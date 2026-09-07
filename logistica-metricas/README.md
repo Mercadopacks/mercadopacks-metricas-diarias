@@ -180,6 +180,15 @@ Los días anteriores no se tocan: cada corrida solo escribe el documento de
 la fecha que le corresponde. Un `concurrency` a nivel de workflow evita que
 dos corridas se pisen si una se atrasa y se solapa con la siguiente.
 
+**No corre los domingos** — la operación es de lunes a sábado; los domingos
+no hay envíos reales, solo se acumulan "A retirar", así que cargar ese día
+falsearía las métricas. Las 4 corridas intradía están restringidas a
+lunes-sábado directamente. La corrida de las 00hs es un caso especial
+porque en realidad cierra el día anterior: se saltea únicamente cuando
+ocurre un lunes de madrugada (porque eso cerraría el domingo) — el resto de
+los días sigue funcionando igual, incluida la del domingo de madrugada, que
+cierra el sábado (día operativo).
+
 El `.xls` descargado **no se guarda en el repositorio de git** (contiene
 datos personales de destinatarios y el repo es público) — vive solo en el
 runner de GitHub Actions durante esa corrida y se descarta al terminar; lo
@@ -264,3 +273,4 @@ Ideas para las próximas iteraciones, en orden sugerido:
 | 2026-09-04 | El % de entregas efectivas ahora excluye los envíos en estado "A retirar" del denominador (son envíos que todavía no llegaron al depósito), tanto en el KPI principal como en el ranking de choferes. Replicado en `publicar_firestore.py` y `generar_reporte.py` para mantener la paridad entre los tres lugares que calculan esta métrica. |
 | 2026-09-04 | Se agregó soporte para "backfill" manual: el workflow de descarga diaria ahora acepta una fecha puntual (input `fecha` en "Run workflow") para rehacer un día ya cargado con reglas de negocio viejas, dado que el `.xls` crudo no se guarda en ningún lado y no hay otra forma de recalcularlo. Necesario porque los días cargados antes del cambio de "A retirar" quedaron con el % de efectividad viejo. |
 | 2026-09-07 | La descarga pasó de correr 1 vez por día (00hs) a 5 veces (11, 13, 15, 18 y 00hs ART). Las 4 corridas intradía traen el día "en curso" y reemplazan (no acumulan) el snapshot de ese día en Firestore; la de las 00hs sigue cerrando el día anterior, sin cambios en esa lógica. Se agregó `MODO_FECHA=hoy\|ayer` a `descargar_lightdata.py` (el workflow decide el modo según qué cron disparó la corrida, no según la hora del reloj, para ser inmune a demoras de GitHub Actions) y un `concurrency` a nivel de workflow para que dos corridas nunca se pisen entre sí. |
+| 2026-09-07 | La descarga no corre los domingos (no es día operativo, solo se acumulan "A retirar" y falsearía las métricas). Las 4 corridas intradía se restringieron a lunes-sábado; la corrida de las 00hs se restringió a saltear únicamente la madrugada del lunes (que cerraría el domingo) — sigue funcionando el resto de los días, incluida la madrugada del domingo, que cierra el sábado. |
