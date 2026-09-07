@@ -146,21 +146,18 @@ cerrar las reglas).
   el repo es público. Quedan solo en la carpeta local `datos_crudos/` de quien
   los descarga.
 
-## Automatización de la descarga diaria (GitHub Actions)
+## Automatización de la descarga diaria
 
-**Estado: en funcionamiento** — probado de punta a punta el 2026-09-02 (login,
-filtro de fecha, descarga, cálculo del snapshot y publicación en Firestore,
-visible en el dashboard sin que nadie suba nada a mano).
+**Estado: en funcionamiento**, disparada desde un cron externo (ver más
+abajo por qué no usa el `schedule` nativo de GitHub Actions).
 
 LightData no tiene API ni URL fija de exportación — solo se puede descargar
 el archivo iniciando sesión manualmente en el navegador. Por eso la
 automatización usa **Playwright** para manejar un navegador real de forma
-desatendida, orquestado por **GitHub Actions** (gratis, no depende de que
-una computadora quede prendida).
+desatendida.
 
 **Qué hace, 5 veces por día (hora Argentina): 11:00, 13:00, 15:00, 18:00 y
-00:00** (en la práctica corre unos minutos después de esa hora — ver nota de
-"por qué :17" en el propio workflow):
+00:00, de lunes a sábado** (domingo no es día operativo — ver más abajo):
 1. `scripts/descargar_lightdata.py` inicia sesión en LightData, filtra el
    listado de envíos SIN filtro de Estado (se necesitan todos los estados) y
    descarga el `.xls`. Las 4 corridas de 11 a 18hs piden el día **en curso**
@@ -172,6 +169,64 @@ una computadora quede prendida).
 3. El dashboard no necesita ningún cambio para esto — lee de Firestore igual
    que cuando alguien carga un archivo a mano.
 
+### Por qué el disparo NO es el `schedule` de GitHub Actions
+
+Se probó primero con un cron nativo de GitHub Actions (`schedule:`), incluso
+corriendo unos minutos después de la hora en punto para evitar congestión.
+Se midió con la API de GitHub durante 5 días seguidos: la corrida programada
+para las 03:17 UTC arrancaba siempre entre las 07:43 y las 08:25 UTC — **una
+demora de 4h30' a 5h10', todos los días**, no un pico ocasional. Ese nivel de
+demora hace inútil el objetivo de tener "fotos" del día a horarios puntuales.
+
+La solución: el workflow (`.github/workflows/descarga_diaria.yml`) hoy solo
+tiene trigger `workflow_dispatch` (se puede disparar a mano, y así es como
+hay que probarlo), y se dispara puntualmente desde **cron-job.org**
+(gratuito) llamando a la API de GitHub — ese tipo de disparo no pasa por la
+cola de `schedule` y arranca casi al instante, igual que un click manual en
+"Run workflow".
+
+### Configuración de cron-job.org (una sola vez)
+
+**1. Generar un token de GitHub** con permiso mínimo (solo disparar
+workflows de este repo, nada más):
+- `github.com/settings/personal-access-tokens/new` → **Fine-grained token**.
+- Resource owner: `Mercadopacks`. Repository access: **Only select
+  repositories** → `mercadopacks-metricas-diarias`.
+- Permissions → **Actions**: Read and write. (No hace falta ningún otro
+  permiso.)
+- Generar y copiar el token (empieza con `github_pat_...`) — no se comparte
+  por chat ni se guarda en el repo, solo va cargado en cron-job.org.
+
+**2. Crear una cuenta gratuita en cron-job.org** y crear **5 cronjobs**, uno
+por horario. Todos con la misma configuración base:
+- URL: `https://api.github.com/repos/Mercadopacks/mercadopacks-metricas-diarias/actions/workflows/descarga_diaria.yml/dispatches`
+- Request method: `POST`
+- Headers:
+  - `Authorization: Bearer <el token generado en el paso 1>`
+  - `Accept: application/vnd.github+json`
+  - `Content-Type: application/json`
+- Body (raw JSON):
+  - 4 de los 5 jobs (11, 13, 15 y 18hs ART): `{"ref":"main","inputs":{"modo":"hoy"}}`
+  - 1 job (00hs ART): `{"ref":"main","inputs":{"modo":"ayer"}}`
+
+**Horarios (en UTC, tal como los pide cron-job.org — sin offset de minutos,
+porque cron-job.org no sufre la congestión que tiene GitHub):**
+
+| Hora Argentina | Hora UTC | Días | `modo` |
+|---|---|---|---|
+| 11:00 | 14:00 | Lunes a sábado | `hoy` |
+| 13:00 | 16:00 | Lunes a sábado | `hoy` |
+| 15:00 | 18:00 | Lunes a sábado | `hoy` |
+| 18:00 | 21:00 | Lunes a sábado | `hoy` |
+| 00:00 | 03:00 | Todos menos lunes* | `ayer` |
+
+\* La corrida de las 00hs en realidad ocurre al arrancar el día siguiente y
+cierra el día anterior — por eso se saltea el lunes (cerraría un domingo,
+que no es día operativo) pero sí corre el domingo de madrugada (cierra el
+sábado). El workflow además tiene una verificación propia que saltea solo
+la corrida si el día a procesar termina siendo domingo, como red de
+seguridad extra por si cron-job.org se configura distinto.
+
 **Sobre las corridas intradía (11 a 18hs):** cada una vuelve a descargar el
 día completo desde LightData y **reemplaza** el snapshot de ese día en
 Firestore (no lo suma al anterior) — así el dashboard siempre muestra la
@@ -179,15 +234,6 @@ versión más actualizada de "hoy" sin datos duplicados ni acumulados de más.
 Los días anteriores no se tocan: cada corrida solo escribe el documento de
 la fecha que le corresponde. Un `concurrency` a nivel de workflow evita que
 dos corridas se pisen si una se atrasa y se solapa con la siguiente.
-
-**No corre los domingos** — la operación es de lunes a sábado; los domingos
-no hay envíos reales, solo se acumulan "A retirar", así que cargar ese día
-falsearía las métricas. Las 4 corridas intradía están restringidas a
-lunes-sábado directamente. La corrida de las 00hs es un caso especial
-porque en realidad cierra el día anterior: se saltea únicamente cuando
-ocurre un lunes de madrugada (porque eso cerraría el domingo) — el resto de
-los días sigue funcionando igual, incluida la del domingo de madrugada, que
-cierra el sábado (día operativo).
 
 El `.xls` descargado **no se guarda en el repositorio de git** (contiene
 datos personales de destinatarios y el repo es público) — vive solo en el
@@ -210,18 +256,24 @@ Ya están cargados y el workflow corre solo — no hace falta ninguna acción
 manual salvo que alguno de los tres cambie (ej. se rota la contraseña de
 LightData) o LightData cambie el diseño de su página.
 
-**Cómo probarlo sin esperar al horario programado, o rehacer un día puntual
-(backfill):** pestaña **Actions** del repo → workflow "Descarga diaria de
-LightData" → botón **"Run workflow"** → en el campo **"fecha"** poner la
-fecha a rehacer en formato `YYYY-MM-DD` (ej. `2026-09-01`) o dejarlo vacío
-para que traiga "ayer" como en la corrida normal. Esto es lo que hay que
-usar si un día quedó con datos calculados con una regla de negocio vieja
-(ej. antes de que se excluyera "A retirar" del % de efectividad): como el
-`.xls` crudo no se guarda en ningún lado, la única forma de corregir un día
-ya cargado es volver a descargarlo y recalcularlo así. Si la corrida falla,
-el job sube como *artifact* descargable una captura de pantalla del momento
-del error (`error-descarga-lightdata`), para diagnosticar sin tener que
-repetirlo a mano.
+**Cómo probarlo a mano, o rehacer un día puntual (backfill):** pestaña
+**Actions** del repo → workflow "Descarga de LightData" → botón **"Run
+workflow"**. Dos campos:
+- **`modo`**: `hoy` o `ayer` (o vacío, que por compatibilidad se comporta
+  como `ayer`). Usalo para simular cualquiera de las 5 corridas.
+- **`fecha`**: una fecha puntual en formato `YYYY-MM-DD` (ej. `2026-09-01`)
+  para backfill — si se completa, ignora `modo` y tiene prioridad total.
+  Esto es lo que hay que usar si un día quedó con datos calculados con una
+  regla de negocio vieja (ej. antes de que se excluyera "A retirar" del %
+  de efectividad): como el `.xls` crudo no se guarda en ningún lado, la
+  única forma de corregir un día ya cargado es volver a descargarlo y
+  recalcularlo así.
+
+Un disparo manual arranca casi al instante (a diferencia de lo que pasaba
+con el `schedule` nativo, ver más arriba). Si la corrida falla, el job sube
+como *artifact* descargable una captura de pantalla del momento del error
+(`error-descarga-lightdata`), para diagnosticar sin tener que repetirlo a
+mano.
 
 **Limitación conocida:** el selector de fecha del calendario de LightData se
 probó seleccionando el día del mes directamente; si "ayer" cae en el mes
@@ -274,3 +326,4 @@ Ideas para las próximas iteraciones, en orden sugerido:
 | 2026-09-04 | Se agregó soporte para "backfill" manual: el workflow de descarga diaria ahora acepta una fecha puntual (input `fecha` en "Run workflow") para rehacer un día ya cargado con reglas de negocio viejas, dado que el `.xls` crudo no se guarda en ningún lado y no hay otra forma de recalcularlo. Necesario porque los días cargados antes del cambio de "A retirar" quedaron con el % de efectividad viejo. |
 | 2026-09-07 | La descarga pasó de correr 1 vez por día (00hs) a 5 veces (11, 13, 15, 18 y 00hs ART). Las 4 corridas intradía traen el día "en curso" y reemplazan (no acumulan) el snapshot de ese día en Firestore; la de las 00hs sigue cerrando el día anterior, sin cambios en esa lógica. Se agregó `MODO_FECHA=hoy\|ayer` a `descargar_lightdata.py` (el workflow decide el modo según qué cron disparó la corrida, no según la hora del reloj, para ser inmune a demoras de GitHub Actions) y un `concurrency` a nivel de workflow para que dos corridas nunca se pisen entre sí. |
 | 2026-09-07 | La descarga no corre los domingos (no es día operativo, solo se acumulan "A retirar" y falsearía las métricas). Las 4 corridas intradía se restringieron a lunes-sábado; la corrida de las 00hs se restringió a saltear únicamente la madrugada del lunes (que cerraría el domingo) — sigue funcionando el resto de los días, incluida la madrugada del domingo, que cierra el sábado. |
+| 2026-09-08 | Se midió con la API de GitHub que el `schedule` nativo de Actions demoraba 4h30'-5h10' TODOS los días (no un pico ocasional) — incompatible con el objetivo de fotos horarias. Se sacó el `schedule` del workflow y se pasó a disparar por `workflow_dispatch` desde un cron externo (cron-job.org, gratis) que llama a la API de GitHub — ese tipo de disparo no pasa por la cola de `schedule` y arranca casi al instante. Se agregó el input `modo` (hoy/ayer) al workflow, y una verificación propia que saltea la corrida si el día a procesar resulta ser domingo (red de seguridad además de la configuración de cron-job.org). |
