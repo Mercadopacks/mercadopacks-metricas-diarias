@@ -10,19 +10,38 @@ el .xls resultante a datos_crudos/.
 Uso:
     LIGHTDATA_USER=... LIGHTDATA_PASS=... python3 descargar_lightdata.py
 
-    Para descargar un día puntual en vez de "ayer" (backfill manual, por
-    ejemplo si un día quedó con datos viejos por un cambio de regla de
-    negocio), agregar FECHA_DESCARGA=YYYY-MM-DD:
+    El día que se descarga se elige con dos variables de entorno opcionales
+    (se evalúan en este orden de prioridad):
 
-    LIGHTDATA_USER=... LIGHTDATA_PASS=... FECHA_DESCARGA=2026-09-01 python3 descargar_lightdata.py
+    1. FECHA_DESCARGA=YYYY-MM-DD → descarga esa fecha puntual exacta.
+       Pensado para backfill manual (ej. si un día quedó con datos viejos
+       por un cambio de regla de negocio):
+
+       LIGHTDATA_USER=... LIGHTDATA_PASS=... FECHA_DESCARGA=2026-09-01 python3 descargar_lightdata.py
+
+    2. MODO_FECHA=hoy|ayer → si no hay FECHA_DESCARGA, elige entre el día de
+       hoy o el de ayer (ambos en base a la fecha UTC actual — ver nota de
+       zona horaria más abajo). Si no se pasa ninguna de las dos variables,
+       el default es "ayer" (mismo comportamiento que la versión anterior
+       de este script, para no romper nada que ya dependa de él).
+
+    El workflow de GitHub Actions usa MODO_FECHA=hoy en las 4 corridas
+    intradía (11/13/15/18hs ART) para traer la "foto" del día en curso, y
+    MODO_FECHA=ayer (o nada) en la corrida de las 00hs ART, que cierra el
+    día que acaba de terminar.
 
 Pensado para correr sin supervisión (GitHub Actions), por eso:
 - Corre el navegador en modo headless.
 - Si algo falla, guarda una captura de pantalla para poder diagnosticar sin
   tener que reproducirlo a mano.
-- Calcula "ayer" en UTC a propósito: el workflow corre a las 03:00 UTC
-  (00:00 hora Argentina), momento en el que la fecha UTC ya coincide con la
-  fecha del día que acaba de arrancar en Argentina.
+- Usa la fecha UTC a propósito para decidir "hoy"/"ayer": todas las corridas
+  programadas (11 a 18hs y 00hs Argentina) caen en un horario UTC donde la
+  fecha del calendario UTC ya coincide con la fecha del calendario en
+  Argentina en el momento exacto de la corrida (Argentina es UTC-3 todo el
+  año, sin horario de verano, así que esto es estable). La única corrida
+  que necesita "ayer" en vez de "hoy" es la de las 00hs ART (03:00 UTC),
+  porque en ese instante la fecha UTC ya avanzó al nuevo día que recién
+  empieza en Argentina, y lo que se quiere cerrar es el día anterior.
 
 Los selectores de este script salieron de grabar la navegación real con
 `playwright codegen https://mercadopacks.lightdata.app/`. Si LightData
@@ -57,14 +76,29 @@ def seleccionar_dia(page, dia: int):
     page.get_by_role("button", name=str(dia), exact=True).click()
 
 
-def descargar(usuario: str, clave: str, fecha_objetivo=None) -> Path:
+def calcular_fecha_objetivo(fecha_objetivo, modo_fecha):
     """
-    Si no se pasa fecha_objetivo, descarga el día de "ayer" (uso normal,
-    corrida diaria). Si se pasa una fecha puntual (objeto date), la usa en
-    su lugar — pensado para backfill manual de días concretos (ver
-    FECHA_DESCARGA en main()).
+    Resuelve qué fecha descargar, en este orden de prioridad:
+    1. fecha_objetivo explícita (backfill manual de un día puntual).
+    2. modo_fecha == "hoy" → fecha UTC actual (coincide con la fecha
+       argentina en todos los horarios intradía programados).
+    3. cualquier otro caso (modo_fecha == "ayer", vacío, o no reconocido)
+       → fecha UTC actual menos un día — comportamiento histórico/default,
+       usado por la corrida de cierre de las 00hs ART.
     """
-    fecha = fecha_objetivo or (datetime.now(timezone.utc) - timedelta(days=1)).date()
+    if fecha_objetivo:
+        return fecha_objetivo
+    hoy_utc = datetime.now(timezone.utc).date()
+    if modo_fecha == "hoy":
+        return hoy_utc
+    return hoy_utc - timedelta(days=1)
+
+
+def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) -> Path:
+    """
+    Ver calcular_fecha_objetivo() para la lógica de qué día se descarga.
+    """
+    fecha = calcular_fecha_objetivo(fecha_objetivo, modo_fecha)
     dia = fecha.day
 
     CARPETA_SALIDA.mkdir(parents=True, exist_ok=True)
@@ -160,7 +194,9 @@ def main():
         except ValueError:
             sys.exit(f"FECHA_DESCARGA debe tener formato YYYY-MM-DD, se recibió: {fecha_str!r}")
 
-    destino = descargar(usuario, clave, fecha_objetivo)
+    modo_fecha = os.environ.get("MODO_FECHA", "").strip().lower()
+
+    destino = descargar(usuario, clave, fecha_objetivo, modo_fecha)
     print(f"Archivo descargado: {destino}")
 
 

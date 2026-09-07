@@ -1,22 +1,51 @@
-name: Descarga diaria de LightData
+name: Descarga de LightData
 
-# Objetivo: 03:00 UTC = 00:00 hora Argentina. Se programa en el minuto :17
-# en vez de en punto (:00) a propósito — los cron "en punto" son los que más
-# competencia tienen en la infraestructura de GitHub (todo el mundo programa
-# tareas justo a la hora exacta), lo que causaba demoras de ~2hs en la
-# práctica. Corriendo unos minutos después de la hora hay menos congestión.
-# GitHub igual no garantiza el minuto exacto, pero esto reduce la demora.
-# Además se puede disparar a mano desde la pestaña "Actions" del repo
-# (workflow_dispatch) para probarlo sin esperar al horario programado.
+# Corre 5 veces por día en horario Argentina (UTC-3, sin horario de verano):
+#   11:00, 13:00, 15:00, 18:00 y 00:00 ART.
+# Las primeras 4 son corridas "intradía": traen la foto del día en curso
+# hasta ese momento y VAN PISANDO el snapshot del día (no se acumulan ni se
+# duplican — ver publicar_firestore.py, publicar(), que hace un `set()` por
+# fecha, no un append). La de las 00hs es la corrida de "cierre": a esa hora
+# el día que se acaba de terminar ya no va a recibir más actualizaciones, así
+# que descarga y publica la versión final de ESE día (el que recién terminó,
+# no el que recién empieza).
+#
+# Cada horario se programa 17 minutos después de la hora en punto (:17) en
+# vez de justo a la hora exacta. Esto no es un error de conversión — es a
+# propósito: ya se observó en este mismo workflow (antes solo con la corrida
+# de las 00hs) que los cron "en punto" sufren demoras de hasta ~2hs por
+# congestión en la infraestructura de GitHub Actions, porque muchísimos
+# repos programan tareas justo a la hora exacta. Corriendo unos minutos
+# después hay menos competencia. Conversión UTC = hora Argentina + 3hs:
+#   11:00 ART -> 14:17 UTC
+#   13:00 ART -> 16:17 UTC
+#   15:00 ART -> 18:17 UTC
+#   18:00 ART -> 21:17 UTC
+#   00:00 ART -> 03:17 UTC  (cron ya existente, sin cambios)
 on:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "17 14 * * *"  # 11:00 ART — intradía
+    - cron: "17 16 * * *"  # 13:00 ART — intradía
+    - cron: "17 18 * * *"  # 15:00 ART — intradía
+    - cron: "17 21 * * *"  # 18:00 ART — intradía
+    - cron: "17 3 * * *"   # 00:00 ART — cierre del día anterior
   workflow_dispatch:
     inputs:
       fecha:
-        description: 'Fecha puntual a descargar (YYYY-MM-DD). Dejar vacío para descargar "ayer" (uso normal).'
+        description: 'Fecha puntual a descargar (YYYY-MM-DD). Dejar vacío para descargar "ayer" (uso normal de una corrida manual).'
         required: false
         default: ''
+
+# Evita que dos corridas se pisen entre sí (ej. una corrida intradía que se
+# atrasó por congestión y todavía sigue activa cuando arranca la siguiente,
+# o un disparo manual mientras corre una programada). `cancel-in-progress:
+# false` hace que la nueva corrida espere en cola en vez de cancelar la que
+# ya está en curso — evita dejar a mitad de camino una sesión de Playwright
+# ya logueada en LightData, y evita una carrera de lecturas/escrituras
+# simultáneas contra el índice de Firestore (envios_index/index).
+concurrency:
+  group: descarga-lightdata
+  cancel-in-progress: false
 
 jobs:
   descargar-y-publicar:
@@ -41,13 +70,33 @@ jobs:
           pip install -r requirements.txt
           playwright install --with-deps chromium
 
-      - name: Descargar export de LightData (día de ayer, o el que se indique en "fecha")
+      # Determina si esta corrida debe traer el día "hoy" (las 4 corridas
+      # intradía) o "ayer" (la corrida de cierre de las 00hs ART). Se basa
+      # en CUÁL cron disparó la corrida (github.event.schedule), no en la
+      # hora del reloj al momento de ejecutar — así el resultado es correcto
+      # incluso si una corrida se atrasa varias horas por congestión de
+      # GitHub Actions. Si es un disparo manual (workflow_dispatch), no fija
+      # ningún modo: el script usa "fecha" si se indicó, y si no cae al
+      # comportamiento default (ayer), igual que antes de este cambio.
+      - name: Determinar si esta corrida es "hoy" o "ayer"
+        id: modo
+        run: |
+          if [ "${{ github.event.schedule }}" = "17 3 * * *" ]; then
+            echo "valor=ayer" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "valor=hoy" >> "$GITHUB_OUTPUT"
+          else
+            echo "valor=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Descargar export de LightData
         id: descarga
         working-directory: logistica-metricas/scripts
         env:
           LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
           LIGHTDATA_PASS: ${{ secrets.LIGHTDATA_PASS }}
           FECHA_DESCARGA: ${{ github.event.inputs.fecha }}
+          MODO_FECHA: ${{ steps.modo.outputs.valor }}
         run: |
           set -e
           SALIDA=$(python descargar_lightdata.py)
@@ -55,6 +104,12 @@ jobs:
           RUTA=$(echo "$SALIDA" | tail -n1 | sed 's/^Archivo descargado: //')
           echo "ruta=$RUTA" >> "$GITHUB_OUTPUT"
 
+      # publicar_firestore.py escribe con `.set()` (reemplaza el documento
+      # completo de esa fecha, no lo fusiona registro por registro) y agrega
+      # la fecha al índice sin tocar las demás fechas ya cargadas — por eso
+      # una corrida intradía "pisa" el snapshot del día sin duplicar nada, y
+      # el histórico de días anteriores queda intacto sin ningún cambio
+      # adicional acá.
       - name: Publicar snapshot en Firestore
         working-directory: logistica-metricas/scripts
         env:

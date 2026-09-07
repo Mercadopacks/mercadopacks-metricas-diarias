@@ -158,16 +158,27 @@ automatización usa **Playwright** para manejar un navegador real de forma
 desatendida, orquestado por **GitHub Actions** (gratis, no depende de que
 una computadora quede prendida).
 
-**Qué hace todos los días a las 00:00hs (hora Argentina):**
+**Qué hace, 5 veces por día (hora Argentina): 11:00, 13:00, 15:00, 18:00 y
+00:00** (en la práctica corre unos minutos después de esa hora — ver nota de
+"por qué :17" en el propio workflow):
 1. `scripts/descargar_lightdata.py` inicia sesión en LightData, filtra el
-   listado de envíos por el día que acaba de cerrar (Desde = Hasta = ayer,
-   sin filtro de Estado — se necesitan todos los estados) y descarga el
-   `.xls`.
+   listado de envíos SIN filtro de Estado (se necesitan todos los estados) y
+   descarga el `.xls`. Las 4 corridas de 11 a 18hs piden el día **en curso**
+   (una "foto" actualizada de lo que va del día); la corrida de las 00hs
+   pide el día que **acaba de cerrar**.
 2. `scripts/publicar_firestore.py` toma ese archivo, calcula exactamente el
    mismo snapshot que arma el dashboard en el navegador (mismas reglas de
    negocio, ver comentarios en el script) y lo publica en Firestore.
 3. El dashboard no necesita ningún cambio para esto — lee de Firestore igual
    que cuando alguien carga un archivo a mano.
+
+**Sobre las corridas intradía (11 a 18hs):** cada una vuelve a descargar el
+día completo desde LightData y **reemplaza** el snapshot de ese día en
+Firestore (no lo suma al anterior) — así el dashboard siempre muestra la
+versión más actualizada de "hoy" sin datos duplicados ni acumulados de más.
+Los días anteriores no se tocan: cada corrida solo escribe el documento de
+la fecha que le corresponde. Un `concurrency` a nivel de workflow evita que
+dos corridas se pisen si una se atrasa y se solapa con la siguiente.
 
 El `.xls` descargado **no se guarda en el repositorio de git** (contiene
 datos personales de destinatarios y el repo es público) — vive solo en el
@@ -252,3 +263,4 @@ Ideas para las próximas iteraciones, en orden sugerido:
 | 2026-09-04 | Se sacó la carga manual de archivo del dashboard (botón, drag&drop, parseo de `.xls` en el navegador con la librería XLSX) — quedó redundante con la automatización diaria. El dashboard pasó a ser un lector puro de Firestore. |
 | 2026-09-04 | El % de entregas efectivas ahora excluye los envíos en estado "A retirar" del denominador (son envíos que todavía no llegaron al depósito), tanto en el KPI principal como en el ranking de choferes. Replicado en `publicar_firestore.py` y `generar_reporte.py` para mantener la paridad entre los tres lugares que calculan esta métrica. |
 | 2026-09-04 | Se agregó soporte para "backfill" manual: el workflow de descarga diaria ahora acepta una fecha puntual (input `fecha` en "Run workflow") para rehacer un día ya cargado con reglas de negocio viejas, dado que el `.xls` crudo no se guarda en ningún lado y no hay otra forma de recalcularlo. Necesario porque los días cargados antes del cambio de "A retirar" quedaron con el % de efectividad viejo. |
+| 2026-09-07 | La descarga pasó de correr 1 vez por día (00hs) a 5 veces (11, 13, 15, 18 y 00hs ART). Las 4 corridas intradía traen el día "en curso" y reemplazan (no acumulan) el snapshot de ese día en Firestore; la de las 00hs sigue cerrando el día anterior, sin cambios en esa lógica. Se agregó `MODO_FECHA=hoy\|ayer` a `descargar_lightdata.py` (el workflow decide el modo según qué cron disparó la corrida, no según la hora del reloj, para ser inmune a demoras de GitHub Actions) y un `concurrency` a nivel de workflow para que dos corridas nunca se pisen entre sí. |
