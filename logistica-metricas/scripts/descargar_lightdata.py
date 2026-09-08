@@ -138,10 +138,15 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
             seleccionar_dia(page, dia)
             page.get_by_role("button", name="Ok").click()
 
-            # Cierra un chip/tooltip que queda abierto tras elegir las
-            # fechas — parte del flujo grabado; sin este click el botón de
-            # buscar de abajo queda tapado y no se puede clickear.
-            page.get_by_text("×").first.click()
+            # Cierra un chip que a veces queda seleccionado en el filtro de
+            # Estado (hay que dejarlo vacío — se necesitan todos los
+            # estados). Es opcional: si no hay ningún chip cargado, este
+            # elemento existe en el DOM pero no está visible, y esperarlo a
+            # timeout completo (20s) frenaba todo el flujo sin necesidad.
+            try:
+                page.get_by_text("×").first.click(timeout=3000)
+            except PlaywrightTimeoutError:
+                pass
 
             # Botón "Buscar/Filtrar": no tiene texto visible en la página,
             # por eso el selector es estructural (más frágil ante cambios
