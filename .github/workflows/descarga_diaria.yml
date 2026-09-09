@@ -108,7 +108,14 @@ jobs:
       - name: Instalar LibreOffice (respaldo para .xls con BIFF corrupto)
         if: steps.chequeo.outputs.saltar != 'true'
         run: |
-          sudo apt-get update
+          # "|| true" en el update: el runner de GitHub trae preinstalado el
+          # repo de Google Chrome, que a veces queda con un cache
+          # desincronizado y tira "Hash Sum mismatch" — no tiene nada que
+          # ver con nuestro código ni con libreoffice-calc (viene de los
+          # repos estándar de Ubuntu, que si se actualizan bien). Sin el
+          # "|| true", esa falla de un repo que ni usamos tumbaba todo el
+          # workflow.
+          sudo apt-get update || true
           sudo apt-get install -y libreoffice-calc
 
       - name: Instalar dependencias
