@@ -25,7 +25,11 @@ Mercadopacks - Metricas/       → raíz del repositorio git
         ├── generar_reporte.py       → script que arma el reporte en Excel
         ├── descargar_lightdata.py   → automatización: login + descarga diaria del export
         ├── publicar_firestore.py    → calcula el snapshot del día y lo publica en Firestore
-        └── requirements.txt         → dependencias de Python para los tres scripts
+        ├── requirements.txt         → dependencias de Python para los tres scripts
+        └── tests/
+            ├── test_estado_lightdata.py      → test de regresión del filtro de Estado (sin credenciales)
+            ├── fixture_estado_select2.html   → página local que simula el campo real de LightData
+            └── vendor/                        → jQuery + Select2 vendorizados para el test
 ```
 
 ## Cómo usarlo
@@ -289,12 +293,27 @@ misma cuenta) y el dashboard mostró ~220 envíos de menos, con las entregas
 más recientes ausentes, porque el `.xls` descargado ya venía filtrado a un
 solo estado. Es un multi-select de Select2 (admite varios chips a la vez),
 así que la corrección saca cualquier chip existente y elige "Todos" de
-forma explícita en cada corrida (ver comentario en `descargar_lightdata.py`,
-justo antes del click en "Buscar/Filtrar" — el widget se ubica con el
-selector `#envios_f_estado + span.select2`). Si vuelve a aparecer un
-desfasaje entre el total del dashboard y el total que se ve en LightData
-para el mismo día, este filtro
-es el primer lugar para revisar.
+forma explícita en cada corrida — ver `seleccionar_estado_todos()` en
+`descargar_lightdata.py`. El arreglo tuvo dos vueltas fallidas más antes de
+encontrar la causa real (documentadas en los comentarios de esa función):
+1. Select2 usa un id aleatorio distinto en cada carga de página para cada
+   opción del desplegable — no se puede guardar ese id.
+2. Sacar un chip existente deja el desplegable **ya abierto** solo; un
+   click de más para "abrirlo" en realidad lo vuelve a cerrar (Select2
+   alterna abierto/cerrado en cada click).
+3. `get_by_role("option", ...)` de Playwright matchea tanto la opción
+   visible de Select2 como el `<option>` nativo oculto del `<select>`
+   original — hay que apuntar a la clase CSS específica de Select2.
+
+Estos tres problemas se encontraron recién al reproducir el bug en una
+página local con la librería real de Select2 (en vez de seguir probando a
+ciegas contra la cuenta real) — ese mismo caso quedó como test de
+regresión en `scripts/tests/test_estado_lightdata.py` (corre sin
+credenciales ni conexión a LightData: `cd scripts/tests && python3
+test_estado_lightdata.py`). Si se vuelve a tocar esta lógica, correr ese
+test antes de subir cambios. Si vuelve a aparecer un desfasaje entre el
+total del dashboard y el total que se ve en LightData para el mismo día,
+este filtro es el primer lugar para revisar.
 
 ## Dónde están las definiciones
 
@@ -341,4 +360,4 @@ Ideas para las próximas iteraciones, en orden sugerido:
 | 2026-09-07 | La descarga pasó de correr 1 vez por día (00hs) a 5 veces (11, 13, 15, 18 y 00hs ART). Las 4 corridas intradía traen el día "en curso" y reemplazan (no acumulan) el snapshot de ese día en Firestore; la de las 00hs sigue cerrando el día anterior, sin cambios en esa lógica. Se agregó `MODO_FECHA=hoy\|ayer` a `descargar_lightdata.py` (el workflow decide el modo según qué cron disparó la corrida, no según la hora del reloj, para ser inmune a demoras de GitHub Actions) y un `concurrency` a nivel de workflow para que dos corridas nunca se pisen entre sí. |
 | 2026-09-07 | La descarga no corre los domingos (no es día operativo, solo se acumulan "A retirar" y falsearía las métricas). Las 4 corridas intradía se restringieron a lunes-sábado; la corrida de las 00hs se restringió a saltear únicamente la madrugada del lunes (que cerraría el domingo) — sigue funcionando el resto de los días, incluida la madrugada del domingo, que cierra el sábado. |
 | 2026-09-08 | Se midió con la API de GitHub que el `schedule` nativo de Actions demoraba 4h30'-5h10' TODOS los días (no un pico ocasional) — incompatible con el objetivo de fotos horarias. Se sacó el `schedule` del workflow y se pasó a disparar por `workflow_dispatch` desde un cron externo (cron-job.org, gratis) que llama a la API de GitHub — ese tipo de disparo no pasa por la cola de `schedule` y arranca casi al instante. Se agregó el input `modo` (hoy/ayer) al workflow, y una verificación propia que saltea la corrida si el día a procesar resulta ser domingo (red de seguridad además de la configuración de cron-job.org). |
-| 2026-09-09 | Bug de datos incompletos: el filtro de Estado de LightData (que se guarda por cuenta en el servidor) le quedó aplicado a un valor distinto de "Todos", y el dashboard mostró ~220 envíos de menos con las entregas recientes ausentes. Se corrigió forzando la selección explícita de "Todos" en cada corrida — ver "Incidente conocido" más arriba. |
+| 2026-09-09 | Bug de datos incompletos: el filtro de Estado de LightData (que se guarda por cuenta en el servidor) le quedó aplicado a un valor distinto de "Todos", y el dashboard mostró ~220 envíos de menos con las entregas recientes ausentes. Se corrigió forzando la selección explícita de "Todos" en cada corrida — ver "Incidente conocido" más arriba. El fix se armó reproduciendo el bug en local con la librería real de Select2 (en vez de iterar a ciegas contra la cuenta real), lo que además dejó un test de regresión permanente (`scripts/tests/test_estado_lightdata.py`) que corre sin credenciales. |

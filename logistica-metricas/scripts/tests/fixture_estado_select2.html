@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="vendor/select2.min.css">
+</head>
+<body>
+<div>
+  <label>Estados del envio</label>
+  <select id="envios_f_estado" multiple="multiple" style="width:300px">
+    <option value="-1">Todos</option>
+    <option value="1">Pendientes</option>
+    <option value="2">Entregado</option>
+    <option value="3">Cancelado</option>
+    <option value="4">A retirar</option>
+  </select>
+</div>
+<div style="margin-top:20px">
+  <label>Origen</label>
+  <select id="envios_f_origen" multiple="multiple" style="width:300px">
+    <option value="-1">Todos</option>
+    <option value="1">ML</option>
+    <option value="2">Directo</option>
+  </select>
+</div>
+<script src="vendor/jquery.min.js"></script>
+<script src="vendor/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+  $('#envios_f_estado').select2();
+  $('#envios_f_origen').select2();
+  // Simula el estado real observado: "Pendientes" seleccionado por defecto
+  $('#envios_f_estado').val(['1']).trigger('change');
+  $('#envios_f_origen').val(['-1']).trigger('change');
+});
+</script>
+</body>
+</html>

@@ -76,6 +76,54 @@ def seleccionar_dia(page, dia: int):
     page.get_by_role("button", name=str(dia), exact=True).click()
 
 
+def seleccionar_estado_todos(page):
+    """
+    Fuerza el filtro "Estados del envio" a "Todos" EXPLÍCITAMENTE, sin
+    asumir que ya viene así por defecto.
+
+    Se agregó después de un incidente real: este filtro le quedó aplicado a
+    "Pendientes" (se guarda por cuenta en el servidor de LightData, no en
+    el navegador), y el dashboard mostró ~220 envíos de menos porque el
+    .xls descargado ya venía recortado a un solo estado.
+
+    Es un multi-select de Select2 (admite varios chips a la vez, confirmado
+    viendo la captura real del error: mostraba el chip "× Pendientes"
+    cargado) — por eso la interacción es distinta a un dropdown simple:
+    primero hay que sacar cualquier chip que ya esté puesto, después abrir
+    el desplegable y elegir "Todos".
+
+    Se ubica el widget con el selector CSS de hermano-adyacente
+    `#envios_f_estado + span.select2` (el <select> real, oculto, con id
+    estable "envios_f_estado" — confirmado en dos grabaciones distintas de
+    esta misma interacción — seguido del <span> que Select2 arma para
+    mostrarlo). No se usa el id de cada opción individual del desplegable
+    porque Select2 lo genera al azar en cada carga de página.
+
+    Esta función tiene un test de regresión que la ejecuta contra una
+    página local con la librería real de Select2 (sin depender de
+    LightData): ver tests/test_estado_lightdata.py. Si se vuelve a tocar
+    esta lógica, correr ese test antes de subir cambios.
+    """
+    estado_widget = page.locator("#envios_f_estado + span.select2")
+    while estado_widget.locator(".select2-selection__choice__remove").count() > 0:
+        estado_widget.locator(".select2-selection__choice__remove").first.click()
+    # OJO: sacar un chip deja el desplegable YA ABIERTO solo (Select2 reabre
+    # la búsqueda al perder un chip). Un click de más ahí lo CIERRA de
+    # nuevo, porque Select2 alterna abierto/cerrado en cada click — eso fue
+    # justo lo que pasó la primera vez que se armó este fix (reproducido y
+    # confirmado en el test local). Por eso solo se hace click para abrir
+    # si TODAVÍA no está abierto.
+    if page.locator(".select2-results__option").count() == 0:
+        estado_widget.click()
+    # OJO 2: get_by_role("option", ...) matchea también el <option> nativo
+    # y oculto del <select> original que Select2 reemplaza visualmente
+    # (ambos tienen rol "option" en el árbol de accesibilidad) — resolvía
+    # al elemento oculto y nunca se volvía visible. Por eso acá se apunta
+    # explícitamente a la clase que Select2 usa para las opciones que SÍ
+    # renderiza y muestra.
+    page.locator(".select2-results__option").get_by_text("Todos", exact=True).click()
+
+
 def calcular_fecha_objetivo(fecha_objetivo, modo_fecha):
     """
     Resuelve qué fecha descargar, en este orden de prioridad:
@@ -146,38 +194,7 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
             except PlaywrightTimeoutError:
                 pass
 
-            # Filtro "Estados del envio": se fuerza a "Todos" EXPLÍCITAMENTE,
-            # sin asumir que ya viene así por defecto. Se agregó después de
-            # un incidente real: este filtro le quedó aplicado a "Pendientes"
-            # (se guarda por cuenta en el servidor de LightData, no en el
-            # navegador), y el dashboard mostró ~220 envíos de menos porque
-            # el .xls descargado ya venía recortado a un solo estado.
-            #
-            # Es un multi-select de Select2 (admite varios chips a la vez,
-            # confirmado viendo la captura real del error: mostraba el chip
-            # "× Pendientes" cargado) — por eso la interacción es distinta a
-            # un dropdown simple: primero hay que sacar cualquier chip que
-            # ya esté puesto, después abrir el desplegable y elegir "Todos".
-            #
-            # Se ubica el widget con el selector CSS de hermano-adyacente
-            # `#envios_f_estado + span.select2` (el <select> real, oculto,
-            # con id estable "envios_f_estado" — confirmado en dos
-            # grabaciones distintas de esta misma interacción — seguido del
-            # <span> que Select2 arma para mostrarlo). No se usa el id de
-            # cada opción individual del desplegable porque Select2 lo
-            # genera al azar en cada carga de página.
-            estado_widget = page.locator("#envios_f_estado + span.select2")
-            while estado_widget.locator(".select2-selection__choice__remove").count() > 0:
-                estado_widget.locator(".select2-selection__choice__remove").first.click()
-            estado_widget.click()
-            # OJO: get_by_role("option", ...) matchea también el <option>
-            # nativo y oculto del <select> original que Select2 reemplaza
-            # visualmente (ambos tienen rol "option" en el árbol de
-            # accesibilidad) — eso fue justo lo que falló la vez pasada:
-            # resolvía al elemento oculto y nunca se volvía visible. Por eso
-            # acá se apunta explícitamente a la clase que Select2 usa para
-            # las opciones que SÍ renderiza y muestra en su desplegable.
-            page.locator(".select2-results__option").get_by_text("Todos", exact=True).click()
+            seleccionar_estado_todos(page)
 
             # Botón "Buscar/Filtrar": no tiene texto visible en la página,
             # por eso el selector es estructural (más frágil ante cambios
