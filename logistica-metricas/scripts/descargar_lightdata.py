@@ -170,7 +170,14 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
             while estado_widget.locator(".select2-selection__choice__remove").count() > 0:
                 estado_widget.locator(".select2-selection__choice__remove").first.click()
             estado_widget.click()
-            page.get_by_role("option", name="Todos", exact=True).click()
+            # OJO: get_by_role("option", ...) matchea también el <option>
+            # nativo y oculto del <select> original que Select2 reemplaza
+            # visualmente (ambos tienen rol "option" en el árbol de
+            # accesibilidad) — eso fue justo lo que falló la vez pasada:
+            # resolvía al elemento oculto y nunca se volvía visible. Por eso
+            # acá se apunta explícitamente a la clase que Select2 usa para
+            # las opciones que SÍ renderiza y muestra en su desplegable.
+            page.locator(".select2-results__option").get_by_text("Todos", exact=True).click()
 
             # Botón "Buscar/Filtrar": no tiene texto visible en la página,
             # por eso el selector es estructural (más frágil ante cambios
