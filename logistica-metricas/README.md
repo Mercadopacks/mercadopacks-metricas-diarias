@@ -282,16 +282,18 @@ un mes atrás antes de poder elegir ese día — este caso no se probó todavía
 Si el workflow falla puntualmente el día 1 de un mes, revisar
 `seleccionar_dia()` en `descargar_lightdata.py` primero.
 
-**Incidente conocido (2026-09-08):** el filtro de Estado de LightData se
-guarda por sesión/cuenta en el servidor, no en el navegador. El script no
-lo forzaba a "Todos" explícitamente, y en algún momento quedó aplicado a un
-valor distinto (posiblemente por una sesión manual de prueba en la misma
-cuenta) — el dashboard mostró ~220 envíos de menos, con las entregas más
-recientes ausentes, porque el `.xls` descargado ya venía filtrado a un solo
-estado. Se corrigió seleccionando "Todos" de forma explícita en cada
-corrida (ver comentario en `descargar_lightdata.py`, justo antes del click
-en "Buscar/Filtrar"). Si vuelve a aparecer un desfasaje entre el total del
-dashboard y el total que se ve en LightData para el mismo día, este filtro
+**Incidente conocido (2026-09-08/09):** el filtro "Estados del envio" de
+LightData se guarda por cuenta en el servidor, no en el navegador — quedó
+aplicado a "Pendientes" (posiblemente por una sesión manual de prueba en la
+misma cuenta) y el dashboard mostró ~220 envíos de menos, con las entregas
+más recientes ausentes, porque el `.xls` descargado ya venía filtrado a un
+solo estado. Es un multi-select de Select2 (admite varios chips a la vez),
+así que la corrección saca cualquier chip existente y elige "Todos" de
+forma explícita en cada corrida (ver comentario en `descargar_lightdata.py`,
+justo antes del click en "Buscar/Filtrar" — el widget se ubica con el
+selector `#envios_f_estado + span.select2`). Si vuelve a aparecer un
+desfasaje entre el total del dashboard y el total que se ve en LightData
+para el mismo día, este filtro
 es el primer lugar para revisar.
 
 ## Dónde están las definiciones
