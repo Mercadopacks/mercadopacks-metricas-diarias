@@ -138,15 +138,34 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
             seleccionar_dia(page, dia)
             page.get_by_role("button", name="Ok").click()
 
-            # Cierra un chip que a veces queda seleccionado en el filtro de
-            # Estado (hay que dejarlo vacío — se necesitan todos los
-            # estados). Es opcional: si no hay ningún chip cargado, este
-            # elemento existe en el DOM pero no está visible, y esperarlo a
-            # timeout completo (20s) frenaba todo el flujo sin necesidad.
+            # Cierra un chip que a veces queda abierto en el área de fechas
+            # tras aplicar el rango — si no está presente, no pasa nada
+            # (best-effort, timeout corto).
             try:
                 page.get_by_text("×").first.click(timeout=3000)
             except PlaywrightTimeoutError:
                 pass
+
+            # Filtro de Estado: se selecciona "Todos" EXPLÍCITAMENTE, sin
+            # asumir que ya viene así por defecto. Este paso se agregó
+            # después de un incidente real: el filtro de Estado le quedó
+            # aplicado a LightData con un valor distinto de "Todos" (se
+            # guarda por sesión/cuenta en el servidor, no en el navegador),
+            # y el dashboard mostró ~220 envíos de menos porque el .xls
+            # descargado ya venía recortado a un solo estado. La versión
+            # anterior de este script dependía de que ese filtro "ya
+            # estuviera" en Todos por casualidad, en vez de forzarlo.
+            #
+            # El id del <select> es estable (envios_f_estado), pero el id
+            # de cada opción del desplegable de Select2 es aleatorio en
+            # cada carga de página (select2-envios_f_estado-result-XXXX) —
+            # por eso NO se usa ese id, sino el contenedor visible (que sí
+            # sigue la convención estable de Select2: select2-<id>-container)
+            # y el texto de la opción, que si cambia va a fallar de forma
+            # visible (timeout claro) en vez de silenciosamente traer datos
+            # incompletos como pasó esta vez.
+            page.locator("#select2-envios_f_estado-container").click()
+            page.get_by_role("option", name="Todos", exact=True).click()
 
             # Botón "Buscar/Filtrar": no tiene texto visible en la página,
             # por eso el selector es estructural (más frágil ante cambios

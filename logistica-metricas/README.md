@@ -282,6 +282,18 @@ un mes atrás antes de poder elegir ese día — este caso no se probó todavía
 Si el workflow falla puntualmente el día 1 de un mes, revisar
 `seleccionar_dia()` en `descargar_lightdata.py` primero.
 
+**Incidente conocido (2026-09-08):** el filtro de Estado de LightData se
+guarda por sesión/cuenta en el servidor, no en el navegador. El script no
+lo forzaba a "Todos" explícitamente, y en algún momento quedó aplicado a un
+valor distinto (posiblemente por una sesión manual de prueba en la misma
+cuenta) — el dashboard mostró ~220 envíos de menos, con las entregas más
+recientes ausentes, porque el `.xls` descargado ya venía filtrado a un solo
+estado. Se corrigió seleccionando "Todos" de forma explícita en cada
+corrida (ver comentario en `descargar_lightdata.py`, justo antes del click
+en "Buscar/Filtrar"). Si vuelve a aparecer un desfasaje entre el total del
+dashboard y el total que se ve en LightData para el mismo día, este filtro
+es el primer lugar para revisar.
+
 ## Dónde están las definiciones
 
 Cualquier duda de "¿esto cuenta como entregado?" o "¿por qué el corte es a
@@ -327,3 +339,4 @@ Ideas para las próximas iteraciones, en orden sugerido:
 | 2026-09-07 | La descarga pasó de correr 1 vez por día (00hs) a 5 veces (11, 13, 15, 18 y 00hs ART). Las 4 corridas intradía traen el día "en curso" y reemplazan (no acumulan) el snapshot de ese día en Firestore; la de las 00hs sigue cerrando el día anterior, sin cambios en esa lógica. Se agregó `MODO_FECHA=hoy\|ayer` a `descargar_lightdata.py` (el workflow decide el modo según qué cron disparó la corrida, no según la hora del reloj, para ser inmune a demoras de GitHub Actions) y un `concurrency` a nivel de workflow para que dos corridas nunca se pisen entre sí. |
 | 2026-09-07 | La descarga no corre los domingos (no es día operativo, solo se acumulan "A retirar" y falsearía las métricas). Las 4 corridas intradía se restringieron a lunes-sábado; la corrida de las 00hs se restringió a saltear únicamente la madrugada del lunes (que cerraría el domingo) — sigue funcionando el resto de los días, incluida la madrugada del domingo, que cierra el sábado. |
 | 2026-09-08 | Se midió con la API de GitHub que el `schedule` nativo de Actions demoraba 4h30'-5h10' TODOS los días (no un pico ocasional) — incompatible con el objetivo de fotos horarias. Se sacó el `schedule` del workflow y se pasó a disparar por `workflow_dispatch` desde un cron externo (cron-job.org, gratis) que llama a la API de GitHub — ese tipo de disparo no pasa por la cola de `schedule` y arranca casi al instante. Se agregó el input `modo` (hoy/ayer) al workflow, y una verificación propia que saltea la corrida si el día a procesar resulta ser domingo (red de seguridad además de la configuración de cron-job.org). |
+| 2026-09-09 | Bug de datos incompletos: el filtro de Estado de LightData (que se guarda por cuenta en el servidor) le quedó aplicado a un valor distinto de "Todos", y el dashboard mostró ~220 envíos de menos con las entregas recientes ausentes. Se corrigió forzando la selección explícita de "Todos" en cada corrida — ver "Incidente conocido" más arriba. |
