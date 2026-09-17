@@ -12,7 +12,7 @@ implementan estas reglas por separado (no comparten código entre sí):
   calcula las franjas horarias y los agregados por su cuenta, replicando la
   misma lógica que el dashboard.
 
-Última actualización: 2026-09-04.
+Última actualización: 2026-09-17.
 
 ---
 
@@ -129,7 +129,24 @@ madrugada **cuenta para las métricas del 31/08** (es el lote de ese día),
 aunque el chequeo de "antes de las 21hs" siga mirando la hora real de
 `Fecha estado` de ese envío en particular.
 
-## 6. Filas a descartar del archivo crudo
+**Ventana de repaso (agregada 2026-09-17):** el caso de arriba (entrega la
+madrugada siguiente) se resuelve solo, pero hay un caso más largo que no:
+un envío puede entrar el día X y no entregarse hasta 2 o 3 días después
+(ej. entra el 07/09, se entrega el 10/09). Como la descarga automática
+filtra por `Fecha MercadoPacks`, ese envío ya se contó en el **total** del
+07/09 desde el primer momento — pero si la automatización solo descargara
+y "cerrara" cada día una única vez, su entrega del 10/09 nunca se reflejaría
+en la efectividad del 07/09 (quedaría como no entregado para siempre, aunque
+LightData sí muestre la entrega al consultarlo más tarde).
+
+Por eso la corrida de cierre de las 00hs (ver README, sección de
+automatización) no solo descarga "ayer": vuelve a descargar y a recalcular
+los **últimos 3 días** cada vez, no solo el que acaba de cerrar. Así, una
+entrega que llega 1 o 2 días tarde se termina reflejando en el día de origen
+que le corresponde según esta regla, sin esperar un backfill manual. Una
+entrega que tarda más de 3 días en resolverse sigue quedando fuera de este
+repaso automático — para esos casos hay que backfillear el día a mano (ver
+input `fecha` del workflow).
 
 El export de LightData trae, al final del archivo, una fila de totales
 (una suma de la columna `Precio`) que **no es un envío real** y no tiene
@@ -233,6 +250,27 @@ A pedido explícito, se separaron dos paletas que no deben mezclarse:
 Esto es intencional: si el dorado de marca también significara "alerta", se
 prestaría a confusión entre "esto es un botón" y "esto está tardando".
 
+## 11. Detalle de envíos por chofer
+
+Al seleccionar un chofer en el ranking, el dashboard muestra además el
+detalle fila por fila de sus envíos del período (tracking, cliente,
+localidad, zona, estado, hora de entrega).
+
+**Decisión de privacidad (2026-09-17):** este detalle **no incluye
+`Dirección` ni `CP`** (el domicilio exacto del destinatario) — solo
+`Localidad` (nivel ciudad/partido). La razón es que las reglas de Firestore
+del proyecto están abiertas a propósito (lectura/escritura sin login, ver
+README) porque hasta ahora solo se guardaban métricas agregadas, nunca
+datos personales. Guardar el domicilio exacto ahí lo expondría
+públicamente a cualquiera que abra el dashboard (la config de Firebase
+está embebida en el HTML público). Si en algún momento se necesita el
+domicilio exacto en el dashboard, hay que agregar autenticación primero —
+no guardarlo en la base abierta como está hoy.
+
+`Nombre Fantasia` (el cliente/cuenta comercial, no el destinatario) y
+`Fecha estado` (de donde sale la hora de entrega) no tienen este problema:
+no son datos personales de una persona física.
+
 ## Historial de cambios
 
 | Fecha | Cambio |
@@ -247,3 +285,4 @@ prestaría a confusión entre "esto es un botón" y "esto está tardando".
 | 2026-09-02 | El cruce por hora de entrega ahora desglosa **todos** los valores de `Estado` (antes solo mostraba `Entregado` y `Entregado 2DA visita`) — ver excepción agregada al punto 8. El ranking de choferes reemplazó la columna "Después de 21hs" por las 4 franjas horarias individuales (cantidad de entregas antes de 21 / 21-22 / 22-23 / después de 23 por chofer). Al cargar un archivo, el panel se posiciona automáticamente en el rango de fechas que trae ese archivo (antes solo pasaba si el archivo incluía el día de hoy). |
 | 2026-09-04 | Regla #1: el % de entregas efectivas ahora excluye los envíos en estado `A retirar` del **denominador** (antes solo se excluían del numerador, junto con `Retirado`/`Nadie`/`Nadie 2DA visita`), porque son envíos que todavía no llegaron al depósito. Se agregó el contador `aRetirar` a nivel global/zona/chofer en el snapshot que arma `publicar_firestore.py`, y se replicó en `generar_reporte.py`. |
 | 2026-09-04 | Se sacó la carga manual de archivo del dashboard (botón, drag&drop, parseo de .xls en el navegador) porque quedó redundante con la automatización diaria — el dashboard ahora es un lector puro de Firestore, ya no procesa archivos por su cuenta. |
+| 2026-09-17 | Regla #5: se agregó la "ventana de repaso" de 3 días — la corrida de cierre re-descarga y recalcula los últimos 3 días (no solo "ayer") para que las entregas que tardan 1-2 días en confirmarse se reflejen en la efectividad de su día de origen. Se agregó la sección 11: detalle de envíos por chofer (tracking, cliente, localidad, zona, estado, hora de entrega) — sin dirección exacta del destinatario, por privacidad (las reglas de Firestore son abiertas). |

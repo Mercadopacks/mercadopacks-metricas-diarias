@@ -165,7 +165,54 @@ def calcular_snapshots(df: pd.DataFrame) -> dict:
     return snapshots
 
 
-def publicar(snapshots: dict, sa_json: str):
+def sanitizar_id_chofer(cadete: str) -> str:
+    """Los IDs de documento de Firestore no pueden tener '/' ni estar
+    vacíos. Los nombres de chofer no deberían traer '/', pero se sanitiza
+    por las dudas en vez de que la corrida entera falle por un dato raro."""
+    return cadete.replace("/", "-").strip() or "sin-nombre"
+
+
+def calcular_detalle_por_chofer(df: pd.DataFrame) -> dict:
+    """
+    Arma, por fecha y por chofer, el detalle fila por fila de sus envíos
+    para que el dashboard pueda mostrarlo al seleccionar un chofer.
+
+    OJO — decisión de privacidad (2026-09-17): NO se incluye 'Dirección' ni
+    'CP' (domicilio exacto del destinatario). Firestore hoy tiene las
+    reglas abiertas (lectura/escritura sin login) porque hasta ahora solo
+    guardaba métricas agregadas, no datos personales — agregar el domicilio
+    completo ahí lo expondría públicamente. Se guarda 'Localidad' (nivel
+    ciudad/partido, no identifica a una persona puntual) en su lugar. Si en
+    algún momento se necesita el domicilio exacto, hay que agregar
+    autenticación al dashboard antes de guardarlo acá.
+    """
+    detalle: dict = {}
+
+    for _, fila in df.iterrows():
+        fecha = fecha_operativa(fila)
+        cadete = str(fila["Cadete"]).strip()
+        if not fecha or not cadete:
+            continue
+
+        dt = fila.get("_fecha_estado_dt")
+        hora_entrega = dt.strftime("%H:%M") if dt is not None and not pd.isna(dt) else None
+
+        item = {
+            "tracking": str(fila.get("Número Tracking") or "").strip(),
+            "cliente": str(fila.get("Nombre Fantasia") or "").strip(),
+            "localidad": str(fila.get("Localidad") or "").strip(),
+            "zona": str(fila["Zona"]).strip(),
+            "estado": str(fila["Estado"]).strip(),
+            "horaEntrega": hora_entrega,
+        }
+
+        por_fecha = detalle.setdefault(fecha, {})
+        por_fecha.setdefault(cadete, []).append(item)
+
+    return detalle
+
+
+def publicar(snapshots: dict, sa_json: str, detalle: dict | None = None):
     """
     Escribe cada snapshot en envios_daily/<fecha> y agrega esa fecha al
     índice (envios_index/index) sin pisar fechas que ya estaban cargadas por
@@ -187,6 +234,21 @@ def publicar(snapshots: dict, sa_json: str):
 
     index_ref.set({"dates": sorted(fechas)})
 
+    # Detalle por chofer (opcional — puede venir vacío si no se pidió, ver
+    # main()). Se guarda en envios_detalle/<fecha>/choferes/<chofer>, no en
+    # un solo documento por día, para que el dashboard pueda pedir
+    # únicamente el chofer que el usuario seleccionó en vez de bajar el
+    # detalle de todos los choferes del día. `.set()` reemplaza el
+    # documento completo, mismo criterio que el snapshot: si se reprocesa
+    # un día (ventana de repaso), el detalle también queda actualizado.
+    if detalle:
+        for fecha, por_chofer in detalle.items():
+            for cadete, items in por_chofer.items():
+                doc_id = sanitizar_id_chofer(cadete)
+                db.collection("envios_detalle").document(fecha) \
+                    .collection("choferes").document(doc_id) \
+                    .set({"chofer": cadete, "fecha": fecha, "items": items})
+
 
 def main():
     if len(sys.argv) < 2:
@@ -203,9 +265,10 @@ def main():
     print(f"Leyendo {ruta} ...")
     df = procesar(cargar_export(ruta))
     snapshots = calcular_snapshots(df)
+    detalle = calcular_detalle_por_chofer(df)
     print(f"  {len(snapshots)} día(s) encontrados: {', '.join(sorted(snapshots))}")
 
-    publicar(snapshots, sa_json)
+    publicar(snapshots, sa_json, detalle)
     print("Publicado en Firestore correctamente.")
 
 

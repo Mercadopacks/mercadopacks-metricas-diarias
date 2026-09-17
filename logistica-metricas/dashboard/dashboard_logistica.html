@@ -391,6 +391,30 @@
     </div>
   </div>
 
+  <div class="table-card" id="detalleChoferCard" hidden>
+    <div class="table-head">
+      <h3>Detalle de envíos — <span id="detalleChoferNombre"></span></h3>
+      <input id="buscarDetalle" placeholder="Buscar tracking o cliente…" />
+    </div>
+    <p class="tabla-nota">Localidad en vez de dirección exacta, a propósito — ver <em>reglas_de_negocio.md</em>, sección 11.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Tracking</th>
+            <th scope="col">Cliente</th>
+            <th scope="col">Localidad</th>
+            <th class="hide-mobile" scope="col">Zona</th>
+            <th scope="col">Estado</th>
+            <th class="num-col hide-mobile" scope="col">Hora entrega</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyDetalleChofer"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="footer" id="footerInfo" hidden>
     <p><strong>Cómo se define cada métrica:</strong> entrega efectiva = estado "Entregado" o "Entregado 2DA visita" · % efectividad = entregas efectivas / (total − "A retirar") · antes de las 21hs = de las entregas efectivas, hora de "Fecha estado" menor a 21:00 · cancelado = "Cancelado" o "Rechazado por el comprador". Definiciones completas en <em>reglas_de_negocio.md</em>.</p>
     <p>Los datos se comparten entre todas las personas que abren este panel. Se refresca solo cada ~45&nbsp;segundos; tocá «Actualizar» para forzarlo al toque.</p>
@@ -482,6 +506,39 @@
     throw new Error('Clave de storage desconocida: ' + key);
   }
 
+  // Debe coincidir con sanitizar_id_chofer() en publicar_firestore.py —
+  // ambos arman el mismo id de documento a partir del nombre del chofer.
+  function sanitizarIdChofer(cadete){
+    const limpio = (cadete || '').replace(/\//g, '-').trim();
+    return limpio || 'sin-nombre';
+  }
+
+  // Trae el detalle de un chofer para las fechas indicadas (una lectura
+  // por fecha, no todo el detalle del día — ver publicar_firestore.py,
+  // calcular_detalle_por_chofer(), para la decisión de guardar así).
+  // Usa detalleCache para no repetir lecturas ya hechas.
+  async function cargarDetalleChofer(chofer, dates){
+    const idChofer = sanitizarIdChofer(chofer);
+    const items = [];
+    for(const fecha of dates){
+      const clave = fecha + '::' + idChofer;
+      if(!(clave in state.detalleCache)){
+        try{
+          const snap = await db.collection('envios_detalle').doc(fecha)
+            .collection('choferes').doc(idChofer).get();
+          state.detalleCache[clave] = snap.exists ? (snap.data().items || []) : [];
+        }catch(e){
+          console.error('cargarDetalleChofer failed', fecha, chofer, e);
+          state.detalleCache[clave] = [];
+        }
+      }
+      for(const item of state.detalleCache[clave]){
+        items.push(Object.assign({ fecha }, item));
+      }
+    }
+    return items;
+  }
+
   async function storeGet(key){
     try{
       const snap = await refDeClave(key).get();
@@ -507,8 +564,10 @@
     rangeEnd: null,
     index: [],               // fechas disponibles (ISO), ascendente
     cache: {},                // iso -> snapshot
+    detalleCache: {},         // 'iso::choferSanitizado' -> array de items
     sort: { key: 'pctEfectividad', dir: 'desc' },
     search: '',
+    searchDetalle: '',
     lastUpdated: null,
     // Filtros interactivos: click en zona / franja horaria / chofer filtra
     // el resto del dashboard. zona y chofer son mutuamente excluyentes
@@ -699,6 +758,7 @@
       console.error('Error dibujando graficos', e);
     }
     renderTabla(agg);
+    await renderDetalleChofer(dates);
     renderCoverage();
   }
 
@@ -1105,6 +1165,36 @@
     });
   }
 
+  async function renderDetalleChofer(dates){
+    const card = document.getElementById('detalleChoferCard');
+    if(!state.filtroChofer){ card.hidden = true; return; }
+    card.hidden = false;
+    document.getElementById('detalleChoferNombre').textContent = state.filtroChofer;
+
+    const items = await cargarDetalleChofer(state.filtroChofer, dates);
+    const q = state.searchDetalle.trim().toLowerCase();
+    const filtrados = q
+      ? items.filter(it => (it.tracking||'').toLowerCase().includes(q) || (it.cliente||'').toLowerCase().includes(q))
+      : items;
+    filtrados.sort((a,b)=> (b.fecha+((b.horaEntrega)||'')).localeCompare(a.fecha+((a.horaEntrega)||'')));
+
+    const tbody = document.getElementById('tbodyDetalleChofer');
+    if(filtrados.length === 0){
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-muted);">Sin envíos para este chofer en el período (o todavía no se cargó el detalle de estas fechas — el detalle se guarda desde el 2026-09-17 en adelante).</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtrados.map(it => `
+      <tr>
+        <td>${fmtCorto(it.fecha)}</td>
+        <td>${escapeHtml(it.tracking||'—')}</td>
+        <td>${escapeHtml(it.cliente||'—')}</td>
+        <td>${escapeHtml(it.localidad||'—')}</td>
+        <td class="hide-mobile">${escapeHtml(it.zona||'—')}</td>
+        <td>${escapeHtml(it.estado||'—')}</td>
+        <td class="num-col hide-mobile">${escapeHtml(it.horaEntrega||'—')}</td>
+      </tr>`).join('');
+  }
+
   function renderCoverage(){
     const el = document.getElementById('coverage');
     if(!state.index.length){ el.innerHTML=''; return; }
@@ -1209,6 +1299,10 @@
 
   document.getElementById('buscarChofer').addEventListener('input', async (e)=>{
     state.search = e.target.value; await render();
+  });
+
+  document.getElementById('buscarDetalle').addEventListener('input', async (e)=>{
+    state.searchDetalle = e.target.value; await render();
   });
 
   document.querySelector('thead').addEventListener('click', async (e)=>{

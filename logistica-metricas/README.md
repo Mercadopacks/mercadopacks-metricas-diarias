@@ -88,7 +88,10 @@ cualquier navegador.
   archivo — no solo entregados), el desglose por zona (con la cantidad de
   cada segmento de la barra, no solo el total), y el ranking de choferes
   (con Pendientes, la cantidad de entregas en cada una de las 4 franjas
-  horarias, buscador y orden por columna).
+  horarias, buscador y orden por columna). Al seleccionar un chofer, además
+  se muestra el detalle fila por fila de sus envíos del período (tracking,
+  cliente, localidad, zona, estado, hora de entrega — sin dirección exacta,
+  ver reglas_de_negocio.md sección 11).
 - Tiene selector de período: Hoy, Ayer, Últimos 7 días, Últimos 30 días, o
   un rango de fechas a elección. Al abrir el panel, elige automáticamente
   "Hoy" si ya hay datos del día, si no "Ayer", y si no el último día
@@ -114,20 +117,46 @@ esa URL en 1-2 minutos.
 
 **Cómo funciona el guardado compartido:** el archivo `dashboard_logistica.html`
 inicializa el SDK de Firebase (config del proyecto `mercadopacks-metricas`,
-ver bloque `firebaseConfig` al inicio del `<script>`) y usa dos colecciones de
-Firestore:
+ver bloque `firebaseConfig` al inicio del `<script>`) y usa estas colecciones
+de Firestore:
 - `envios_index` (un solo documento, `index`) — la lista de fechas que tienen
   datos cargados.
 - `envios_daily` — un documento por fecha (ID = fecha ISO, ej. `2026-08-31`)
   con el snapshot agregado de ese día (totales, buckets horarios, por chofer,
   por zona).
+- `envios_detalle/<fecha>/choferes/<chofer>` — el detalle fila por fila de
+  los envíos de ese chofer ese día (tracking, cliente, localidad, zona,
+  estado, hora de entrega), para la vista de detalle del dashboard al
+  seleccionar un chofer. **No incluye dirección exacta ni CP** — ver
+  reglas_de_negocio.md, sección 11, sobre por qué.
 
 Las reglas de Firestore están abiertas (lectura/escritura sin autenticación)
-para esas dos colecciones — es una decisión consciente porque es una
+para estas colecciones — es una decisión consciente porque es una
 herramienta interna sin sistema de login y lo que se guarda ahí son métricas
-agregadas, no datos personales de destinatarios. Si el link llegase a
-filtrarse fuera del equipo habría que revisar esto (agregar autenticación o
-cerrar las reglas).
+agregadas y datos operativos (no domicilios ni datos personales del
+destinatario). Si el link llegase a filtrarse fuera del equipo habría que
+revisar esto (agregar autenticación o cerrar las reglas) — y sobre todo
+**nunca** agregar dirección/CP/teléfono/email del destinatario a ninguna
+colección mientras las reglas sigan abiertas.
+
+Reglas de Firestore vigentes (Firebase Console → Firestore Database →
+Reglas):
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /envios_index/{document} {
+      allow read, write: if true;
+    }
+    match /envios_daily/{document} {
+      allow read, write: if true;
+    }
+    match /envios_detalle/{fecha}/choferes/{chofer} {
+      allow read, write: if true;
+    }
+  }
+}
+```
 
 **Qué NO hace (para que no haya sorpresas):**
 - No tiene forma de cargar un archivo a mano — se sacó el botón de carga
@@ -166,7 +195,12 @@ desatendida.
    listado de envíos SIN filtro de Estado (se necesitan todos los estados) y
    descarga el `.xls`. Las 4 corridas de 11 a 18hs piden el día **en curso**
    (una "foto" actualizada de lo que va del día); la corrida de las 00hs
-   pide el día que **acaba de cerrar**.
+   pide el día que **acaba de cerrar, y además los 2 días anteriores a ese**
+   — una "ventana de repaso" de 3 días para que las entregas que tardan 1-2
+   días en confirmarse (recibido el lunes, entregado el miércoles) se
+   reflejen en la efectividad de su día de origen en vez de quedar
+   congeladas para siempre en el número que tenían al momento del cierre
+   original (ver reglas_de_negocio.md, regla #5).
 2. `scripts/publicar_firestore.py` toma ese archivo, calcula exactamente el
    mismo snapshot que arma el dashboard en el navegador (mismas reglas de
    negocio, ver comentarios en el script) y lo publica en Firestore.
@@ -361,3 +395,4 @@ Ideas para las próximas iteraciones, en orden sugerido:
 | 2026-09-07 | La descarga no corre los domingos (no es día operativo, solo se acumulan "A retirar" y falsearía las métricas). Las 4 corridas intradía se restringieron a lunes-sábado; la corrida de las 00hs se restringió a saltear únicamente la madrugada del lunes (que cerraría el domingo) — sigue funcionando el resto de los días, incluida la madrugada del domingo, que cierra el sábado. |
 | 2026-09-08 | Se midió con la API de GitHub que el `schedule` nativo de Actions demoraba 4h30'-5h10' TODOS los días (no un pico ocasional) — incompatible con el objetivo de fotos horarias. Se sacó el `schedule` del workflow y se pasó a disparar por `workflow_dispatch` desde un cron externo (cron-job.org, gratis) que llama a la API de GitHub — ese tipo de disparo no pasa por la cola de `schedule` y arranca casi al instante. Se agregó el input `modo` (hoy/ayer) al workflow, y una verificación propia que saltea la corrida si el día a procesar resulta ser domingo (red de seguridad además de la configuración de cron-job.org). |
 | 2026-09-09 | Bug de datos incompletos: el filtro de Estado de LightData (que se guarda por cuenta en el servidor) le quedó aplicado a un valor distinto de "Todos", y el dashboard mostró ~220 envíos de menos con las entregas recientes ausentes. Se corrigió forzando la selección explícita de "Todos" en cada corrida — ver "Incidente conocido" más arriba. El fix se armó reproduciendo el bug en local con la librería real de Select2 (en vez de iterar a ciegas contra la cuenta real), lo que además dejó un test de regresión permanente (`scripts/tests/test_estado_lightdata.py`) que corre sin credenciales. |
+| 2026-09-17 | Dos mejoras pedidas después de comparar contra LightData en producción: (1) "ventana de repaso" de 3 días en la corrida de cierre, para que las entregas que tardan días en confirmarse dejen de quedar excluidas para siempre de la efectividad de su día de origen; (2) detalle de envíos por chofer (tracking, cliente, localidad, zona, estado, hora de entrega) en `envios_detalle/<fecha>/choferes/<chofer>`, visible en el dashboard al seleccionar un chofer — sin dirección exacta del destinatario, por privacidad (reglas de Firestore abiertas). **Pendiente: agregar la colección `envios_detalle` a las reglas de Firestore en la consola de Firebase** (ver bloque de reglas más arriba) — sin eso, la escritura del detalle va a fallar silenciosamente. |

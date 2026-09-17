@@ -125,34 +125,49 @@ jobs:
           pip install -r requirements.txt
           playwright install --with-deps chromium
 
-      - name: Descargar export de LightData
+      # Qué fechas se procesan en esta corrida:
+      # - Si viene "fecha" explícita (backfill manual): solo esa, sin
+      #   ventana de repaso — es una corrección puntual pedida a mano.
+      # - modo=hoy (las 4 corridas intradía): solo hoy. No tiene sentido
+      #   revisar días pasados 4 veces por día, alcanza con la corrida de
+      #   cierre para eso.
+      # - modo=ayer (o vacío, la corrida de cierre de las 00hs): ayer, y
+      #   además los 2 días anteriores a ayer — "ventana de repaso" de 3
+      #   días. Se agregó porque un envío puede entrar al depósito un día
+      #   y no entregarse hasta 2-3 días después; como cada día se
+      #   descarga filtrando por "Fecha MercadoPacks" (día de entrada, no
+      #   de entrega), sin este repaso el snapshot de ese día quedaba
+      #   "congelado" para siempre con esa entrega tardía sin contar,
+      #   aunque LightData sí la mostrara como entregada al consultarla
+      #   más tarde. Repasando los últimos 3 días, esas entregas tardías
+      #   se terminan reflejando en el día que realmente les corresponde
+      #   (reglas_de_negocio.md, regla #5) sin esperar a un backfill manual.
+      - name: Descargar y publicar (con ventana de repaso de días anteriores)
         if: steps.chequeo.outputs.saltar != 'true'
-        id: descarga
         working-directory: logistica-metricas/scripts
         env:
           LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
           LIGHTDATA_PASS: ${{ secrets.LIGHTDATA_PASS }}
-          FECHA_DESCARGA: ${{ github.event.inputs.fecha }}
-          MODO_FECHA: ${{ github.event.inputs.modo }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FECHA_INPUT: ${{ github.event.inputs.fecha }}
+          MODO_INPUT: ${{ github.event.inputs.modo }}
         run: |
           set -e
-          SALIDA=$(python descargar_lightdata.py)
-          echo "$SALIDA"
-          RUTA=$(echo "$SALIDA" | tail -n1 | sed 's/^Archivo descargado: //')
-          echo "ruta=$RUTA" >> "$GITHUB_OUTPUT"
+          if [ -n "$FECHA_INPUT" ]; then
+            FECHAS="$FECHA_INPUT"
+          elif [ "$MODO_INPUT" = "hoy" ]; then
+            FECHAS=$(date -u +%F)
+          else
+            FECHAS=$(for i in 1 2 3; do date -u -d "-$i day" +%F; done)
+          fi
 
-      # publicar_firestore.py escribe con `.set()` (reemplaza el documento
-      # completo de esa fecha, no lo fusiona registro por registro) y agrega
-      # la fecha al índice sin tocar las demás fechas ya cargadas — por eso
-      # una corrida intradía "pisa" el snapshot del día sin duplicar nada, y
-      # el histórico de días anteriores queda intacto sin ningún cambio
-      # adicional acá.
-      - name: Publicar snapshot en Firestore
-        if: steps.chequeo.outputs.saltar != 'true'
-        working-directory: logistica-metricas/scripts
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: python publicar_firestore.py "${{ steps.descarga.outputs.ruta }}"
+          for FECHA in $FECHAS; do
+            echo "=== Procesando $FECHA ==="
+            SALIDA=$(FECHA_DESCARGA="$FECHA" python descargar_lightdata.py)
+            echo "$SALIDA"
+            RUTA=$(echo "$SALIDA" | tail -n1 | sed 's/^Archivo descargado: //')
+            python publicar_firestore.py "$RUTA"
+          done
 
       # El .xls crudo (con datos personales de destinatarios) NO se commitea
       # al repo — es público. Solo el snapshot agregado llega a Firestore.
