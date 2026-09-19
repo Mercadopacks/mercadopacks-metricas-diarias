@@ -196,15 +196,19 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
 
             seleccionar_estado_todos(page)
 
-            # Botón "Buscar/Filtrar": no tiene texto visible en la página,
-            # por eso el selector es estructural (más frágil ante cambios
-            # de diseño que uno por texto o rol).
-            page.locator(".row > div:nth-child(3) > .row > div > .btn").first.click()
+            # OJO: antes estos dos botones se ubicaban con selectores
+            # estructurales (".row > div:nth-child(3) > ...") asumiendo que
+            # no tenían texto visible — resultó ser falso, y esa asunción
+            # causó un incidente real (2026-09-19): el selector matcheó un
+            # botón de OTRO módulo ("Descarga masiva choferes", de
+            # Liquidación de Cobranzas) que casualmente cae en la misma
+            # posición del DOM. Confirmado con captura de pantalla real que
+            # los botones sí tienen texto visible: "FILTRAR" y "DESCARGAR".
+            page.get_by_role("button", name="FILTRAR", exact=True).click()
 
             with page.expect_download() as download_info:
                 with page.expect_popup() as popup_info:
-                    # Botón de exportar — mismo caso, sin texto visible.
-                    page.locator("div:nth-child(3) > .row > div:nth-child(2) > .btn").click()
+                    page.get_by_role("button", name="DESCARGAR", exact=True).click()
                 popup = popup_info.value
             download = download_info.value
             popup.close()
