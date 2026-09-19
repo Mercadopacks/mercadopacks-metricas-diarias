@@ -204,11 +204,20 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
             # Liquidación de Cobranzas) que casualmente cae en la misma
             # posición del DOM. Confirmado con captura de pantalla real que
             # los botones sí tienen texto visible: "FILTRAR" y "DESCARGAR".
-            page.get_by_role("button", name="FILTRAR", exact=True).click()
+            #
+            # OJO 2: get_by_role("button", name="FILTRAR", exact=True) no
+            # matcheaba nada (0 resultados) — probablemente no son
+            # <button> semánticos, sino algo estilizado para parecerlo
+            # (como "Ingresar" en el login, un poco más arriba, que por la
+            # misma razón usa get_by_text en vez de get_by_role). Se usa
+            # get_by_text acá por lo mismo: no importa qué tag sea, alcanza
+            # con el texto visible. Sin riesgo de matchear otro botón:
+            # "Descarga masiva choferes" no contiene "DESCARGAR" como texto.
+            page.get_by_text("FILTRAR").click()
 
             with page.expect_download() as download_info:
                 with page.expect_popup() as popup_info:
-                    page.get_by_role("button", name="DESCARGAR", exact=True).click()
+                    page.get_by_text("DESCARGAR").click()
                 popup = popup_info.value
             download = download_info.value
             popup.close()
