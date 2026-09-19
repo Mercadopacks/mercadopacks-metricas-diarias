@@ -196,28 +196,27 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
 
             seleccionar_estado_todos(page)
 
-            # OJO: antes estos dos botones se ubicaban con selectores
-            # estructurales (".row > div:nth-child(3) > ...") asumiendo que
-            # no tenían texto visible — resultó ser falso, y esa asunción
-            # causó un incidente real (2026-09-19): el selector matcheó un
-            # botón de OTRO módulo ("Descarga masiva choferes", de
-            # Liquidación de Cobranzas) que casualmente cae en la misma
-            # posición del DOM. Confirmado con captura de pantalla real que
-            # los botones sí tienen texto visible: "FILTRAR" y "DESCARGAR".
-            #
-            # OJO 2: get_by_role("button", name="FILTRAR", exact=True) no
-            # matcheaba nada (0 resultados) — probablemente no son
-            # <button> semánticos, sino algo estilizado para parecerlo
-            # (como "Ingresar" en el login, un poco más arriba, que por la
-            # misma razón usa get_by_text en vez de get_by_role). Se usa
-            # get_by_text acá por lo mismo: no importa qué tag sea, alcanza
-            # con el texto visible. Sin riesgo de matchear otro botón:
-            # "Descarga masiva choferes" no contiene "DESCARGAR" como texto.
-            page.get_by_text("FILTRAR").click()
+            # Botones "Buscar/Filtrar" y "Exportar": NO son <button>
+            # semánticos con texto accesible utilizable (confirmado con dos
+            # intentos fallidos: get_by_role con "FILTRAR" no matcheaba
+            # nada, get_by_text tampoco — el texto visible en pantalla no
+            # es un nodo de texto real que Playwright pueda bindear). El
+            # selector correcto es estructural, pero tiene que estar
+            # ANCLADO al contenedor del módulo de Envíos (#envios_listado)
+            # — confirmado grabando de nuevo la interacción real con
+            # `playwright codegen` (2026-09-19). Sin ese anclaje, el
+            # selector puede "escaparse" y agarrar un botón con la misma
+            # forma en OTRO módulo de la página (pasó de verdad: agarró
+            # "Descarga masiva choferes" de Liquidación de Cobranzas).
+            page.locator(
+                "#envios_listado > .card > .card-content > div > div:nth-child(3) > .row > div > .btn"
+            ).first.click()
 
             with page.expect_download() as download_info:
                 with page.expect_popup() as popup_info:
-                    page.get_by_text("DESCARGAR").click()
+                    page.locator(
+                        "#envios_listado > .card > .card-content > div > div:nth-child(3) > .row > div:nth-child(2) > .btn"
+                    ).click()
                 popup = popup_info.value
             download = download_info.value
             popup.close()
