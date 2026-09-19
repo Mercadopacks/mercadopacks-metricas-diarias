@@ -350,16 +350,29 @@ total del dashboard y el total que se ve en LightData para el mismo día,
 este filtro es el primer lugar para revisar.
 
 **Incidente conocido (2026-09-19):** los botones "Buscar/Filtrar" y
-"Exportar" se ubicaban con selectores CSS estructurales
-(`.row > div:nth-child(3) > ...`), asumiendo que no tenían texto visible.
-Esa asunción era falsa — confirmado con una captura de pantalla real de un
-fallo: el selector matcheó un botón de **otro módulo** de LightData
-("Descarga masiva choferes", de Liquidación de Cobranzas) que casualmente
-cae en la misma posición del DOM. Se corrigió apuntando directamente al
-texto real de los botones ("FILTRAR" y "DESCARGAR"), visibles en la
-captura del incidente. Moraleja para el futuro: ante cualquier fallo de
-selector, pedir/revisar la captura de `error_descarga.png` antes de
-suponer nada sobre qué texto tiene o no tiene un elemento.
+"Exportar" se ubicaban con un selector CSS estructural sin anclar
+(`.row > div:nth-child(3) > ...`), que podía "escaparse" y matchear un
+botón con la misma forma en **otro módulo** de la página. Pasó de verdad:
+agarró "Descarga masiva choferes" (de Liquidación de Cobranzas) en vez del
+botón de Envíos. Se probaron dos arreglos que NO funcionaron antes de
+encontrar la causa real — `get_by_role("button", name="FILTRAR")` y
+`get_by_text("FILTRAR")` fallaron porque estos botones **no tienen texto
+accesible utilizable** (ni rol ni texto real que Playwright pueda
+bindear). El arreglo correcto fue volver a grabar la interacción real con
+`playwright codegen` y usar el selector estructural que esa herramienta
+generó, pero **anclado al contenedor del módulo** (`#envios_listado > ...`
+en vez de empezar directamente en `.row`) — así queda scopeado y no puede
+agarrar nada de otro módulo. Se verificó en local con un fixture que
+reproduce dos módulos de forma idéntica: el selector viejo matchea 2
+elementos (ambiguo), el nuevo matchea exactamente 1.
+
+Moraleja para el futuro: ante cualquier fallo de selector contra
+LightData, la única forma confiable de arreglarlo es **grabar de nuevo con
+`playwright codegen`** (nunca adivinar por una captura de pantalla ni por
+patrones de otros elementos del script) — y si el selector que resulta es
+estructural (no por texto/rol), verificar que esté anclado a un
+contenedor específico del módulo, no empezando en una clase genérica como
+`.row`.
 
 ## Dónde están las definiciones
 
@@ -408,4 +421,4 @@ Ideas para las próximas iteraciones, en orden sugerido:
 | 2026-09-08 | Se midió con la API de GitHub que el `schedule` nativo de Actions demoraba 4h30'-5h10' TODOS los días (no un pico ocasional) — incompatible con el objetivo de fotos horarias. Se sacó el `schedule` del workflow y se pasó a disparar por `workflow_dispatch` desde un cron externo (cron-job.org, gratis) que llama a la API de GitHub — ese tipo de disparo no pasa por la cola de `schedule` y arranca casi al instante. Se agregó el input `modo` (hoy/ayer) al workflow, y una verificación propia que saltea la corrida si el día a procesar resulta ser domingo (red de seguridad además de la configuración de cron-job.org). |
 | 2026-09-09 | Bug de datos incompletos: el filtro de Estado de LightData (que se guarda por cuenta en el servidor) le quedó aplicado a un valor distinto de "Todos", y el dashboard mostró ~220 envíos de menos con las entregas recientes ausentes. Se corrigió forzando la selección explícita de "Todos" en cada corrida — ver "Incidente conocido" más arriba. El fix se armó reproduciendo el bug en local con la librería real de Select2 (en vez de iterar a ciegas contra la cuenta real), lo que además dejó un test de regresión permanente (`scripts/tests/test_estado_lightdata.py`) que corre sin credenciales. |
 | 2026-09-17 | Dos mejoras pedidas después de comparar contra LightData en producción: (1) "ventana de repaso" de 3 días en la corrida de cierre, para que las entregas que tardan días en confirmarse dejen de quedar excluidas para siempre de la efectividad de su día de origen; (2) detalle de envíos por chofer (tracking, cliente, localidad, zona, estado, hora de entrega) en `envios_detalle/<fecha>/choferes/<chofer>`, visible en el dashboard al seleccionar un chofer — sin dirección exacta del destinatario, por privacidad (reglas de Firestore abiertas). **Pendiente: agregar la colección `envios_detalle` a las reglas de Firestore en la consola de Firebase** (ver bloque de reglas más arriba) — sin eso, la escritura del detalle va a fallar silenciosamente. |
-| 2026-09-19 | Los botones "Buscar/Filtrar" y "Exportar" se ubicaban con selectores estructurales asumiendo que no tenían texto visible — falso, confirmado con una captura real de un fallo donde el selector agarró un botón de otro módulo de LightData. Se corrigió apuntando al texto real ("FILTRAR" / "DESCARGAR") — ver "Incidente conocido" más arriba. |
+| 2026-09-19 | Los botones "Buscar/Filtrar" y "Exportar" se ubicaban con un selector estructural sin anclar, que se "escapó" y agarró un botón de otro módulo de LightData. Se probaron dos arreglos por texto/rol que no funcionaron (estos botones no tienen texto accesible real); el arreglo correcto fue volver a grabar con `playwright codegen` y anclar el selector estructural resultante al contenedor `#envios_listado` — verificado en local reproduciendo la ambigüedad del selector viejo contra el nuevo. Ver "Incidente conocido" más arriba. |
