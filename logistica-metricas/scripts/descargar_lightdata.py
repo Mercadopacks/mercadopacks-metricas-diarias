@@ -62,24 +62,22 @@ CARPETA_SALIDA = Path(__file__).resolve().parent.parent / "datos_crudos"
 TIMEOUT_MS = 20_000
 
 
-MESES_ES = [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-]
-
-
 def navegar_a_mes(page, fecha):
     """
-    Navega el calendario (un date picker de Angular Material — reconocible
-    por el panel azul con la fecha grande a la izquierda, confirmado con
-    una captura real) hasta el mes/año de `fecha`, clickeando "mes
-    anterior"/"mes siguiente" las veces que haga falta.
+    Navega el calendario (el date picker nativo de Materialize CSS — NO es
+    Angular Material, un intento anterior de este fix asumió mal el
+    framework a partir de una sola captura y falló en producción con un
+    timeout) hasta el mes/año de `fecha`, clickeando "mes anterior"/"mes
+    siguiente" las veces que haga falta.
 
-    Se usan las clases estables del componente de Angular Material
-    (`mat-calendar-previous-button` / `mat-calendar-next-button` /
-    `mat-calendar-period-button`) en vez de texto visible, porque ese texto
-    podría venir en español o inglés según el locale configurado en
-    LightData, mientras que las clases del framework no cambian.
+    Selectores confirmados inspeccionando el HTML real del picker (no
+    adivinados): el botón "mes anterior" es `button.month-prev` (por
+    simetría con el de Materialize, "mes siguiente" es `button.month-next`),
+    y el mes/año actual se lee de dos `<select>` nativos que Materialize
+    mantiene ocultos pero sincronizados con la UI visible
+    (`select.orig-select-month`, con valores 0=Enero...11=Diciembre, y
+    `select.orig-select-year`) — mucho más confiable que parsear un texto
+    visible que podría cambiar de idioma.
 
     Bug real que esto corrige (2026-10-01): antes, seleccionar_dia() solo
     clickeaba el botón del número de día en el mes que el calendario tuviera
@@ -96,25 +94,42 @@ def navegar_a_mes(page, fecha):
     2026-10-01T03:00 UTC, aunque el workflow de GitHub Actions marcó esa
     corrida como exitosa).
     """
-    boton_anterior = page.locator("button.mat-calendar-previous-button")
-    boton_siguiente = page.locator("button.mat-calendar-next-button")
-    etiqueta_periodo = page.locator("button.mat-calendar-period-button")
+    boton_anterior = page.locator("button.month-prev")
+    boton_siguiente = page.locator("button.month-next")
+    select_mes = page.locator("select.orig-select-month")
+    select_anio = page.locator("select.orig-select-year")
+
+    # Falla rápido y con un mensaje claro si cambió la estructura del picker,
+    # en vez de un timeout críptico de 20s esperando un selector que no
+    # existe (lo que pasó con el intento anterior, que asumió mal el
+    # framework del date picker).
+    if (
+        boton_anterior.count() == 0 or boton_siguiente.count() == 0
+        or select_mes.count() == 0 or select_anio.count() == 0
+    ):
+        raise RuntimeError(
+            "No se encontraron los controles de navegación del calendario de "
+            "LightData (button.month-prev / button.month-next / "
+            "select.orig-select-month / select.orig-select-year) — puede que "
+            "haya cambiado la estructura del date picker. Revisar con "
+            "playwright codegen antes de reintentar, no adivinar selectores nuevos."
+        )
 
     objetivo_idx = fecha.year * 12 + (fecha.month - 1)
 
     for _ in range(36):  # tope de seguridad: 3 años de margen, nunca debería hacer falta tanto
-        texto = etiqueta_periodo.inner_text().strip().lower()
-        nombre_mes, anio_str = texto.rsplit(" ", 1)
-        actual_idx = int(anio_str) * 12 + MESES_ES.index(nombre_mes)
+        mes_actual = int(select_mes.input_value())  # 0=Enero ... 11=Diciembre
+        anio_actual = int(select_anio.input_value())
+        actual_idx = anio_actual * 12 + mes_actual
         diferencia = objetivo_idx - actual_idx
         if diferencia == 0:
             return
         (boton_siguiente if diferencia > 0 else boton_anterior).click()
 
     raise RuntimeError(
-        f"No se pudo navegar el calendario hasta {MESES_ES[fecha.month - 1]} "
-        f"{fecha.year} después de 36 intentos — puede que haya cambiado la "
-        "estructura del date picker de LightData."
+        f"No se pudo navegar el calendario hasta el mes {fecha.month}/{fecha.year} "
+        "después de 36 intentos — puede que haya cambiado la estructura del "
+        "date picker de LightData."
     )
 
 
