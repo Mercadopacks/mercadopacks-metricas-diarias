@@ -62,18 +62,69 @@ CARPETA_SALIDA = Path(__file__).resolve().parent.parent / "datos_crudos"
 TIMEOUT_MS = 20_000
 
 
-def seleccionar_dia(page, dia: int):
-    """
-    Clickea el botón del día indicado en el calendario que está abierto.
+MESES_ES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+]
 
-    Nota / limitación conocida: si "ayer" cae en el mes anterior (es decir,
-    hoy es el día 1 del mes), el calendario podría no mostrar ese día sin
-    antes navegar al mes anterior. Esto no se probó todavía porque no
-    ocurrió durante la grabación del flujo — si el script falla el primer
-    día de cada mes, revisar este paso primero (agregar un click al botón
-    de "mes anterior" del picker antes de buscar el día).
+
+def navegar_a_mes(page, fecha):
     """
-    page.get_by_role("button", name=str(dia), exact=True).click()
+    Navega el calendario (un date picker de Angular Material — reconocible
+    por el panel azul con la fecha grande a la izquierda, confirmado con
+    una captura real) hasta el mes/año de `fecha`, clickeando "mes
+    anterior"/"mes siguiente" las veces que haga falta.
+
+    Se usan las clases estables del componente de Angular Material
+    (`mat-calendar-previous-button` / `mat-calendar-next-button` /
+    `mat-calendar-period-button`) en vez de texto visible, porque ese texto
+    podría venir en español o inglés según el locale configurado en
+    LightData, mientras que las clases del framework no cambian.
+
+    Bug real que esto corrige (2026-10-01): antes, seleccionar_dia() solo
+    clickeaba el botón del número de día en el mes que el calendario tuviera
+    abierto por default — el mes de "hoy" en LightData, no el mes de la
+    fecha pedida. La corrida de cierre de las 00hs ART (que además repasa
+    los 2 días anteriores, ver reglas_de_negocio.md regla #5) cae justo
+    después de medianoche: el 1° de octubre pidió los días 30/29/28 de
+    SEPTIEMBRE, pero el calendario abría en OCTUBRE — y como esos mismos
+    números de día también existen en octubre, el script clickeaba la
+    fecha equivocada sin ningún error visible. LightData devolvía 0 filas
+    para ese rango y el snapshot de esos 3 días quedó sin actualizar, en
+    silencio (incidente real: envios_daily/2026-09-30, 2026-09-29 y
+    2026-09-28 no se actualizaron con la corrida de cierre del
+    2026-10-01T03:00 UTC, aunque el workflow de GitHub Actions marcó esa
+    corrida como exitosa).
+    """
+    boton_anterior = page.locator("button.mat-calendar-previous-button")
+    boton_siguiente = page.locator("button.mat-calendar-next-button")
+    etiqueta_periodo = page.locator("button.mat-calendar-period-button")
+
+    objetivo_idx = fecha.year * 12 + (fecha.month - 1)
+
+    for _ in range(36):  # tope de seguridad: 3 años de margen, nunca debería hacer falta tanto
+        texto = etiqueta_periodo.inner_text().strip().lower()
+        nombre_mes, anio_str = texto.rsplit(" ", 1)
+        actual_idx = int(anio_str) * 12 + MESES_ES.index(nombre_mes)
+        diferencia = objetivo_idx - actual_idx
+        if diferencia == 0:
+            return
+        (boton_siguiente if diferencia > 0 else boton_anterior).click()
+
+    raise RuntimeError(
+        f"No se pudo navegar el calendario hasta {MESES_ES[fecha.month - 1]} "
+        f"{fecha.year} después de 36 intentos — puede que haya cambiado la "
+        "estructura del date picker de LightData."
+    )
+
+
+def seleccionar_dia(page, fecha):
+    """
+    Navega al mes de `fecha` (ver navegar_a_mes) y clickea el botón del día
+    indicado en el calendario que está abierto.
+    """
+    navegar_a_mes(page, fecha)
+    page.get_by_role("button", name=str(fecha.day), exact=True).click()
 
 
 def seleccionar_estado_todos(page):
@@ -147,7 +198,6 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
     Ver calcular_fecha_objetivo() para la lógica de qué día se descarga.
     """
     fecha = calcular_fecha_objetivo(fecha_objetivo, modo_fecha)
-    dia = fecha.day
 
     CARPETA_SALIDA.mkdir(parents=True, exist_ok=True)
 
@@ -179,11 +229,11 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
             page.get_by_role("link", name="menu Envios").click()
 
             page.get_by_role("textbox", name="Fecha desde/hasta").click()
-            seleccionar_dia(page, dia)
+            seleccionar_dia(page, fecha)
             page.get_by_role("button", name="Ok").click()
 
             page.get_by_role("textbox", name="Hasta", exact=True).click()
-            seleccionar_dia(page, dia)
+            seleccionar_dia(page, fecha)
             page.get_by_role("button", name="Ok").click()
 
             # Cierra un chip que a veces queda abierto en el área de fechas

@@ -266,6 +266,32 @@ def main():
     df = procesar(cargar_export(ruta))
     snapshots = calcular_snapshots(df)
     detalle = calcular_detalle_por_chofer(df)
+
+    # Red de seguridad agregada tras un incidente real (2026-10-01): un
+    # archivo de LightData con 0 filas útiles (p.ej. porque el date picker
+    # quedó en el mes equivocado — ver seleccionar_dia() en
+    # descargar_lightdata.py) antes hacía que este script terminara sin
+    # error y sin escribir nada en Firestore, dejando el snapshot de ese
+    # día desactualizado EN SILENCIO (el workflow de GitHub Actions marcaba
+    # la corrida como exitosa igual). Ahora se corta acá con un error
+    # explícito para que la corrida quede marcada como fallida y se note.
+    if not snapshots:
+        sys.exit(
+            f"El archivo {ruta} no generó ningún snapshot (0 filas con fecha "
+            "operativa válida). Esto casi siempre significa que el filtro de "
+            "fecha de LightData apuntó al día o mes equivocado al descargar "
+            "— revisar antes de reintentar, no ignorar este error."
+        )
+
+    esperado = os.environ.get("FECHA_DESCARGA", "").strip()
+    if esperado and esperado not in snapshots:
+        sys.exit(
+            f"Se esperaba el día {esperado} pero el archivo solo trajo datos "
+            f"de: {', '.join(sorted(snapshots))}. Probablemente el calendario "
+            "de LightData quedó en el mes equivocado — revisar antes de "
+            "reintentar, no ignorar este error."
+        )
+
     print(f"  {len(snapshots)} día(s) encontrados: {', '.join(sorted(snapshots))}")
 
     publicar(snapshots, sa_json, detalle)

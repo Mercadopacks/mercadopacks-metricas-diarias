@@ -163,7 +163,8 @@ jobs:
 
           for FECHA in $FECHAS; do
             echo "=== Procesando $FECHA ==="
-            SALIDA=$(FECHA_DESCARGA="$FECHA" python descargar_lightdata.py)
+            export FECHA_DESCARGA="$FECHA"
+            SALIDA=$(python descargar_lightdata.py)
             echo "$SALIDA"
             RUTA=$(echo "$SALIDA" | tail -n1 | sed 's/^Archivo descargado: //')
             python publicar_firestore.py "$RUTA"
