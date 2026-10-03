@@ -98,20 +98,53 @@ class LocatorFalso:
             raise AssertionError("solo los botones prev/next se clickean")
 
 
+def _resolver_dentro_del_modal(calendario: CalendarioFalso, selector: str):
+    if "month-prev" in selector:
+        return LocatorFalso(calendario, "prev")
+    if "month-next" in selector:
+        return LocatorFalso(calendario, "next")
+    if "orig-select-month" in selector:
+        return LocatorFalso(calendario, "mes")
+    if "orig-select-year" in selector:
+        return LocatorFalso(calendario, "anio")
+    raise AssertionError(f"selector inesperado dentro del modal: {selector}")
+
+
+class ModalFalso:
+    """Simula `.modal.open` — el contenedor del calendario abierto. Sus
+    hijos (`.locator(...)`) se resuelven contra el mismo CalendarioFalso."""
+
+    def __init__(self, calendario: CalendarioFalso):
+        self.calendario = calendario
+
+    def locator(self, selector: str):
+        return _resolver_dentro_del_modal(self.calendario, selector)
+
+    def count(self):
+        return 1
+
+    @property
+    def last(self):
+        return self
+
+
 class PageFalsa:
     def __init__(self, calendario: CalendarioFalso):
         self.calendario = calendario
 
     def locator(self, selector: str):
-        if "month-prev" in selector:
-            return LocatorFalso(self.calendario, "prev")
-        if "month-next" in selector:
-            return LocatorFalso(self.calendario, "next")
-        if "orig-select-month" in selector:
-            return LocatorFalso(self.calendario, "mes")
-        if "orig-select-year" in selector:
-            return LocatorFalso(self.calendario, "anio")
-        raise AssertionError(f"selector inesperado: {selector}")
+        if selector == ".modal.open":
+            if not self.calendario.existe:
+                return ModalInexistenteFalso()
+            return ModalFalso(self.calendario)
+        raise AssertionError(f"selector inesperado a nivel de página: {selector}")
+
+
+class ModalInexistenteFalso:
+    """Simula `.modal.open` cuando no hay ningún modal abierto (count() == 0)."""
+
+    def count(self):
+        return 0
 
 
 CASOS_OK = [

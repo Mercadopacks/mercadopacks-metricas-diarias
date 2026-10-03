@@ -62,13 +62,45 @@ CARPETA_SALIDA = Path(__file__).resolve().parent.parent / "datos_crudos"
 TIMEOUT_MS = 20_000
 
 
+def _modal_de_calendario_abierto(page):
+    """
+    Devuelve el contenedor del modal de Materialize que está REALMENTE
+    abierto en este momento (clase `.modal.open` — convención propia y
+    documentada de Materialize, no un supuesto nuevo: es la misma clase que
+    el propio framework agrega/saca al abrir/cerrar un modal).
+
+    Hace falta escalear todo a este contenedor porque LightData puede tener
+    más de una instancia del date picker en el DOM al mismo tiempo (se
+    confirmó en un backfill real: `select.orig-select-month` resolvió a 2
+    elementos en vez de 1, con el calendario recién abierto por primera vez
+    — todavía no está claro por qué hay una segunda instancia, pero da
+    igual: filtrando por cuál modal está efectivamente abierto, el resto de
+    los selectores dejan de ser ambiguos sin depender de entender esa causa).
+    """
+    modal = page.locator(".modal.open")
+    n = modal.count()
+    if n == 0:
+        raise RuntimeError(
+            "No se encontró ningún '.modal.open' — el calendario de LightData "
+            "no se abrió como se esperaba, o cambió de estructura (ya no usa "
+            "el modal de Materialize). Revisar con playwright codegen antes "
+            "de reintentar, no adivinar selectores nuevos."
+        )
+    # Si por lo que sea hay más de un modal marcado "open" a la vez, nos
+    # quedamos con el más reciente (el último en el DOM) en vez de fallar —
+    # es la opción más razonable sin más información, y de todas formas cada
+    # paso de abajo tiene su propio chequeo de "no encontrado".
+    return modal.last if n > 1 else modal
+
+
 def navegar_a_mes(page, fecha):
     """
     Navega el calendario (el date picker nativo de Materialize CSS — NO es
     Angular Material, un intento anterior de este fix asumió mal el
     framework a partir de una sola captura y falló en producción con un
     timeout) hasta el mes/año de `fecha`, clickeando "mes anterior"/"mes
-    siguiente" las veces que haga falta.
+    siguiente" las veces que haga falta, todo escaleado dentro del modal
+    que está realmente abierto (ver `_modal_de_calendario_abierto`).
 
     Selectores confirmados inspeccionando el HTML real del picker (no
     adivinados): el botón "mes anterior" es `button.month-prev` (por
@@ -77,7 +109,9 @@ def navegar_a_mes(page, fecha):
     mantiene ocultos pero sincronizados con la UI visible
     (`select.orig-select-month`, con valores 0=Enero...11=Diciembre, y
     `select.orig-select-year`) — mucho más confiable que parsear un texto
-    visible que podría cambiar de idioma.
+    visible que podría cambiar de idioma. `input_value()` funciona sobre
+    estos selects aunque Materialize los mantenga ocultos a propósito (es
+    una lectura del DOM, no una interacción que requiera visibilidad).
 
     Bug real que esto corrige (2026-10-01): antes, seleccionar_dia() solo
     clickeaba el botón del número de día en el mes que el calendario tuviera
@@ -94,10 +128,11 @@ def navegar_a_mes(page, fecha):
     2026-10-01T03:00 UTC, aunque el workflow de GitHub Actions marcó esa
     corrida como exitosa).
     """
-    boton_anterior = page.locator("button.month-prev")
-    boton_siguiente = page.locator("button.month-next")
-    select_mes = page.locator("select.orig-select-month")
-    select_anio = page.locator("select.orig-select-year")
+    modal = _modal_de_calendario_abierto(page)
+    boton_anterior = modal.locator("button.month-prev")
+    boton_siguiente = modal.locator("button.month-next")
+    select_mes = modal.locator("select.orig-select-month")
+    select_anio = modal.locator("select.orig-select-year")
 
     # Falla rápido y con un mensaje claro si cambió la estructura del picker,
     # en vez de un timeout críptico de 20s esperando un selector que no
@@ -108,8 +143,8 @@ def navegar_a_mes(page, fecha):
         or select_mes.count() == 0 or select_anio.count() == 0
     ):
         raise RuntimeError(
-            "No se encontraron los controles de navegación del calendario de "
-            "LightData (button.month-prev / button.month-next / "
+            "No se encontraron los controles de navegación dentro del modal "
+            "de calendario abierto (button.month-prev / button.month-next / "
             "select.orig-select-month / select.orig-select-year) — puede que "
             "haya cambiado la estructura del date picker. Revisar con "
             "playwright codegen antes de reintentar, no adivinar selectores nuevos."
@@ -136,10 +171,13 @@ def navegar_a_mes(page, fecha):
 def seleccionar_dia(page, fecha):
     """
     Navega al mes de `fecha` (ver navegar_a_mes) y clickea el botón del día
-    indicado en el calendario que está abierto.
+    indicado, dentro del modal que está realmente abierto — mismo motivo que
+    en navegar_a_mes: puede haber más de una instancia del calendario en el
+    DOM, y el número de día (ej. "28") existe en cualquiera de ellas.
     """
     navegar_a_mes(page, fecha)
-    page.get_by_role("button", name=str(fecha.day), exact=True).click()
+    modal = _modal_de_calendario_abierto(page)
+    modal.get_by_role("button", name=str(fecha.day), exact=True).click()
 
 
 def seleccionar_estado_todos(page):
