@@ -12,7 +12,7 @@ implementan estas reglas por separado (no comparten código entre sí):
   calcula las franjas horarias y los agregados por su cuenta, replicando la
   misma lógica que el dashboard.
 
-Última actualización: 2026-09-17.
+Última actualización: 2026-10-23.
 
 ---
 
@@ -271,6 +271,82 @@ no guardarlo en la base abierta como está hoy.
 `Fecha estado` (de donde sale la hora de entrega) no tienen este problema:
 no son datos personales de una persona física.
 
+## 12. Indicadores estilo Mercado Libre ("Mis métricas")
+
+Fila de 6 tarjetas chicas arriba de los KPIs principales, pedida para
+replicar el panel "Mis métricas" que Mercado Libre comparte con los
+transportistas. Se calculan enteramente a partir de `porEstadoHora`
+(desglose por estado × franja horaria, ya guardado en cada snapshot diario
+desde antes — ver sección 8), así que no hace falta ningún cambio en la
+descarga ni en la publicación.
+
+**Importante — son siempre GLOBALES:** igual que la tabla "Cruce por hora
+de entrega" (sección 8), estos indicadores NO respetan el filtro de
+zona/chofer activo, porque `porEstadoHora` no se guarda con ese cruce. Usan
+el agregado completo del período (`agg`), no el `scope` filtrado.
+
+Cada tarjeta muestra un valor principal (grande) y, debajo, el desglose
+numérico que lo compone — cada número junto a su "de TOTAL" para no tener
+que adivinar la base de comparación (ajuste pedido el 2026-10-16). Un ícono
+"i" en cada título muestra la fórmula completa al pasar el mouse, y el
+bloque de definiciones fijo que antes estaba siempre visible al pie de
+página pasó a un link colapsable ("ⓘ Cómo se calculan estas métricas").
+
+Definiciones (TOTAL = total de envíos del período, sin excluir "A retirar"
+salvo que se diga lo contrario):
+
+1. **Entregas Efectivas** (2026-10-23, antes "Envíos correctos") — % =
+   (`Entregado` + `Entregado 2DA visita`, sin restringir por hora) /
+   (TOTAL − "A retirar"). Mismo criterio que el viejo KPI "Entregas
+   efectivas" que este panel reemplazó. Debajo, el número de `Entregado` y
+   de `Entregado 2DA visita` por separado.
+2. **Entregas Pre 21** (2026-10-23: pasó a tener un % como protagonista,
+   igual que "Entregas Post 21") — % = `Entregado` antes de 21hs / TOTAL.
+   Debajo, el número de `Entregado` y de `Entregado 2DA visita` antes de
+   21hs, por separado.
+3. **Entregas post 21** — % = `Entregado` después de 21hs / TOTAL (el % no
+   incluye "2DA visita", solo el desglose numérico la muestra aparte).
+   Números: `Entregado` después de 21hs, y `Entregado 2DA visita` después
+   de 21hs.
+4. **Envíos incorrectos** — % = (TOTAL − Entregado antes de 21hs) / TOTAL.
+   Es decir, todo lo que no sea "Entregado antes de 21hs" cuenta como
+   incorrecto, incluida una entrega real pero tardía (mismo criterio desde
+   que se creó esta tarjeta, no cambió con el punto 1).
+5. **Reprogramado post 21** — % = (`reprogramado por meli` +
+   `reprogramado por comprador`, después de 21hs) / TOTAL. Los nombres de
+   estado van en minúsculas tal cual los exporta LightData (inconsistencia
+   real del export, no un error de tipeo). `reprogramado por comprador`
+   nunca apareció todavía en los datos reales (43 días de historial
+   revisados el 2026-10-15) pero se incluye igual porque es un estado
+   válido de LightData.
+6. **Demora** — % = (todo estado que NO sea `Entregado` ni `Entregado 2DA
+   visita`, sumado después de 21hs) / TOTAL. Por diseño puede solaparse
+   con el punto 5 (un `reprogramado por meli` post-21 cuenta en las dos
+   tarjetas) — son tarjetas independientes, no una partición exhaustiva.
+
+### Pestañas de reportes (2026-10-16)
+
+"Entregas por hora", "Cruce por hora de entrega", "Por zona" y "Ranking de
+choferes" dejaron de mostrarse todos apilados — ahora son 4 pestañas y se
+ve una a la vez. Internamente se sigue calculando todo igual; lo único que
+cambia es que el gráfico SVG activo se vuelve a dibujar al cambiar de
+pestaña (si se dibuja con el contenedor oculto, mide ancho/alto 0 y queda
+mal escalado para siempre — ver comentario de `aplicarReportTab()` en el
+dashboard).
+
+### Tema visual claro (2026-10-23)
+
+El dashboard pasó de fondo oscuro a fondo claro (gris muy clarito de
+página, tarjetas blancas) con la marca (dorado `#F6BE05` + casi negro) para
+título, bordes, botones y estados activos. El semáforo de puntualidad
+(verde/amarillo/rojo/rojo oscuro, sección 8) se mantuvo exactamente igual a
+propósito — la marca es para el "chrome" de la interfaz, el semáforo sigue
+siendo el lenguaje de color para leer las métricas de un vistazo. De paso
+se corrigió un bug real preexistente (no introducido por este cambio): el
+cuadro de "filtros activos" se veía vacío con borde dorado aun sin ningún
+filtro puesto, porque la regla CSS de la clase tenía más especificidad que
+el atributo `hidden` del navegador.
+
 ## Historial de cambios
 
 | Fecha | Cambio |
@@ -286,3 +362,6 @@ no son datos personales de una persona física.
 | 2026-09-04 | Regla #1: el % de entregas efectivas ahora excluye los envíos en estado `A retirar` del **denominador** (antes solo se excluían del numerador, junto con `Retirado`/`Nadie`/`Nadie 2DA visita`), porque son envíos que todavía no llegaron al depósito. Se agregó el contador `aRetirar` a nivel global/zona/chofer en el snapshot que arma `publicar_firestore.py`, y se replicó en `generar_reporte.py`. |
 | 2026-09-04 | Se sacó la carga manual de archivo del dashboard (botón, drag&drop, parseo de .xls en el navegador) porque quedó redundante con la automatización diaria — el dashboard ahora es un lector puro de Firestore, ya no procesa archivos por su cuenta. |
 | 2026-09-17 | Regla #5: se agregó la "ventana de repaso" de 3 días — la corrida de cierre re-descarga y recalcula los últimos 3 días (no solo "ayer") para que las entregas que tardan 1-2 días en confirmarse se reflejen en la efectividad de su día de origen. Se agregó la sección 11: detalle de envíos por chofer (tracking, cliente, localidad, zona, estado, hora de entrega) — sin dirección exacta del destinatario, por privacidad (las reglas de Firestore son abiertas). |
+| 2026-10-15 | Sección 12: se agregaron 6 indicadores estilo "Mis métricas" de Mercado Libre (envíos correctos, entregas pre/post 21, envíos incorrectos, reprogramado post 21, demora) arriba de los KPIs principales. Se calculan enteramente a partir de `porEstadoHora`, que ya se guardaba — no hubo que tocar descarga ni publicación. Son siempre globales (no respetan filtro de zona/chofer), igual que la tabla "Cruce por hora". |
+| 2026-10-16 | Tres ajustes a los indicadores del 2026-10-15: cada valor ahora muestra "de TOTAL" para no perder de vista la base de comparación; el bloque fijo de definiciones/días cargados pasó a un link colapsable ("ⓘ Cómo se calculan estas métricas"); y "Entregas por hora" / "Cruce por hora de entrega" / "Por zona" / "Ranking de choferes" pasaron de estar todos apilados a ser 4 pestañas (una visible a la vez). |
+| 2026-10-23 | Los 4 KPIs viejos del dashboard (Total de envíos, Entregas efectivas, Antes de las 21:00, Cancelados/rechazados) se sacaron del todo — quedaron redundantes con los indicadores nuevos. El indicador "Envíos correctos" pasó a llamarse "Entregas Efectivas" y retomó la definición del viejo KPI del mismo nombre (Entregado + Entregado 2DA visita, sin restringir por hora, sobre total − "A retirar"); "Entregas Pre 21" pasó a tener un % como valor principal, igual que "Entregas Post 21" (antes mostraba solo el total sin porcentaje). Además, el dashboard pasó de tema oscuro a tema claro (fondo gris clarito, tarjetas blancas, marca dorado/negro en el "chrome" de la interfaz) manteniendo el semáforo verde/amarillo/rojo de puntualidad sin cambios — ver sección 12. |

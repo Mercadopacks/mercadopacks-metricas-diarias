@@ -13,20 +13,24 @@
     /* Marca (MP): dorado + negro, tomado del logo. Se usa para el "chrome"
        de la interfaz (fondo, paneles, botones, acentos de navegacion) —
        a proposito NO se usa para indicar puntualidad, para no mezclar
-       "esto es de la marca" con "esto es una alerta". */
-    --bg: #0c0c0e;
-    --panel: #17171a;
-    --panel-2: #202023;
-    --border: #2b2b2f;
-    --text: #f2efe8;
-    --text-muted: #98979c;
+       "esto es de la marca" con "esto es una alerta".
+       Tema claro (pedido 2026-10-23): fondo gris clarito, tarjetas blancas,
+       texto casi negro — dorado/negro para titulos, bordes y acentos. */
+    --bg: #efeeea;
+    --panel: #ffffff;
+    --panel-2: #f1efe7;
+    --border: #e3e0d5;
+    --text: #1a1710;
+    --text-muted: #6f6c62;
     --gold: #f6be05;
-    --gold-soft: rgba(246,190,5,.14);
-    --gold-ink: #171400;
+    --gold-soft: rgba(246,190,5,.20);
+    --gold-ink: #1a1710;
 
     /* Semaforo de puntualidad (entrega): verde = antes de las 21,
        amarillo = 21 a 22, rojo = 22 a 23, rojo oscuro = despues de las 23.
-       Independiente de la marca. */
+       Independiente de la marca — se mantienen igual en el tema claro a
+       proposito (pedido explicito: no limitarse a dorado/negro para la
+       informacion de las metricas, solo para el "chrome" de la interfaz). */
     --verde: #34c759;
     --verde-soft: rgba(52,199,89,.14);
     --amarillo: #f2994a;
@@ -77,7 +81,7 @@
     border-radius: 8px; padding:7px 12px; font-size:13px; font-weight:500;
     display:inline-flex; align-items:center; gap:6px; transition: border-color .15s, background .15s;
   }
-  .btn:hover{ border-color:#45454b; background:#232326; }
+  .btn:hover{ border-color:var(--gold); background:var(--panel-2); }
   .btn:focus-visible, input:focus-visible, select:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
   .btn svg{ width:14px; height:14px; }
   .btn.spin svg{ animation: spin 0.8s linear infinite; }
@@ -89,6 +93,7 @@
     gap:14px; margin-bottom:20px;
   }
   .chips{ display:flex; gap:6px; flex-wrap:wrap; }
+  #reportTabs{ margin-bottom:14px; }
   .chip{
     background:transparent; border:1px solid var(--border); color:var(--text-muted);
     border-radius:20px; padding:6px 13px; font-size:12.5px; font-weight:500;
@@ -96,7 +101,7 @@
   }
   .chip:hover{ border-color:var(--gold); color:var(--text); }
   .chip:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
-  .chip.active{ background: var(--gold-soft); border-color:var(--gold); color:var(--gold); font-weight:600; }
+  .chip.active{ background: var(--gold); border-color:var(--text); color:var(--text); font-weight:600; }
   .range-inputs{ display:none; align-items:center; gap:6px; }
   .range-inputs.show{ display:flex; }
   .range-inputs input[type=date]{
@@ -105,21 +110,51 @@
   }
   .range-inputs span{ color:var(--text-muted); font-size:12px; }
 
-  /* ---------- kpis ---------- */
-  .kpis{ display:grid; grid-template-columns:repeat(2, 1fr); gap:14px; margin-bottom:24px; }
-  .kpi{
-    background:var(--panel); border:1px solid var(--border); border-radius: var(--radius);
-    padding:16px 16px 14px; border-left:3px solid var(--slate);
+  /* ---------- mini kpis (estilo "Mis métricas" de Mercado Libre) ---------- */
+  .mini-kpis{ display:grid; grid-template-columns:repeat(1, 1fr); gap:10px; margin-bottom:24px; }
+  @media (min-width: 640px){ .mini-kpis{ grid-template-columns:repeat(2, 1fr); } }
+  @media (min-width: 1000px){ .mini-kpis{ grid-template-columns:repeat(3, 1fr); } }
+  .mini-kpi{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px;
   }
-  .kpi.k-total{ border-left-color:var(--gold); }
-  .kpi.k-efectiva{ border-left-color:var(--gold); }
-  .kpi.k-verde{ border-left-color:var(--verde); }
-  .kpi.k-amarillo{ border-left-color:var(--amarillo); }
-  .kpi.k-rojo{ border-left-color:var(--rojo); }
-  .kpi.k-cancel{ border-left-color:var(--rojo-oscuro); }
-  .kpi .label{ color:var(--text-muted); font-size:12.5px; margin-bottom:8px; }
-  .kpi .value{ font-size:28px; font-weight:700; line-height:1; }
-  .kpi .foot{ color:var(--text-muted); font-size:12px; margin-top:6px; }
+  .mini-kpi .mini-label{
+    display:flex; align-items:center; gap:5px; color:var(--text-muted); font-size:11.5px; margin-bottom:9px;
+  }
+  .mini-info{
+    position:relative; display:inline-flex; align-items:center; justify-content:center;
+    width:14px; height:14px; border-radius:50%; background:var(--panel-2); border:1px solid var(--border);
+    color:var(--text-muted); font-size:10px; font-style:italic; font-family:Georgia, serif; line-height:1;
+    cursor:help; flex:none;
+  }
+  .mini-info:hover, .mini-info:focus-visible{ border-color:var(--gold); color:var(--gold); outline:none; }
+  .mini-info:hover .mini-tooltip, .mini-info:focus-visible .mini-tooltip{ opacity:1; visibility:visible; transform:translate(-50%,0); }
+  .mini-tooltip{
+    position:absolute; bottom:calc(100% + 9px); left:50%; transform:translate(-50%,4px);
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:11.5px;
+    font-style:normal; font-weight:400; text-align:left; line-height:1.45;
+    padding:9px 11px; border-radius:8px; width:230px;
+    opacity:0; visibility:hidden; transition:opacity .12s, transform .12s; z-index:30;
+    box-shadow:0 10px 24px rgba(26,23,16,.16);
+  }
+  .mini-tooltip::after{
+    content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:5px solid transparent; border-top-color:var(--border);
+  }
+  .mini-kpi .mini-value-row{ display:flex; align-items:baseline; gap:7px; }
+  .mini-dot{ width:9px; height:9px; border-radius:50%; flex:none; position:relative; top:-1px; }
+  .mini-dot.verde{ background:var(--verde); }
+  .mini-dot.amarillo{ background:var(--amarillo); }
+  .mini-dot.rojo{ background:var(--rojo-oscuro); }
+  .mini-kpi .mini-value{ font-size:21px; font-weight:700; line-height:1.15; }
+  .mini-kpi .mini-sub{ color:var(--text-muted); font-size:11px; margin-top:5px; }
+  .mini-detalle{
+    margin-top:10px; padding-top:9px; border-top:1px solid var(--border);
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .mini-fila{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:11.5px; color:var(--text-muted); }
+  .mini-fila .mini-fila-valor{ color:var(--text); font-weight:600; font-size:12.5px; white-space:nowrap; }
+  .mini-fila .mini-fila-de{ color:var(--text-muted); font-weight:400; font-size:11px; }
 
   /* ---------- charts ---------- */
   .charts{ display:grid; grid-template-columns: 1fr; gap:16px; margin-bottom:28px; }
@@ -153,7 +188,7 @@
   .bucket-table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:4px; }
   .bucket-table th{ text-align:right; color:var(--text-muted); font-weight:500; font-size:11px; padding:6px 8px; border-bottom:1px solid var(--border); }
   .bucket-table th:first-child{ text-align:left; }
-  .bucket-table td{ padding:6px 8px; border-bottom:1px solid rgba(43,43,47,.5); }
+  .bucket-table td{ padding:6px 8px; border-bottom:1px solid var(--border); }
   .bucket-table td.num-col{ text-align:right; white-space:nowrap; }
   .bucket-table .muted{ color:var(--text-muted); font-size:11px; }
   .bucket-table tr.fila-total td{ font-weight:600; border-top:1px solid var(--border); }
@@ -179,7 +214,7 @@
   thead th:hover, thead th:focus-visible{ color:var(--text); background:var(--panel-2); }
   thead th.num-col, td.num-col{ text-align:right; }
   tbody td{ padding:10px 12px; border-bottom:1px solid var(--border); color:var(--text); }
-  tbody tr:hover{ background:rgba(246,190,5,.05); }
+  tbody tr:hover{ background:rgba(246,190,5,.08); }
   tbody tr.clickable{ cursor:pointer; transition:background .15s; }
   tbody tr.clickable:focus-within{ outline:2px solid var(--gold); outline-offset:-2px; }
   tbody tr.fila-seleccionada{ background:var(--gold-soft); border-left:4px solid var(--gold); font-weight:500; }
@@ -191,6 +226,13 @@
     border:2px solid var(--gold); border-radius:8px; font-size:13px;
     animation:slideDown 0.2s ease-out;
   }
+  /* El selector de clase de arriba tiene mas especificidad que la regla
+     por default del navegador para [hidden] — sin esto, el JS lo oculta
+     (cont.hidden = true) pero el CSS lo fuerza a mostrarse igual, vacio.
+     Bug real preexistente, no introducido por el tema claro — se notaba
+     menos en el tema oscuro, ahora con fondo blanco se veia como una barra
+     dorada vacia. */
+  .filtros-activos[hidden]{ display:none; }
   @keyframes slideDown{ from{ transform:translateY(-8px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
   .filtros-label{ color:var(--text); font-weight:600; }
   .filtro-chip{
@@ -214,6 +256,12 @@
   .bar-mini > div{ height:100%; background:var(--verde); }
 
   /* ---------- footer ---------- */
+  .footer-toggle{
+    display:inline-flex; align-items:center; gap:5px; background:transparent; border:none;
+    color:var(--text-muted); font-size:12px; padding:6px 0; margin-bottom:6px; cursor:pointer;
+    text-decoration:underline; text-underline-offset:2px;
+  }
+  .footer-toggle:hover, .footer-toggle:focus-visible{ color:var(--text); }
   .footer{ color:var(--text-muted); font-size:12px; line-height:1.7; }
   .footer strong{ color:var(--text); font-weight:600; }
   .coverage{ display:flex; gap:5px; flex-wrap:wrap; margin-top:8px; }
@@ -235,14 +283,14 @@
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
     background:var(--panel-2); border:2px solid var(--border); color:var(--text);
     padding:12px 20px; border-radius:10px; font-size:14px; font-weight:500;
-    box-shadow:0 12px 32px rgba(0,0,0,.5); z-index:50;
+    box-shadow:0 12px 32px rgba(26,23,16,.18); z-index:50;
     animation:toastIn 0.3s ease-out;
   }
   @keyframes toastIn{
     from{ transform:translateX(-50%) translateY(20px); opacity:0; }
     to{ transform:translateX(-50%) translateY(0); opacity:1; }
   }
-  .toast.err{ border-color:var(--rojo); background:rgba(179,38,30,.15); color:#ffd7d7; font-weight:600; }
+  .toast.err{ border-color:var(--rojo); background:rgba(239,91,91,.12); color:var(--rojo-oscuro); font-weight:600; }
 
   .sr-only{
     position:absolute; width:1px; height:1px; overflow:hidden;
@@ -322,45 +370,31 @@
 
   <div class="filtros-activos" id="filtrosActivos" hidden aria-live="polite" aria-atomic="true"></div>
 
-  <div class="kpis" id="kpis" hidden>
-    <article class="kpi k-total" aria-label="Total de envíos procesados">
-      <h2 class="label">Total de envíos</h2>
-      <div class="value num" id="kpiTotal" aria-live="polite">—</div>
-      <div class="foot" id="kpiTotalFoot"></div>
-    </article>
-    <article class="kpi k-efectiva" aria-label="Entregas efectivas realizadas">
-      <h2 class="label">Entregas efectivas</h2>
-      <div class="value num" id="kpiEfectiva" aria-live="polite">—</div>
-      <div class="foot" id="kpiEfectivaFoot"></div>
-    </article>
-    <article class="kpi k-verde" id="kpiCorteCard" aria-label="Entregas por franja horaria">
-      <h2 class="label" id="kpiCorteLabel">Antes de las 21:00</h2>
-      <div class="value num" id="kpiCorte" aria-live="polite">—</div>
-      <div class="foot" id="kpiCorteFoot"></div>
-    </article>
-    <article class="kpi k-cancel" aria-label="Envíos cancelados o rechazados">
-      <h2 class="label">Cancelados / rechazados</h2>
-      <div class="value num" id="kpiCancel" aria-live="polite">—</div>
-      <div class="foot" id="kpiCancelFoot"></div>
-    </article>
+  <div class="mini-kpis" id="miniKpis" hidden aria-label="Mis métricas"></div>
+
+  <div class="chips" id="reportTabs" hidden>
+    <button class="chip active" data-tab="horas">Entregas por hora</button>
+    <button class="chip" data-tab="cruce">Cruce por hora de entrega</button>
+    <button class="chip" data-tab="zona">Por zona</button>
+    <button class="chip" data-tab="ranking">Ranking de choferes</button>
   </div>
 
-  <div class="charts" id="chartsRow" hidden>
-    <div class="card">
-      <h3 id="chartMainTitle">Evolución</h3>
-      <div class="card-sub" id="chartMainSub"></div>
-      <div class="chart-wrap"><div id="chartMain" class="svg-chart"></div></div>
-    </div>
-    <div class="card">
-      <h3>Cruce por hora de entrega</h3>
-      <div class="card-sub">Cantidad y % por franja horaria — click en una franja para filtrar el resto del panel</div>
-      <div id="bucketReport"></div>
-    </div>
-    <div class="card">
-      <h3>Por zona</h3>
-      <div class="card-sub" id="chartZonaSub">Volumen y hora de entrega por zona · click en una zona para filtrar</div>
-      <div class="chart-wrap chart-wrap-tall"><div id="chartZona" class="svg-chart"></div></div>
-    </div>
+  <div class="card" id="cardEntregasPorHora" hidden>
+    <h3 id="chartMainTitle">Evolución</h3>
+    <div class="card-sub" id="chartMainSub"></div>
+    <div class="chart-wrap"><div id="chartMain" class="svg-chart"></div></div>
+  </div>
+
+  <div class="card" id="cardCrucePorHora" hidden>
+    <h3>Cruce por hora de entrega</h3>
+    <div class="card-sub">Cantidad y % por franja horaria — click en una franja para filtrar el resto del panel</div>
+    <div id="bucketReport"></div>
+  </div>
+
+  <div class="card" id="cardPorZona" hidden>
+    <h3>Por zona</h3>
+    <div class="card-sub" id="chartZonaSub">Volumen y hora de entrega por zona · click en una zona para filtrar</div>
+    <div class="chart-wrap chart-wrap-tall"><div id="chartZona" class="svg-chart"></div></div>
   </div>
 
   <div class="table-card" id="tableCard" hidden>
@@ -415,6 +449,7 @@
     </div>
   </div>
 
+  <button class="footer-toggle" id="footerToggle" hidden aria-expanded="false" aria-controls="footerInfo">ⓘ Cómo se calculan estas métricas</button>
   <div class="footer" id="footerInfo" hidden>
     <p><strong>Cómo se define cada métrica:</strong> entrega efectiva = estado "Entregado" o "Entregado 2DA visita" · % efectividad = entregas efectivas / (total − "A retirar") · antes de las 21hs = de las entregas efectivas, hora de "Fecha estado" menor a 21:00 · cancelado = "Cancelado" o "Rechazado por el comprador". Definiciones completas en <em>reglas_de_negocio.md</em>.</p>
     <p>Los datos se comparten entre todas las personas que abren este panel. Se refresca solo cada ~45&nbsp;segundos; tocá «Actualizar» para forzarlo al toque.</p>
@@ -576,6 +611,15 @@
     filtroZona: null,
     filtroChofer: null,
     filtroBucket: null,
+    // Qué reporte (de los 4 que antes iban todos apilados) está visible —
+    // ver aplicarReportTab(). Guarda también el último agg/dates/scope
+    // calculado para poder re-dibujar el SVG activo al cambiar de pestaña
+    // sin tener que recalcular todo de nuevo (ver nota en aplicarReportTab).
+    reportTab: 'horas',
+    ultimoDates: null,
+    ultimoAgg: null,
+    ultimoScope: null,
+    footerAbierto: false,
   };
 
   function hayFiltrosActivos(){
@@ -666,6 +710,160 @@
     return agg;
   }
 
+  // Suma los 3 buckets posteriores al corte de las 21hs (21-22 + 22-23 +
+  // despues23) de un objeto de buckets tipo nuevosBuckets().
+  function sumaPost21(buckets){
+    return (buckets.e21_22||0) + (buckets.e22_23||0) + (buckets.despues23||0);
+  }
+
+  // Suma las 4 franjas (antes21 + post21) — total sin importar la hora.
+  function sumaTodos(buckets){
+    return (buckets.antes21||0) + sumaPost21(buckets);
+  }
+
+  // Indicadores estilo "Mis métricas" de Mercado Libre (pedido 2026-10-15,
+  // ajustado el mismo día dos veces tras revisión: primero se sacaron los 4
+  // KPIs viejos (quedaron redundantes) y se agregó el tooltip "i" con la
+  // fórmula de cada uno; después se volvió a juntar "Entregado" y
+  // "Entregado 2DA visita" bajo el título original de cada ítem (al
+  // separarlos del todo en tarjetas propias se perdía el contexto de a qué
+  // grupo pertenecía cada número) — ahora cada tarjeta tiene UN título fijo
+  // (el pedido originalmente) y, adentro, una fila por cada valor
+  // individual con su propia etiqueta.
+  //
+  // Se arman enteramente a partir de `agg.porEstadoHora`, que YA se guarda
+  // por día desde que existe el detalle por estado/franja horaria — no
+  // hace falta tocar la descarga ni la publicación para esto.
+  //
+  // OJO: igual que la tabla "Cruce por hora" de la que sale este mismo
+  // dato, esto es siempre GLOBAL — no respeta el filtro de zona/chofer,
+  // porque porEstadoHora no se guarda con ese cruce (ver nota debajo de la
+  // tabla por estado). Por eso usa `agg` directo, no `scope`. Se repite esa
+  // aclaración al final de cada tooltip.
+  //
+  // Los nombres de estado de LightData no son 100% consistentes (ej.
+  // "reprogramado por meli" en minúsculas, a diferencia del resto) — se
+  // usan tal cual aparecen en los datos reales, confirmado revisando los
+  // 43 días de historial en Firestore antes de escribir esto.
+  function renderIndicadoresMeli(agg){
+    const total = agg.total || 0;
+    const porEstado = agg.porEstadoHora || {};
+    const de = estado => porEstado[estado] || nuevosBuckets();
+    const GLOBAL = ' (calculado sobre el total global del período, no se filtra por zona/chofer).';
+
+    const entregado = de('Entregado');
+    const entregado2da = de('Entregado 2DA visita');
+    const reprogMeli = de('reprogramado por meli');
+    const reprogComprador = de('reprogramado por comprador');
+
+    // 1. Entregas Efectivas = mismo criterio que el viejo KPI "Entregas
+    //    efectivas" (el que había antes de sacar los 4 KPIs originales):
+    //    Entregado + Entregado 2DA visita, SIN restringir por hora, sobre
+    //    el total menos "A retirar" (reglas_de_negocio.md, regla #1).
+    const entregadoTotal = sumaTodos(entregado);
+    const entregado2daTotal = sumaTodos(entregado2da);
+    const efectivas = entregadoTotal + entregado2daTotal;
+    const totalParaEfectividad = total - (agg.aRetirar || 0);
+
+    // Entregado antes de las 21 — ya no es su propia tarjeta ("Envíos
+    // correctos" pasó a llamarse "Entregas Efectivas" y mide otra cosa),
+    // pero el ítem 4 (Envíos Incorrectos) lo sigue usando tal cual.
+    const correctos = entregado.antes21 || 0;
+
+    // 2. Entregas pre-21 = Entregado antes de las 21.
+    const pre21Entregado = entregado.antes21 || 0;
+    const pre21Entregado2da = entregado2da.antes21 || 0;
+
+    // 3. Entregas post-21 (el % es solo sobre "Entregado").
+    const post21Entregado = sumaPost21(entregado);
+    const post21Entregado2da = sumaPost21(entregado2da);
+
+    // 4. Envíos incorrectos = todo lo que no sea "correcto" (item 1).
+    const incorrectos = total - correctos;
+
+    // 5. Reprogramado post-21 = reprogramado por meli + por comprador, post-21.
+    const reprogPost21 = sumaPost21(reprogMeli) + sumaPost21(reprogComprador);
+
+    // 6. Demora = cualquier estado que NO sea Entregado/Entregado 2DA
+    //    visita, sumado en post-21 (puede solaparse con "reprogramado",
+    //    a propósito — son tarjetas independientes, no mutuamente excluyentes).
+    let demoraPost21 = 0;
+    for(const [estado, b] of Object.entries(porEstado)){
+      if(estado === 'Entregado' || estado === 'Entregado 2DA visita') continue;
+      demoraPost21 += sumaPost21(b);
+    }
+
+    const tarjetas = [
+      {
+        label:'Entregas Efectivas', dot:'verde',
+        valor:fmtPct(pct(efectivas, totalParaEfectividad)),
+        info:'Porcentaje = (Entregado + Entregado 2DA visita) / (Total de envíos − "A retirar"). Debajo, el número de "Entregado" y de "Entregado 2DA visita", sin restringir por hora.'+GLOBAL,
+        filas:[
+          ['Entregado', entregadoTotal],
+          ['Entregado 2DA visita', entregado2daTotal],
+        ],
+      },
+      {
+        label:'Entregas Pre 21', dot:'verde',
+        valor:fmtPct(pct(pre21Entregado, total)),
+        info:'Porcentaje = Entregado antes de las 21hs / Total de envíos. Debajo, el número de "Entregado" y de "Entregado 2DA visita" antes de las 21hs, por separado.'+GLOBAL,
+        filas:[
+          ['Entregado', pre21Entregado],
+          ['Entregado 2DA visita', pre21Entregado2da],
+        ],
+      },
+      {
+        label:'Entregas Post 21', dot:'amarillo',
+        valor:fmtPct(pct(post21Entregado, total)),
+        info:'Porcentaje = Entregado después de las 21hs / Total de envíos. Debajo, el número de "Entregado" y de "Entregado 2DA visita" después de las 21hs, por separado.'+GLOBAL,
+        filas:[
+          ['Entregado', post21Entregado],
+          ['Entregado 2DA visita', post21Entregado2da],
+        ],
+      },
+      {
+        label:'Envíos Incorrectos', dot:'rojo',
+        valor:fmtPct(pct(incorrectos, total)),
+        info:'(Total de envíos − Envíos correctos) / Total de envíos. Incluye cualquier cosa que no sea "Entregado antes de las 21hs".'+GLOBAL,
+        filas:[ ['Total incorrectos', incorrectos] ],
+      },
+      {
+        label:'Reprogramado Post 21', dot:'rojo',
+        valor:fmtPct(pct(reprogPost21, total)),
+        info:'("reprogramado por meli" + "reprogramado por comprador") después de las 21hs / Total de envíos.'+GLOBAL,
+        filas:[ ['Reprogramado (meli + comprador)', reprogPost21] ],
+      },
+      {
+        label:'Demora', dot:'rojo',
+        valor:fmtPct(pct(demoraPost21, total)),
+        info:'Envíos en cualquier estado que no sea "Entregado" ni "Entregado 2DA visita", después de las 21hs / Total de envíos.'+GLOBAL,
+        filas:[ ['Total en demora', demoraPost21] ],
+      },
+    ];
+
+    document.getElementById('miniKpis').innerHTML = tarjetas.map(t => `
+      <article class="mini-kpi">
+        <div class="mini-label">
+          <span>${escapeHtml(t.label)}</span>
+          <span class="mini-info" tabindex="0" role="img" aria-label="${escapeHtml(t.info)}">
+            i
+            <span class="mini-tooltip">${escapeHtml(t.info)}</span>
+          </span>
+        </div>
+        <div class="mini-value-row">
+          <span class="mini-dot ${t.dot}"></span>
+          <span class="mini-value num">${t.valor}</span>
+        </div>
+        <div class="mini-sub">de ${fmtNum(total)} envíos en el período</div>
+        <div class="mini-detalle">
+          ${t.filas.map(([label, valorNum]) => `
+            <div class="mini-fila"><span>${escapeHtml(label)}</span><span class="mini-fila-valor num">${fmtNum(valorNum)} <span class="mini-fila-de">de ${fmtNum(total)}</span></span></div>
+          `).join('')}
+        </div>
+      </article>
+    `).join('');
+  }
+
   // ======================================================================
   // Render
   // ======================================================================
@@ -709,10 +907,14 @@
     const agg = aggregate(dates);
 
     const hayDatos = state.index.length > 0;
-    document.getElementById('kpis').hidden = !hayDatos;
-    document.getElementById('chartsRow').hidden = !hayDatos;
+    document.getElementById('miniKpis').hidden = !hayDatos;
+    document.getElementById('reportTabs').hidden = !hayDatos;
+    document.getElementById('cardEntregasPorHora').hidden = !hayDatos;
+    document.getElementById('cardCrucePorHora').hidden = !hayDatos;
+    document.getElementById('cardPorZona').hidden = !hayDatos;
     document.getElementById('tableCard').hidden = !hayDatos;
-    document.getElementById('footerInfo').hidden = !hayDatos;
+    document.getElementById('footerToggle').hidden = !hayDatos;
+    document.getElementById('footerInfo').hidden = !hayDatos || !state.footerAbierto;
 
     const mc = document.getElementById('mainContent');
     if(!hayDatos){
@@ -724,36 +926,14 @@
     renderFiltrosActivos();
 
     const scope = scopeActual(agg);
+    state.ultimoDates = dates;
+    state.ultimoAgg = agg;
+    state.ultimoScope = scope;
 
-    // KPIs — Total / Efectiva / Cancelados respetan el filtro de zona o
-    // chofer (scope). La tarjeta de horario es interactiva: por defecto
-    // muestra "antes de las 21", pero si se clickeo una franja en el
-    // cruce por hora, pasa a mostrar esa franja puntual.
-    document.getElementById('kpiTotal').textContent = fmtNum(scope.total);
-    document.getElementById('kpiTotalFoot').textContent = dates.length + (dates.length===1 ? ' día' : ' días') + ' seleccionado' + (dates.length===1?'':'s');
-
-    // % efectividad se calcula sobre el total MENOS los envíos "A retirar"
-    // (todavía no llegaron al depósito, no corresponde contarlos en el
-    // universo de entregas — ver reglas_de_negocio.md, regla #1).
-    const totalParaEfectividad = scope.total - (scope.aRetirar || 0);
-    document.getElementById('kpiEfectiva').textContent = fmtPct(pct(scope.efectivas, totalParaEfectividad));
-    document.getElementById('kpiEfectivaFoot').textContent = fmtNum(scope.efectivas) + ' de ' + fmtNum(totalParaEfectividad);
-
-    const bucketActivo = BUCKETS.find(b => b.key === (state.filtroBucket || 'antes21'));
-    const valBucket = (scope.buckets && scope.buckets[bucketActivo.key]) || 0;
-    document.getElementById('kpiCorteLabel').textContent = bucketActivo.label;
-    document.getElementById('kpiCorte').textContent = fmtPct(pct(valBucket, scope.efectivas));
-    document.getElementById('kpiCorteFoot').textContent = fmtNum(valBucket) + ' de ' + fmtNum(scope.efectivas) + ' entregadas';
-    const kpiCorteCard = document.getElementById('kpiCorteCard');
-    kpiCorteCard.className = 'kpi ' + (bucketActivo.key==='antes21' ? 'k-verde' : bucketActivo.key==='e21_22' ? 'k-amarillo' : 'k-rojo');
-
-    document.getElementById('kpiCancel').textContent = fmtPct(pct(scope.cancelados, scope.total));
-    document.getElementById('kpiCancelFoot').textContent = fmtNum(scope.cancelados) + ' de ' + fmtNum(scope.total);
+    renderIndicadoresMeli(agg);
 
     try{
-      renderChartMain(dates, agg);
-      renderBucketReport(scope, agg);
-      renderChartZona(agg);
+      aplicarReportTab(state.reportTab);
     }catch(e){
       console.error('Error dibujando graficos', e);
     }
@@ -762,12 +942,40 @@
     renderCoverage();
   }
 
+  // Muestra solo UNO de los 4 reportes (Entregas por hora / Cruce por hora /
+  // Por zona / Ranking de choferes) a la vez, en vez de apilarlos todos uno
+  // debajo del otro — pedido 2026-10-16 para no tener que scrollear toda la
+  // página para ver cada cosa.
+  //
+  // OJO con el orden de operaciones: los 3 gráficos SVG miden el ancho/alto
+  // real del contenedor (`container.clientWidth/clientHeight`, ver svgEl())
+  // para armar su viewBox. Si se dibujan mientras su tarjeta está oculta
+  // (`hidden`, que el navegador resuelve como `display:none`), esa medida
+  // da 0 y el gráfico queda mal escalado PARA SIEMPRE — no se vuelve a
+  // recalcular solo al mostrar la tarjeta después. Por eso acá se
+  // redibuja el que corresponda recién DESPUÉS de sacarle el `hidden`, cada
+  // vez que se cambia de pestaña (no hace falta recalcular `agg` de nuevo,
+  // se reusa lo último guardado en `state.ultimoAgg/ultimoDates/ultimoScope`).
+  function aplicarReportTab(tab){
+    state.reportTab = tab;
+    document.querySelectorAll('#reportTabs .chip').forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
+    document.getElementById('cardEntregasPorHora').hidden = tab !== 'horas';
+    document.getElementById('cardCrucePorHora').hidden = tab !== 'cruce';
+    document.getElementById('cardPorZona').hidden = tab !== 'zona';
+    document.getElementById('tableCard').hidden = tab !== 'ranking';
+
+    if(!state.ultimoAgg) return;
+    if(tab==='horas') renderChartMain(state.ultimoDates, state.ultimoAgg);
+    if(tab==='cruce') renderBucketReport(state.ultimoScope, state.ultimoAgg);
+    if(tab==='zona') renderChartZona(state.ultimoAgg);
+  }
+
   // Paleta: dorado/negro = marca (MercadoPacks/MP), verde-amarillo-rojo =
   // semaforo de puntualidad de entrega (independiente de la marca, a
   // proposito, para no mezclar "color de marca" con "color de estado").
   const COLORS = {
     gold:'#f6be05', verde:'#34c759', amarillo:'#f2994a', rojo:'#ef5b5b', rojoOscuro:'#b3261e',
-    slate:'#55555c', grid:'#2a2a2e', text:'#9a9aa2', textBright:'#f2efe8',
+    slate:'#8c8a7e', grid:'#e3e0d5', text:'#6f6c62', textBright:'#1a1710',
   };
   const HORA_MIN_VISIBLE = 6;   // el grafico de entregas por hora arranca a las 06:00
   const HORA_MAX_VISIBLE = 23;  // ...y llega hasta las 23:00 (fin del dia operativo)
@@ -825,7 +1033,7 @@
     for(let h=0; h<=23; h++) horas.push(h);
     const valores = horas.map(h => porHora[h] || 0);
 
-    const m = { top:24, right:8, bottom:26, left:32 };
+    const m = { top:24, right:18, bottom:26, left:36 };
     const { svg, w:VBW, h:VBH } = svgEl(container);
     const w = VBW - m.left - m.right, h = VBH - m.top - m.bottom;
     const maxVal = Math.max(1, ...valores);
@@ -865,7 +1073,7 @@
   }
 
   function dibujarLineas(labels, series, container){
-    const m = { top:20, right:10, bottom:24, left:32 };
+    const m = { top:20, right:20, bottom:24, left:36 };
     const { svg, w:VBW, h:VBH } = svgEl(container);
     const w = VBW - m.left - m.right, h = VBH - m.top - m.bottom;
     const n = labels.length;
@@ -923,7 +1131,7 @@
       sub.textContent = 'Envíos de ' + state.filtroChofer + ' por zona (sin cruce horario para este corte)';
       const zonas = Object.entries(pz).sort((a,b)=>b[1]-a[1]);
       if(zonas.length === 0){ container.innerHTML = '<p class="empty-note">Sin datos de zona para este chofer.</p>'; return; }
-      const m = { top:10, right:16, bottom:6, left:74 };
+      const m = { top:10, right:56, bottom:6, left:74 };
       const { svg, w:VBW, h:VBH } = svgEl(container);
       const w = VBW - m.left - m.right, h = VBH - m.top - m.bottom;
       const maxTotal = Math.max(1, ...zonas.map(z=>z[1]));
@@ -952,7 +1160,7 @@
       ? ('Zonas — mostrando solo "' + BUCKETS.find(b=>b.key===bucketSel).label + '" (click de nuevo para quitar el filtro)')
       : 'Volumen y hora de entrega (verde/amarillo/rojo) por zona · click en una zona para filtrar';
 
-    const m = { top:22, right:16, bottom:6, left:74 };
+    const m = { top:22, right:56, bottom:6, left:74 };
     const { svg, w:VBW, h:VBH } = svgEl(container);
     const w = VBW - m.left - m.right, h = VBH - m.top - m.bottom;
     const maxTotal = Math.max(1, ...zonas.map(z=>z[1].total));
@@ -1290,6 +1498,17 @@
 
   document.getElementById('rangeStart').addEventListener('change', async (e)=>{ state.rangeStart = e.target.value; await render(); });
   document.getElementById('rangeEnd').addEventListener('change', async (e)=>{ state.rangeEnd = e.target.value; await render(); });
+
+  document.getElementById('reportTabs').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.chip'); if(!btn) return;
+    aplicarReportTab(btn.dataset.tab);
+  });
+
+  document.getElementById('footerToggle').addEventListener('click', (e)=>{
+    state.footerAbierto = !state.footerAbierto;
+    document.getElementById('footerInfo').hidden = !state.footerAbierto;
+    e.currentTarget.setAttribute('aria-expanded', String(state.footerAbierto));
+  });
 
   document.getElementById('btnRefresh').addEventListener('click', async (e)=>{
     const btn = e.currentTarget; btn.classList.add('spin');
