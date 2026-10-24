@@ -446,13 +446,32 @@ performando" (separación pedida explícitamente):
   vehículo) y "Zona × turno" (heatmap, color = % asistencia).
 - **📊 Rendimiento histórico** (con su propio selector de período): Ranking
   de repartidores (Top 5 / A mejorar) → heatmap de cuellos de botella
-  (zona × turno, color = % puntualidad) → tabla completa ordenable por
-  score.
+  (zona × turno, color = % puntualidad) → tabla completa, ordenable
+  haciendo click en cualquier columna (alterna asc/desc, con flecha
+  dorada indicando cuál y en qué sentido — mismo componente que el
+  ranking de choferes de Envíos, ver 13.5), por defecto por score
+  descendente.
 - Se actualiza solo cada 45 segundos mientras la pestaña de Repartidores
   esté abierta (mismo intervalo que Envíos), para reflejar repartidores
   que se van agregando a la hoja viva durante el día.
 
-## Historial de cambios
+### 13.5 Tablas ordenables (`wireSortableTable` / `ordenarPorClave`)
+
+Componente genérico (no exclusivo de Repartidores) agregado el
+2026-10-24: cualquier `<th data-key="...">` dentro de un `<thead>` pasado
+a `wireSortableTable(thead, sortState, onSort)` queda clickeable
+(y navegable por teclado, Enter/Espacio) para ordenar asc/desc por esa
+columna, con una flecha (`▲`/`▼`, dorada) que indica cuál columna y en
+qué sentido — antes el ranking de choferes de Envíos ya tenía el
+`data-key` y la lógica de orden, pero sin ningún indicador visual, así
+que no se notaba que ya era clickeable. La tabla "Todos los
+repartidores" (histórico) directamente no tenía `data-key` ni handler —
+el click en los headers no hacía nada. Se usa en dos tablas hoy:
+"Ranking de choferes" (Envíos) y "Todos los repartidores"
+(Repartidores → histórico), ambas con su propio `state.sort` /
+`stateRepa.sort` persistente entre renders. `ordenarPorClave(filas,
+sortState)` es el comparador genérico (strings con `localeCompare`,
+números restando, `null`/`undefined` al final).
 
 | Fecha | Cambio |
 |---|---|
@@ -472,3 +491,4 @@ performando" (separación pedida explícitamente):
 | 2026-10-23 | Los 4 KPIs viejos del dashboard (Total de envíos, Entregas efectivas, Antes de las 21:00, Cancelados/rechazados) se sacaron del todo — quedaron redundantes con los indicadores nuevos. El indicador "Envíos correctos" pasó a llamarse "Entregas Efectivas" y retomó la definición del viejo KPI del mismo nombre (Entregado + Entregado 2DA visita, sin restringir por hora, sobre total − "A retirar"); "Entregas Pre 21" pasó a tener un % como valor principal, igual que "Entregas Post 21" (antes mostraba solo el total sin porcentaje). Además, el dashboard pasó de tema oscuro a tema claro (fondo gris clarito, tarjetas blancas, marca dorado/negro en el "chrome" de la interfaz) manteniendo el semáforo verde/amarillo/rojo de puntualidad sin cambios — ver sección 12. |
 | 2026-10-24 | Segundo reporte: **Seguimiento de Repartidores** (sección 13), con botones arriba para navegar entre los dos. Lee dos planillas de Google Sheets publicadas como CSV directo desde el navegador (sin Firestore ni automatización nueva). Dos modos — "Operación en vivo" (hoy: KPIs con objetivo según día de semana, Centro de alertas, flota confirmada por zona con barras, heatmap zona × turno) y "Rendimiento histórico" (ranking con score compuesto, heatmap de cuellos de botella, tabla completa) — para no mezclar monitoreo en vivo con análisis histórico. Se usó la skill de dataviz para la paleta de colores de los vehículos (validada contra daltonismo). De paso se corrigió un bug real preexistente que afectaba a todo el dashboard: `setChip()` no estaba acotado a `#chips`, así que en cada carga de página le borraba la clase "active" a todos los `.chip`, incluidos los botones de navegación nuevos (recién se veían marcados después de un click). **Pendiente:** agregar un piso de muestra al score del ranking. |
 | 2026-10-24 | Se conectó la tercera hoja ("Listado de Choferes") para la disponibilidad de sábados — era otra pestaña del mismo documento ya compartido, sin necesitar un link nuevo. Los sábados, el dashboard ahora filtra el denominador de Asistencia confirmada / Pallet retirado a solo quienes están habilitados en el roster (`ASISTE SABADO=TRUE` o sin dato), y el objetivo volvió a 95% (reemplaza el 70% de arranque). Se muestra una nota con la cantidad excluida. De paso se corrigió un bug real: `filasAObjetosRepa()` asumía NOMBRE en la columna 2 (cierto en viva/histórica), pero en el roster NOMBRE es la columna 1 — ahora busca el índice por nombre de columna en vez de asumir una posición fija. |
+| 2026-10-24 | Se agregó un componente genérico de tablas ordenables (`wireSortableTable`/`ordenarPorClave`, sección 13.5) y se aplicó a "Todos los repartidores" (histórico de Repartidores), que antes no tenía ningún `data-key` ni handler de click — los headers no hacían nada. De paso se notó que "Ranking de choferes" (Envíos) ya tenía la lógica de orden pero sin indicador visual, así que no se notaba que era clickeable; ahora ambas tablas muestran una flecha dorada (▲/▼) en la columna activa. |

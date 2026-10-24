@@ -321,6 +321,11 @@
   }
   thead th:hover, thead th:focus-visible{ color:var(--text); background:var(--panel-2); }
   thead th.num-col, td.num-col{ text-align:right; }
+  thead th[data-key]{ position:relative; }
+  thead th[data-key]::after{ content:'↕'; display:inline-block; margin-left:5px; font-size:10px; opacity:.35; }
+  thead th[data-key].th-sort-asc::after{ content:'▲'; opacity:1; color:var(--gold); }
+  thead th[data-key].th-sort-desc::after{ content:'▼'; opacity:1; color:var(--gold); }
+  thead th:not([data-key]){ cursor:default; }
   tbody td{ padding:10px 12px; border-bottom:1px solid var(--border); color:var(--text); }
   tbody tr:hover{ background:rgba(246,190,5,.08); }
   tbody tr.clickable{ cursor:pointer; transition:background .15s; }
@@ -520,7 +525,7 @@
     <p class="tabla-nota" id="tablaNota" hidden></p>
     <div class="table-wrap">
       <table>
-        <thead>
+        <thead id="theadChoferes">
           <tr>
             <th data-key="cadete" scope="col">Chofer</th>
             <th data-key="total" class="num-col" scope="col">Envíos</th>
@@ -684,14 +689,14 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead>
+              <thead id="theadRepartidoresHist">
                 <tr>
-                  <th scope="col">Repartidor</th>
-                  <th class="num-col" scope="col">Asignaciones</th>
-                  <th class="num-col" scope="col">% Asistencia</th>
-                  <th class="num-col" scope="col">% A tiempo</th>
-                  <th class="num-col" scope="col">Alertas</th>
-                  <th class="num-col" scope="col">Score</th>
+                  <th data-key="nombre" scope="col">Repartidor</th>
+                  <th data-key="asignaciones" class="num-col" scope="col">Asignaciones</th>
+                  <th data-key="pctAsistencia" class="num-col" scope="col">% Asistencia</th>
+                  <th data-key="pctATiempo" class="num-col" scope="col">% A tiempo</th>
+                  <th data-key="alertas" class="num-col" scope="col">Alertas</th>
+                  <th data-key="score" class="num-col" scope="col">Score</th>
                 </tr>
               </thead>
               <tbody id="tbodyRepartidores"></tbody>
@@ -755,6 +760,55 @@
   function pct(a,b){ if(!b) return null; return Math.round((a/b)*1000)/10; }
   function fmtPct(v){ return (v===null || v===undefined || isNaN(v)) ? '—' : v.toFixed(1)+'%'; }
   function fmtNum(v){ return (v===null||v===undefined||isNaN(v)) ? '—' : new Intl.NumberFormat('es-AR').format(v); }
+
+  // Tablas ordenables: un mismo patrón para todas las tablas con
+  // th[data-key] — click alterna asc/desc, flecha muestra cuál columna y
+  // en qué sentido. wireSortableTable() se llama una sola vez (al armar
+  // la página); actualizarIndicadorSort() se llama en cada render porque
+  // el estado de orden puede cambiar entre renders.
+  function wireSortableTable(thead, sortState, onSort){
+    if(!thead) return;
+    thead.querySelectorAll('th[data-key]').forEach(th=>{
+      th.setAttribute('tabindex', '0');
+      th.setAttribute('role', 'button');
+    });
+    thead.addEventListener('click', (e)=>{
+      const th = e.target.closest('th[data-key]'); if(!th) return;
+      const key = th.dataset.key;
+      if(sortState.key === key){ sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc'; }
+      else { sortState.key = key; sortState.dir = 'desc'; }
+      onSort();
+    });
+    thead.addEventListener('keydown', (e)=>{
+      if(e.key !== 'Enter' && e.key !== ' ') return;
+      const th = e.target.closest('th[data-key]'); if(!th) return;
+      e.preventDefault();
+      th.click();
+    });
+  }
+
+  function actualizarIndicadorSort(thead, sortState){
+    if(!thead) return;
+    thead.querySelectorAll('th[data-key]').forEach(th=>{
+      const activo = th.dataset.key === sortState.key;
+      th.classList.toggle('th-sort-asc', activo && sortState.dir === 'asc');
+      th.classList.toggle('th-sort-desc', activo && sortState.dir === 'desc');
+      th.setAttribute('aria-sort', activo ? (sortState.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    });
+  }
+
+  function ordenarPorClave(filas, sortState){
+    const {key, dir} = sortState;
+    return filas.slice().sort((a,b)=>{
+      let va = a[key], vb = b[key];
+      if(va === null || va === undefined) va = typeof vb === 'string' ? '' : -Infinity;
+      if(vb === null || vb === undefined) vb = typeof va === 'string' ? '' : -Infinity;
+      if(typeof va === 'string' || typeof vb === 'string'){
+        return dir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+      }
+      return dir === 'asc' ? va - vb : vb - va;
+    });
+  }
 
   // ======================================================================
   // Storage compartido — Firestore (Firebase). Reemplaza al viejo
@@ -1626,6 +1680,8 @@
         await render();
       });
     });
+
+    actualizarIndicadorSort(document.getElementById('theadChoferes'), state.sort);
   }
 
   async function renderDetalleChofer(dates){
@@ -1785,13 +1841,7 @@
     state.searchDetalle = e.target.value; await render();
   });
 
-  document.querySelector('thead').addEventListener('click', async (e)=>{
-    const th = e.target.closest('th'); if(!th) return;
-    const key = th.dataset.key;
-    if(state.sort.key === key){ state.sort.dir = state.sort.dir==='asc'?'desc':'asc'; }
-    else { state.sort.key = key; state.sort.dir = 'desc'; }
-    await render();
-  });
+  wireSortableTable(document.getElementById('theadChoferes'), state.sort, async ()=>{ await render(); });
 
   // ======================================================================
   // Seguimiento de Repartidores (agregado 2026-10-23)
@@ -1837,6 +1887,7 @@
     rangeStart: null,
     rangeEnd: null,
     search: '',
+    sort: { key: 'score', dir: 'desc' },
     filasVivo: [],         // cache de las filas de hoy, para filtrar el detalle de zona sin re-pedir la planilla
     zonaSeleccionada: null,
   };
@@ -2482,7 +2533,8 @@
 
     const q = stateRepa.search.trim().toLowerCase();
     const filtrados = q ? porRepartidor.filter(r => r.nombre.toLowerCase().includes(q)) : porRepartidor;
-    document.getElementById('tbodyRepartidores').innerHTML = filtrados.map(r => `
+    const ordenados = ordenarPorClave(filtrados, stateRepa.sort);
+    document.getElementById('tbodyRepartidores').innerHTML = ordenados.map(r => `
       <tr>
         <td>${escapeHtml(r.nombre)}<span class="repa-alerta-chip-zona">${escapeHtml(r.zonaPrincipal)}</span></td>
         <td class="num-col">${fmtNum(r.asignaciones)}</td>
@@ -2492,6 +2544,7 @@
         <td class="num-col" style="font-weight:700;">${r.score.toFixed(1)}</td>
       </tr>
     `).join('');
+    actualizarIndicadorSort(document.getElementById('theadRepartidoresHist'), stateRepa.sort);
   }
 
   function cambiarModoRepa(modo){
@@ -2562,6 +2615,7 @@
   document.getElementById('rangeStartRepa').addEventListener('change', (e)=>{ stateRepa.rangeStart = e.target.value; renderRepartidoresHistorico(); });
   document.getElementById('rangeEndRepa').addEventListener('change', (e)=>{ stateRepa.rangeEnd = e.target.value; renderRepartidoresHistorico(); });
   document.getElementById('buscarRepartidor').addEventListener('input', (e)=>{ stateRepa.search = e.target.value; renderRepartidoresHistorico(); });
+  wireSortableTable(document.getElementById('theadRepartidoresHist'), stateRepa.sort, ()=>{ renderRepartidoresHistorico(); });
 
   // Pedido 2026-10-24: a lo largo del día se van agregando repartidores a
   // la hoja viva — si la pestaña de Repartidores queda abierta, se
