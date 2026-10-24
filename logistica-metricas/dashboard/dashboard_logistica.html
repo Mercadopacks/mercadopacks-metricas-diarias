@@ -591,6 +591,7 @@
       <div id="repaVivoContent" hidden>
 
         <div class="mini-kpis" id="repaMiniKpisVivo" aria-label="Indicadores de hoy"></div>
+        <p class="tabla-nota" id="repaNotaRoster" hidden></p>
 
         <div class="card" id="repaAlertasCardVivo" style="margin-top:18px;">
           <h3>Centro de alertas</h3>
@@ -1805,19 +1806,25 @@
   // filtra por fecha en el momento.
   const URL_REPA_VIVA = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMlxJ09UzQevg183EP4DAZ4VdsMoAuTCsSYl4Q0JuJJFzrbONEccUGwY_zxApX0C5iQJRsI4Ro7CEV/pub?output=csv';
   const URL_REPA_HIST = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSdkuu23UUeUjF-QLjPkC0nXSdqN3BZivvvbxpHDIEVYsJ0IdT2B_DWi7y048tQPdiFMexkGd5twMrO/pub?output=csv';
+  // "Listado de Choferes" — otra pestaña del MISMO documento publicado que
+  // la hoja viva (mismo ID de publicación, distinto gid) — confirmado
+  // 2026-10-24 leyendo /pubhtml y probando los gid que aparecían ahí, sin
+  // necesidad de un link nuevo. Trae el roster de repartidores con quién
+  // puede trabajar los sábados (columna ASISTE SABADO).
+  const URL_REPA_ROSTER = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMlxJ09UzQevg183EP4DAZ4VdsMoAuTCsSYl4Q0JuJJFzrbONEccUGwY_zxApX0C5iQJRsI4Ro7CEV/pub?output=csv&gid=0';
 
   // Tolerancia de puntualidad confirmada con el usuario (2026-10-23):
   // "llego a tiempo" = HORA LLEGADA <= TURNO asignado + 15 minutos.
   const TOLERANCIA_PUNTUALIDAD_MIN = 15;
 
-  // Objetivo de asistencia/pallet retirado por día de semana (pedido
-  // 2026-10-24): los sábados no todos los repartidores están asignados a
-  // trabajar, así que medirlos contra el mismo 95% de un día de semana
-  // siempre da rojo sin que sea un problema real. 70% para sábado es un
-  // valor de arranque — falta ajustarlo con la hoja de listado de
-  // repartidores (quién puede trabajar sábados), todavía no conectada.
-  // Domingo no opera (reglas_de_negocio.md) — no se evalúa.
-  const OBJETIVO_ASISTENCIA_POR_DIA = { 0:null, 1:95, 2:95, 3:95, 4:95, 5:95, 6:70 };
+  // Objetivo de asistencia/pallet retirado por día de semana. Antes el
+  // sábado bajaba a 70% a ciegas (parche sin la hoja de roster); ahora que
+  // "Listado de Choferes" está conectada (ASISTE SABADO), las asignaciones
+  // de gente no habilitada para sábado se filtran ANTES de calcular estos
+  // KPIs (ver filasEsperadasHoyRepa) — el objetivo vuelve a ser 95% porque
+  // ya se está midiendo solo contra quienes realmente se esperaba que
+  // trabajen. Domingo no opera (reglas_de_negocio.md) — no se evalúa.
+  const OBJETIVO_ASISTENCIA_POR_DIA = { 0:null, 1:95, 2:95, 3:95, 4:95, 5:95, 6:95 };
 
   function diaDeSemanaRepa(fechaISO){
     const [y,m,d] = fechaISO.split('-').map(Number);
@@ -1870,8 +1877,14 @@
     const filas = parsearCSV(csvTexto);
     if(filas.length === 0) return [];
     const header = filas[0];
+    // Antes era un índice fijo (f[1]) asumiendo que NOMBRE siempre está en
+    // la 2da columna — cierto en viva/histórica (FECHA,NOMBRE,...) pero NO
+    // en "Listado de Choferes" (NOMBRE va primero). Bug real encontrado al
+    // conectar esa hoja el 2026-10-24: con índice fijo, el filtro de filas
+    // vacías terminaba mirando la columna equivocada ahí.
+    const idxNombre = header.findIndex(h => (h||'').trim() === 'NOMBRE');
     return filas.slice(1)
-      .filter(f => (f[1] || '').trim())
+      .filter(f => idxNombre === -1 || (f[idxNombre] || '').trim())
       .map(f => {
         const obj = {};
         header.forEach((h, i) => { if(h && h.trim()) obj[h.trim()] = (f[i] || '').trim(); });
@@ -1934,11 +1947,37 @@
   // cache acá — mejor priorizar que "Hoy" se vea al instante según se va
   // cargando la planilla a mano durante el día.
   async function cargarDatosRepartidores(){
-    const [filasViva, filasHist] = await Promise.all([
+    const [filasViva, filasHist, filasRoster] = await Promise.all([
       cargarCSVRepa(URL_REPA_VIVA),
       cargarCSVRepa(URL_REPA_HIST),
+      cargarCSVRepa(URL_REPA_ROSTER),
     ]);
-    return { filasViva, filasHist };
+    return { filasViva, filasHist, filasRoster };
+  }
+
+  // Lookup NOMBRE -> si está habilitado para trabajar los sábados, según
+  // "Listado de Choferes". `TRUE`/`FALSE` tal cual vienen de Sheets.
+  function construirRosterSabadoRepa(filasRoster){
+    const roster = {};
+    filasRoster.forEach(f => {
+      roster[f['NOMBRE']] = (f['ASISTE SABADO'] || '').trim().toUpperCase() === 'TRUE';
+    });
+    return roster;
+  }
+
+  // Sábado: filtra las asignaciones de hoy a solo quienes el roster marca
+  // habilitados para trabajar ese día — antes se medía la asistencia
+  // contra TODOS los asignados, lo que daba siempre en rojo porque gran
+  // parte del roster no trabaja los sábados (confirmado: de 935 filas del
+  // roster, solo ~121 tienen ASISTE SABADO=TRUE). Si alguien no aparece en
+  // el roster (típico de un ingreso nuevo) NO se excluye — mejor de más
+  // que esconder una falta real por un roster desactualizado.
+  function filasEsperadasHoyRepa(filas, rosterSabado, diaSemana){
+    if(diaSemana !== 6) return filas;
+    return filas.filter(f => {
+      const habilitado = rosterSabado[f['NOMBRE']];
+      return habilitado === undefined || habilitado === true;
+    });
   }
 
   // "Hoy" = lo que diga la propia hoja viva, NO el reloj del navegador.
@@ -2295,19 +2334,22 @@
     const cont = document.getElementById('repaVivoContent');
     const vacio = document.getElementById('repaVivoEmpty');
 
-    let filasViva, filasHist;
+    let filasViva, filasHist, filasRoster;
     try{
-      ({ filasViva, filasHist } = await cargarDatosRepartidores());
+      ({ filasViva, filasHist, filasRoster } = await cargarDatosRepartidores());
     }catch(e){
       console.error('Error cargando datos de repartidores', e);
       cont.hidden = true; vacio.hidden = false;
       vacio.querySelector('h2').textContent = 'No se pudieron cargar los datos de repartidores';
-      vacio.querySelector('p').textContent = 'Revisá la conexión, o que las dos planillas sigan publicadas (Archivo → Compartir → Publicar en la Web). Detalle técnico: ' + e.message;
+      vacio.querySelector('p').textContent = 'Revisá la conexión, o que las planillas sigan publicadas (Archivo → Compartir → Publicar en la Web). Detalle técnico: ' + e.message;
       return;
     }
 
     const hoy = fechaReferenciaHoyRepa(filasViva, filasHist);
-    const filas = filasViva.filter(f => fechaRepaAISO(f['FECHA']) === hoy);
+    const diaSemana = diaDeSemanaRepa(hoy);
+    const rosterSabado = construirRosterSabadoRepa(filasRoster);
+    const filasDeHoy = filasViva.filter(f => fechaRepaAISO(f['FECHA']) === hoy);
+    const filas = filasEsperadasHoyRepa(filasDeHoy, rosterSabado, diaSemana);
     if(filas.length === 0){
       cont.hidden = true; vacio.hidden = false;
       vacio.querySelector('h2').textContent = 'Todavía no hay datos de hoy';
@@ -2319,13 +2361,14 @@
     stateRepa.filasVivo = filas; // para poder filtrar el detalle de zona sin volver a pedir la planilla
 
     const m = calcularMetricasRepa(filas);
-    const objetivoAsistencia = OBJETIVO_ASISTENCIA_POR_DIA[diaDeSemanaRepa(hoy)] ?? 95;
+    const objetivoAsistencia = OBJETIVO_ASISTENCIA_POR_DIA[diaSemana] ?? 95;
+    const excluidosPorRoster = diaSemana === 6 ? filasDeHoy.length - filas.length : 0;
 
     const tarjetas = [
       {
         label:'Asistencia confirmada', dot: estadoRAG(pct(m.asistenciaSi, m.total), objetivoAsistencia, objetivoAsistencia-15), objetivo: objetivoAsistencia,
         valor: fmtPct(pct(m.asistenciaSi, m.total)), pctNum: pct(m.asistenciaSi, m.total),
-        info:`Asignaciones con "Asiste a depósito" confirmado (soporte) / total de asignaciones de hoy. Objetivo: ${objetivoAsistencia}% (ajustado por día de semana — sábado tiene menos dotación esperada que un día hábil).`,
+        info:`Asignaciones con "Asiste a depósito" confirmado (soporte) / total de asignaciones de hoy. Objetivo: ${objetivoAsistencia}%.${excluidosPorRoster ? ' Hoy es sábado: se excluyeron '+excluidosPorRoster+' asignaciones de gente no habilitada para trabajar sábado, según "Listado de Choferes".' : ''}`,
         filas:[ ['Confirmaron', m.asistenciaSi] ],
       },
       {
@@ -2337,11 +2380,21 @@
       {
         label:'Pallet retirado', dot: estadoRAG(pct(m.palletRetiradoSi, m.total), objetivoAsistencia, objetivoAsistencia-15), objetivo: objetivoAsistencia,
         valor: fmtPct(pct(m.palletRetiradoSi, m.total)), pctNum: pct(m.palletRetiradoSi, m.total),
-        info:`Asignaciones con el pallet retirado del depósito / total de asignaciones de hoy. Objetivo: ${objetivoAsistencia}% (mismo criterio que asistencia, ajustado por día de semana).`,
+        info:`Asignaciones con el pallet retirado del depósito / total de asignaciones de hoy. Objetivo: ${objetivoAsistencia}% (mismo criterio que asistencia).`,
         filas:[ ['Retirado', m.palletRetiradoSi] ],
       },
     ];
     document.getElementById('repaMiniKpisVivo').innerHTML = tarjetas.map(t => tarjetaMiniKpiRepaHTML(t, m.total)).join('');
+
+    const notaRoster = document.getElementById('repaNotaRoster');
+    if(notaRoster){
+      if(excluidosPorRoster){
+        notaRoster.hidden = false;
+        notaRoster.textContent = `Hoy es sábado: se excluyeron ${fmtNum(excluidosPorRoster)} asignaciones de gente no habilitada para trabajar sábado (según "Listado de Choferes") de los indicadores de arriba.`;
+      }else{
+        notaRoster.hidden = true;
+      }
+    }
 
     renderAlertasListaRepa(document.getElementById('repaAlertasListaVivo'), m.alertas);
 

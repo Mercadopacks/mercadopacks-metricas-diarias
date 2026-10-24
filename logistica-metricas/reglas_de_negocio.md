@@ -379,8 +379,14 @@ armar otro pipeline como el de LightData:
   (ej. `reprogramado por meli` en minúsculas, `ZONA`/`TIPO DE VEHICULO`
   con mayúsculas/minúsculas mezcladas en la histórica) — se normalizan en
   el dashboard, no en el origen.
-- **Pendiente:** hay una tercera hoja (listado de repartidores, con quién
-  puede trabajar los sábados) todavía no conectada.
+- **Hoja de roster** (`Listado de Choferes`): tercera pestaña del **mismo
+  documento** que la hoja viva — se publicó "todo el documento" de una
+  sola vez en "Publicar en la Web", así que comparte el mismo ID de
+  publicación y solo cambia el `gid` en la URL (confirmado el 2026-10-24
+  leyendo `/pubhtml` y probando los `gid` que aparecían ahí, sin necesitar
+  un link nuevo del usuario). Trae, por repartidor, la columna `ASISTE
+  SABADO` (TRUE/FALSE) usada para filtrar qué asignaciones de sábado
+  entran en los indicadores de arriba — ver 13.3.
 
 ### 13.2 Flujo de una asignación
 
@@ -401,13 +407,17 @@ se acumule histórico real.
 
 - **Llegada a tiempo:** `HORA LLEGADA` ≤ `TURNO` asignado + **15 minutos**
   de tolerancia (confirmado con el usuario).
-- **Objetivo de Asistencia confirmada / Pallet retirado — varía por día de
-  semana:** 95% de lunes a viernes, **70% los sábados** (no todos los
-  repartidores están asignados a trabajar sábado, así que medirlos contra
-  el mismo objetivo de un día hábil siempre daba en rojo sin ser un
-  problema real). El 70% es un valor de arranque, pendiente de ajustar
-  cuando se conecte la hoja de disponibilidad de sábados. Domingo no se
-  evalúa (no opera, igual que Envíos).
+- **Objetivo de Asistencia confirmada / Pallet retirado — 95% todos los
+  días hábiles, incluido sábado.** No todos los repartidores están
+  asignados a trabajar sábado, así que en vez de bajar el objetivo ese
+  día (como se hacía al principio, con un 70% de arranque), el dashboard
+  **filtra el denominador**: los sábados, `filasEsperadasHoyRepa()` saca
+  de la cuenta a las asignaciones de gente marcada `ASISTE SABADO=FALSE`
+  en la hoja de roster, antes de calcular los indicadores. Si un
+  repartidor no aparece en el roster, NO se excluye (por seguridad, para
+  no esconder una inasistencia real por un roster desactualizado). La
+  cantidad excluida se muestra como nota debajo de los indicadores
+  (`#repaNotaRoster`). Domingo no se evalúa (no opera, igual que Envíos).
 - **Objetivo de Llegada a tiempo:** 80% fijo (no varía por día).
 - **Centro de alertas:** se excluyen las alertas que digan "a tiempo" —
   dado que la puntualidad todavía no se mide de forma confiable (ver
@@ -460,4 +470,5 @@ performando" (separación pedida explícitamente):
 | 2026-10-15 | Sección 12: se agregaron 6 indicadores estilo "Mis métricas" de Mercado Libre (envíos correctos, entregas pre/post 21, envíos incorrectos, reprogramado post 21, demora) arriba de los KPIs principales. Se calculan enteramente a partir de `porEstadoHora`, que ya se guardaba — no hubo que tocar descarga ni publicación. Son siempre globales (no respetan filtro de zona/chofer), igual que la tabla "Cruce por hora". |
 | 2026-10-16 | Tres ajustes a los indicadores del 2026-10-15: cada valor ahora muestra "de TOTAL" para no perder de vista la base de comparación; el bloque fijo de definiciones/días cargados pasó a un link colapsable ("ⓘ Cómo se calculan estas métricas"); y "Entregas por hora" / "Cruce por hora de entrega" / "Por zona" / "Ranking de choferes" pasaron de estar todos apilados a ser 4 pestañas (una visible a la vez). |
 | 2026-10-23 | Los 4 KPIs viejos del dashboard (Total de envíos, Entregas efectivas, Antes de las 21:00, Cancelados/rechazados) se sacaron del todo — quedaron redundantes con los indicadores nuevos. El indicador "Envíos correctos" pasó a llamarse "Entregas Efectivas" y retomó la definición del viejo KPI del mismo nombre (Entregado + Entregado 2DA visita, sin restringir por hora, sobre total − "A retirar"); "Entregas Pre 21" pasó a tener un % como valor principal, igual que "Entregas Post 21" (antes mostraba solo el total sin porcentaje). Además, el dashboard pasó de tema oscuro a tema claro (fondo gris clarito, tarjetas blancas, marca dorado/negro en el "chrome" de la interfaz) manteniendo el semáforo verde/amarillo/rojo de puntualidad sin cambios — ver sección 12. |
-| 2026-10-24 | Segundo reporte: **Seguimiento de Repartidores** (sección 13), con botones arriba para navegar entre los dos. Lee dos planillas de Google Sheets publicadas como CSV directo desde el navegador (sin Firestore ni automatización nueva). Dos modos — "Operación en vivo" (hoy: KPIs con objetivo según día de semana, Centro de alertas, flota confirmada por zona con barras, heatmap zona × turno) y "Rendimiento histórico" (ranking con score compuesto, heatmap de cuellos de botella, tabla completa) — para no mezclar monitoreo en vivo con análisis histórico. Se usó la skill de dataviz para la paleta de colores de los vehículos (validada contra daltonismo). De paso se corrigió un bug real preexistente que afectaba a todo el dashboard: `setChip()` no estaba acotado a `#chips`, así que en cada carga de página le borraba la clase "active" a todos los `.chip`, incluidos los botones de navegación nuevos (recién se veían marcados después de un click). **Pendiente:** conectar la hoja de listado de repartidores (quién puede trabajar sábados) y agregar un piso de muestra al score del ranking. |
+| 2026-10-24 | Segundo reporte: **Seguimiento de Repartidores** (sección 13), con botones arriba para navegar entre los dos. Lee dos planillas de Google Sheets publicadas como CSV directo desde el navegador (sin Firestore ni automatización nueva). Dos modos — "Operación en vivo" (hoy: KPIs con objetivo según día de semana, Centro de alertas, flota confirmada por zona con barras, heatmap zona × turno) y "Rendimiento histórico" (ranking con score compuesto, heatmap de cuellos de botella, tabla completa) — para no mezclar monitoreo en vivo con análisis histórico. Se usó la skill de dataviz para la paleta de colores de los vehículos (validada contra daltonismo). De paso se corrigió un bug real preexistente que afectaba a todo el dashboard: `setChip()` no estaba acotado a `#chips`, así que en cada carga de página le borraba la clase "active" a todos los `.chip`, incluidos los botones de navegación nuevos (recién se veían marcados después de un click). **Pendiente:** agregar un piso de muestra al score del ranking. |
+| 2026-10-24 | Se conectó la tercera hoja ("Listado de Choferes") para la disponibilidad de sábados — era otra pestaña del mismo documento ya compartido, sin necesitar un link nuevo. Los sábados, el dashboard ahora filtra el denominador de Asistencia confirmada / Pallet retirado a solo quienes están habilitados en el roster (`ASISTE SABADO=TRUE` o sin dato), y el objetivo volvió a 95% (reemplaza el 70% de arranque). Se muestra una nota con la cantidad excluida. De paso se corrigió un bug real: `filasAObjetosRepa()` asumía NOMBRE en la columna 2 (cierto en viva/histórica), pero en el roster NOMBRE es la columna 1 — ahora busca el índice por nombre de columna en vez de asumir una posición fija. |
