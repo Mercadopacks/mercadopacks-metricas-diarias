@@ -390,11 +390,14 @@ armar otro pipeline como el de LightData:
 
 ### 13.2 Flujo de una asignación
 
-`ASISTE A DEPOSITO (SOPORTE)` (confirma asistencia) → `PALLET LISTO
-(DEPÓSITO)` → `CONFIRMA RETIRO (SOPORTE)` → `HORA LLEGADA` (llegada física
-al depósito) → `PALLET RETIRADO (DEPÓSITO)`. La columna `ALERTADO` trae
-alertas operativas en vivo (ej. "Pallet sin retirar", "chofer no asiste con
-pallet armado").
+`ASISTENCIA` (confirma asistencia — hasta el 2026-10-31 se llamaba `ASISTE
+A DEPOSITO (SOPORTE)`, ver 13.6) → `PALLET LISTO (DEPÓSITO)` →
+`CONFIRMA RETIRO (SOPORTE)` → `HORA LLEGADA` (llegada física al depósito)
+→ `PALLET RETIRADO (DEPÓSITO)`. La columna de alertas operativas en vivo
+(ej. "Pallet sin retirar", "chofer no asiste con pallet armado") está, al
+2026-10-31, **sin nombre de columna** en el CSV publicado — el dashboard
+la ubica por posición, justo después de `ESTADO DEL CHOFER` — y se sigue
+exponiendo internamente como `ALERTADO`, ver 13.6.
 
 **OJO:** `HORA LLEGADA` (y por lo tanto todo lo que depende de ella —
 "Llegada a tiempo", el heatmap histórico de puntualidad) recién se empezó
@@ -473,6 +476,52 @@ el click en los headers no hacía nada. Se usa en dos tablas hoy:
 sortState)` es el comparador genérico (strings con `localeCompare`,
 números restando, `null`/`undefined` al final).
 
+### 13.6 La planilla de origen puede cambiar de esquema sin avisar
+
+Bug real encontrado el 2026-10-31: entre el 2026-10-24 (conexión inicial)
+y esa fecha, alguien restructuró las columnas de las hojas "viva" e
+"histórica" en Google Sheets — mismo documento, mismo `gid`, pero:
+
+- `ASISTE A DEPOSITO (SOPORTE)` se renombró a `ASISTENCIA` (mismo
+  significado, TRUE/FALSE).
+- La columna `ALERTADO` perdió su nombre de columna al republicar —
+  quedó como un header vacío (`""`) pegado justo después de `ESTADO DEL
+  CHOFER` (una columna narrativa nueva que no es lo mismo: trae estados
+  como "👍 Asistencia confirmada" o "🚚 En camino al depósito", no
+  alertas).
+
+Como `filasAObjetosRepa()` arma el objeto de cada fila a partir del
+nombre de columna (`header.forEach((h,i) => { if(h && h.trim())
+obj[h.trim()] = ... })`), el resultado fue silencioso y específico:
+- `f['ASISTE A DEPOSITO (SOPORTE)']` pasó a ser siempre `undefined` →
+  nunca `=== 'TRUE'` → Asistencia confirmada y Pallet retirado
+  mostraban 0% todo el tiempo, con la "fecha de hoy" y la cantidad de
+  asignaciones calculadas bien (la hoja SÍ tenía filas de hoy) — lo que
+  hacía parecer que "no mostraba datos de hoy" cuando en realidad sí los
+  encontraba, pero los contaba todos como "no asistió".
+- La columna de header vacío (que traía el texto de la alerta) se
+  descartaba del todo en el loop de arriba → Centro de alertas siempre
+  "Sin alertas", aunque hubiera alertas reales ese día.
+- No hubo ningún error de JS ni pantalla vacía — por eso pasó
+  desapercibido hasta que el usuario lo reportó a simple vista.
+
+**Fix:** `asisteRepa(f)` prueba los dos nombres de columna (`ASISTENCIA`
+primero, `ASISTE A DEPOSITO (SOPORTE)` como fallback) en vez de asumir
+uno solo. `filasAObjetosRepa()` ubica la columna de alertas **por
+posición** (el índice siguiente a `ESTADO DEL CHOFER`, solo si ese header
+está vacío) y la expone bajo la clave `ALERTADO` de siempre, para no
+tener que tocar el resto del código que ya la usa.
+
+**Lección para el futuro:** esta integración lee una planilla operativa
+que el equipo de depósito edita directamente (no un export generado por
+el propio dashboard), así que el esquema de columnas puede cambiar en
+cualquier momento sin que nadie avise al código. Si un indicador de
+Repartidores empieza a dar 0% o "sin datos" de forma sospechosa (sobre
+todo si la cantidad de asignaciones del período sigue siendo la
+correcta), lo primero a revisar es si los nombres de columna en
+`dashboard_logistica.html` siguen matcheando el CSV real —
+`curl -sL "<URL_REPA_VIVA>" | head -1` para ver el header actual.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -492,3 +541,4 @@ números restando, `null`/`undefined` al final).
 | 2026-10-24 | Segundo reporte: **Seguimiento de Repartidores** (sección 13), con botones arriba para navegar entre los dos. Lee dos planillas de Google Sheets publicadas como CSV directo desde el navegador (sin Firestore ni automatización nueva). Dos modos — "Operación en vivo" (hoy: KPIs con objetivo según día de semana, Centro de alertas, flota confirmada por zona con barras, heatmap zona × turno) y "Rendimiento histórico" (ranking con score compuesto, heatmap de cuellos de botella, tabla completa) — para no mezclar monitoreo en vivo con análisis histórico. Se usó la skill de dataviz para la paleta de colores de los vehículos (validada contra daltonismo). De paso se corrigió un bug real preexistente que afectaba a todo el dashboard: `setChip()` no estaba acotado a `#chips`, así que en cada carga de página le borraba la clase "active" a todos los `.chip`, incluidos los botones de navegación nuevos (recién se veían marcados después de un click). **Pendiente:** agregar un piso de muestra al score del ranking. |
 | 2026-10-24 | Se conectó la tercera hoja ("Listado de Choferes") para la disponibilidad de sábados — era otra pestaña del mismo documento ya compartido, sin necesitar un link nuevo. Los sábados, el dashboard ahora filtra el denominador de Asistencia confirmada / Pallet retirado a solo quienes están habilitados en el roster (`ASISTE SABADO=TRUE` o sin dato), y el objetivo volvió a 95% (reemplaza el 70% de arranque). Se muestra una nota con la cantidad excluida. De paso se corrigió un bug real: `filasAObjetosRepa()` asumía NOMBRE en la columna 2 (cierto en viva/histórica), pero en el roster NOMBRE es la columna 1 — ahora busca el índice por nombre de columna en vez de asumir una posición fija. |
 | 2026-10-24 | Se agregó un componente genérico de tablas ordenables (`wireSortableTable`/`ordenarPorClave`, sección 13.5) y se aplicó a "Todos los repartidores" (histórico de Repartidores), que antes no tenía ningún `data-key` ni handler de click — los headers no hacían nada. De paso se notó que "Ranking de choferes" (Envíos) ya tenía la lógica de orden pero sin indicador visual, así que no se notaba que era clickeable; ahora ambas tablas muestran una flecha dorada (▲/▼) en la columna activa. |
+| 2026-10-31 | Bug real (sección 13.6): la hoja "viva" de Repartidores cambió de esquema sin avisar — `ASISTE A DEPOSITO (SOPORTE)` pasó a llamarse `ASISTENCIA` y la columna `ALERTADO` quedó sin nombre de columna en el CSV publicado. Asistencia confirmada y Pallet retirado mostraban 0% todo el tiempo (con la cantidad de asignaciones de hoy bien calculada, lo que lo hacía parecer "no muestra datos de hoy") y el Centro de alertas siempre decía "Sin alertas". Sin ningún error de JS — reportado por el usuario a simple vista. Fix: `asisteRepa()` prueba los dos nombres de columna, y la columna de alertas se ubica por posición (siguiente a `ESTADO DEL CHOFER`) en vez de por nombre. |

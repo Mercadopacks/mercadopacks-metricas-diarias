@@ -1934,11 +1934,25 @@
     // conectar esa hoja el 2026-10-24: con índice fijo, el filtro de filas
     // vacías terminaba mirando la columna equivocada ahí.
     const idxNombre = header.findIndex(h => (h||'').trim() === 'NOMBRE');
+    // La hoja "viva"/"histórica" tiene una columna de alertas (antes
+    // llamada ALERTADO) que en algún momento quedó SIN nombre de columna
+    // al republicar — siempre pegada justo después de "ESTADO DEL CHOFER".
+    // Bug real encontrado el 2026-10-31: el loop de abajo descarta
+    // cualquier columna con header vacío, así que esa columna
+    // desaparecía del todo (y con ella, el Centro de alertas). La
+    // recuperamos por posición y la exponemos bajo la clave ALERTADO de
+    // siempre, para no tocar el resto del código que ya la usa.
+    const idxEstadoChofer = header.findIndex(h => (h||'').trim() === 'ESTADO DEL CHOFER');
+    const idxAlertado = (idxEstadoChofer !== -1 && (header[idxEstadoChofer + 1] || '').trim() === '')
+      ? idxEstadoChofer + 1 : -1;
     return filas.slice(1)
       .filter(f => idxNombre === -1 || (f[idxNombre] || '').trim())
       .map(f => {
         const obj = {};
         header.forEach((h, i) => { if(h && h.trim()) obj[h.trim()] = (f[i] || '').trim(); });
+        if(idxAlertado !== -1 && obj['ALERTADO'] === undefined){
+          obj['ALERTADO'] = (f[idxAlertado] || '').trim();
+        }
         return obj;
       });
   }
@@ -2114,7 +2128,7 @@
       const zona = normalizarZonaRepa(f['ZONA']);
       const turnoClave = (f['TURNO'] || '').trim() || 'SIN TURNO';
       const vehiculo = normalizarVehiculoRepa(f['TIPO DE VEHICULO']);
-      const asiste = f['ASISTE A DEPOSITO (SOPORTE)'] === 'TRUE';
+      const asiste = asisteRepa(f);
       const palletRetirado = f['PALLET RETIRADO (DEPÓSITO)'] === 'TRUE';
       const horaLlegada = fechaHoraRepaADate(f['HORA LLEGADA']);
       const turno = turnoRepaADate(f['FECHA'], f['TURNO']);
@@ -2156,7 +2170,7 @@
       }
       const r = porNombre[nombre];
       r.asignaciones++;
-      if(f['ASISTE A DEPOSITO (SOPORTE)'] === 'TRUE') r.asistencia++;
+      if(asisteRepa(f)) r.asistencia++;
       const horaLlegada = fechaHoraRepaADate(f['HORA LLEGADA']);
       const turno = turnoRepaADate(f['FECHA'], f['TURNO']);
       if(horaLlegada){
@@ -2187,6 +2201,16 @@
     if(valor >= umbralVerde) return 'verde';
     if(valor >= umbralAmarillo) return 'amarillo';
     return 'rojo';
+  }
+
+  // La columna de asistencia confirmada se llamaba "ASISTE A DEPOSITO
+  // (SOPORTE)"; en algún momento la planilla la rebautizó "ASISTENCIA"
+  // (bug real encontrado el 2026-10-31 — con el nombre viejo, nunca
+  // matcheaba y todo el período mostraba 0% de asistencia aunque la
+  // hoja tuviera filas en TRUE). Se prueban los dos nombres por las
+  // dudas de que la planilla vuelva al nombre viejo.
+  function asisteRepa(f){
+    return f['ASISTENCIA'] === 'TRUE' || f['ASISTE A DEPOSITO (SOPORTE)'] === 'TRUE';
   }
 
   // Pedido 2026-10-24: sacar del Centro de Alertas (y del conteo de
@@ -2471,7 +2495,7 @@
       c.classList.toggle('seleccionada', c.dataset.zona === zona);
     });
     const confirmados = (stateRepa.filasVivo || [])
-      .filter(f => normalizarZonaRepa(f['ZONA']) === zona && f['ASISTE A DEPOSITO (SOPORTE)'] === 'TRUE')
+      .filter(f => normalizarZonaRepa(f['ZONA']) === zona && asisteRepa(f))
       .sort((a,b) => (a['TURNO']||'').localeCompare(b['TURNO']||''));
     document.getElementById('repaZonaDetalleTitulo').textContent = `Detalle de zona — ${zona} (${confirmados.length} confirmados)`;
     document.getElementById('repaZonaDetalleBody').innerHTML = confirmados.length === 0
