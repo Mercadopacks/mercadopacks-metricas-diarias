@@ -95,6 +95,7 @@ def calcular_snapshots(df: pd.DataFrame) -> dict:
             "porHora": [0] * 24,
             "porChofer": {},
             "porZona": {},
+            "flex": {"total": 0, "aRetirar": 0, "porEstadoHora": {}},
         })
 
         estado = str(fila["Estado"])
@@ -106,6 +107,11 @@ def calcular_snapshots(df: pd.DataFrame) -> dict:
         # contarlo en el universo de entregas para el % de efectividad
         # (reglas_de_negocio.md, regla #1).
         es_a_retirar = estado == "A retirar"
+        # Flex de Mercado Libre = Origen "ML" o "ML TURBO" (reglas_de_negocio.md
+        # sección 13.7, criterio confirmado con el equipo el 2026-11-06 — no
+        # hay columna "Flex" explícita en el export de LightData).
+        origen = str(fila.get("Origen") or "").strip()
+        es_flex = origen in ("ML", "ML TURBO")
 
         dt = fila.get("_fecha_estado_dt")
         hora = dt.hour if dt is not None and not pd.isna(dt) else None
@@ -130,6 +136,14 @@ def calcular_snapshots(df: pd.DataFrame) -> dict:
         if hora_bucket:
             eb = snap["porEstadoHora"].setdefault(estado, nuevos_buckets())
             sumar_bucket(eb, hora_bucket)
+
+        if es_flex:
+            snap["flex"]["total"] += 1
+            if es_a_retirar:
+                snap["flex"]["aRetirar"] += 1
+            if hora_bucket:
+                ebf = snap["flex"]["porEstadoHora"].setdefault(estado, nuevos_buckets())
+                sumar_bucket(ebf, hora_bucket)
 
         if not cadete:
             snap["sinChofer"] += 1

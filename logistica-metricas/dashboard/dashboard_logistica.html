@@ -263,6 +263,8 @@
   .mini-fila{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:11.5px; color:var(--text-muted); }
   .mini-fila .mini-fila-valor{ color:var(--text); font-weight:600; font-size:12.5px; white-space:nowrap; }
   .mini-fila .mini-fila-de{ color:var(--text-muted); font-weight:400; font-size:11px; }
+  .mini-sub-seccion{ padding-top:10px; }
+  .mini-sub-seccion .mini-value{ font-size:17px; }
 
   /* ---------- charts ---------- */
   .charts{ display:grid; grid-template-columns: 1fr; gap:16px; margin-bottom:28px; }
@@ -982,6 +984,7 @@
     const agg = {
       total:0, efectivas:0, cancelados:0, sinChofer:0, aRetirar:0,
       buckets:nuevosBuckets(), porEstadoHora:{}, porChofer:{}, porZona:{},
+      flex:{ total:0, aRetirar:0, porEstadoHora:{} },
     };
     for(const s of snaps){
       agg.total += s.total; agg.efectivas += s.efectivas; agg.cancelados += s.cancelados;
@@ -991,6 +994,17 @@
       for(const [estado, b] of Object.entries(s.porEstadoHora || {})){
         if(!agg.porEstadoHora[estado]) agg.porEstadoHora[estado] = nuevosBuckets();
         sumarBuckets(agg.porEstadoHora[estado], b);
+      }
+
+      // Sub-agregado de envíos Flex de Mercado Libre (Origen "ML" o "ML
+      // TURBO" — reglas_de_negocio.md sección 13.7), publicado por
+      // publicar_firestore.py junto al resto del snapshot diario.
+      const sf = s.flex || {};
+      agg.flex.total += (sf.total || 0);
+      agg.flex.aRetirar += (sf.aRetirar || 0);
+      for(const [estado, b] of Object.entries(sf.porEstadoHora || {})){
+        if(!agg.flex.porEstadoHora[estado]) agg.flex.porEstadoHora[estado] = nuevosBuckets();
+        sumarBuckets(agg.flex.porEstadoHora[estado], b);
       }
 
       for(const [k,v] of Object.entries(s.porChofer||{})){
@@ -1068,6 +1082,18 @@
     const efectivas = entregadoTotal + entregado2daTotal;
     const totalParaEfectividad = total - (agg.aRetirar || 0);
 
+    // Entregas Efectivas, pero solo para envíos Flex de Mercado Libre
+    // (Origen "ML" o "ML TURBO" — reglas_de_negocio.md sección 13.7).
+    // Mismo criterio que el indicador general (item 1), aplicado sobre
+    // agg.flex en vez de agg.
+    const porEstadoFlex = agg.flex.porEstadoHora || {};
+    const deFlex = estado => porEstadoFlex[estado] || nuevosBuckets();
+    const entregadoFlexTotal = sumaTodos(deFlex('Entregado'));
+    const entregado2daFlexTotal = sumaTodos(deFlex('Entregado 2DA visita'));
+    const efectivasFlex = entregadoFlexTotal + entregado2daFlexTotal;
+    const totalFlex = agg.flex.total || 0;
+    const totalParaEfectividadFlex = totalFlex - (agg.flex.aRetirar || 0);
+
     // Entregado antes de las 21 — ya no es su propia tarjeta ("Envíos
     // correctos" pasó a llamarse "Entregas Efectivas" y mide otra cosa),
     // pero el ítem 4 (Envíos Incorrectos) lo sigue usando tal cual.
@@ -1105,6 +1131,15 @@
           ['Entregado', entregadoTotal],
           ['Entregado 2DA visita', entregado2daTotal],
         ],
+        sub:{
+          titulo:'Solo Flex de Mercado Libre',
+          valor:fmtPct(pct(efectivasFlex, totalParaEfectividadFlex)),
+          info:'Mismo cálculo que arriba, pero solo sobre envíos con Origen "ML" o "ML TURBO" (Flex).'+GLOBAL,
+          filas:[
+            ['Entregados (flex)', efectivasFlex],
+            ['Total flex', totalFlex],
+          ],
+        },
       },
       {
         label:'Entregas Pre 21', dot:'verde',
@@ -1163,6 +1198,26 @@
             <div class="mini-fila"><span>${escapeHtml(label)}</span><span class="mini-fila-valor num">${fmtNum(valorNum)} <span class="mini-fila-de">de ${fmtNum(total)}</span></span></div>
           `).join('')}
         </div>
+        ${t.sub ? `
+        <div class="mini-detalle mini-sub-seccion">
+          <div class="mini-label">
+            <span>${escapeHtml(t.sub.titulo)}</span>
+            <span class="mini-info" tabindex="0" role="img" aria-label="${escapeHtml(t.sub.info)}">
+              i
+              <span class="mini-tooltip">${escapeHtml(t.sub.info)}</span>
+            </span>
+          </div>
+          <div class="mini-value-row">
+            <span class="mini-dot ${t.dot}"></span>
+            <span class="mini-value num">${t.sub.valor}</span>
+          </div>
+          <div class="mini-detalle">
+            ${t.sub.filas.map(([label, valorNum]) => `
+              <div class="mini-fila"><span>${escapeHtml(label)}</span><span class="mini-fila-valor num">${fmtNum(valorNum)}</span></div>
+            `).join('')}
+          </div>
+        </div>
+        ` : ''}
       </article>
     `).join('');
   }

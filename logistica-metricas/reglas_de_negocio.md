@@ -324,6 +324,37 @@ salvo que se diga lo contrario):
    con el punto 5 (un `reprogramado por meli` post-21 cuenta en las dos
    tarjetas) — son tarjetas independientes, no una partición exhaustiva.
 
+### Entregas Efectivas — desglose Flex de Mercado Libre (2026-11-06)
+
+La tarjeta "Entregas Efectivas" (punto 1 arriba) muestra ahora, debajo del
+desglose normal, una sub-sección "Solo Flex de Mercado Libre" con el mismo
+% y los mismos números pero calculados únicamente sobre los envíos Flex.
+
+**Qué cuenta como "Flex de Mercado Libre":** el export de LightData no trae
+ninguna columna llamada "Flex" — se usa la columna `Origen` (ver
+`diccionario_de_datos.md`), y un envío cuenta como Flex si `Origen` es
+`"ML"` o `"ML TURBO"`. Criterio confirmado con el equipo el 2026-11-06
+(se descartó limitar a solo `"ML"` porque "ML TURBO" también es Flex).
+
+**Cómo se calcula:** `publicar_firestore.py` ahora calcula, fila por fila,
+si el envío es Flex (`Origen` ∈ {`ML`, `ML TURBO`}) y, si lo es, además de
+sumarlo en los contadores globales de siempre lo suma en un sub-objeto
+`flex` del snapshot diario (`{total, aRetirar, porEstadoHora}` — mismo
+shape que los campos globales, pero restringido a Flex). El dashboard
+agrega ese sub-objeto igual que el resto (`aggregate()`) y
+`renderIndicadoresMeli()` aplica la misma fórmula del punto 1
+(`Entregado + Entregado 2DA visita`, sin restringir por hora, sobre
+`total flex − "A retirar" flex`) pero leyendo `agg.flex` en vez de `agg`.
+
+**Limitación conocida:** los snapshots ya publicados en Firestore antes de
+este cambio no tienen el campo `flex` (quedan en `{total:0, aRetirar:0,
+porEstadoHora:{}}` por el fallback del dashboard), así que para esos días
+la sub-sección muestra "—". Se completa solo, día a día, a medida que
+`publicar_firestore.py` corre con el código nuevo — no hace falta
+reprocesar el historial salvo que se quiera tener el dato retroactivo
+(en ese caso, habría que volver a correr `publicar_firestore.py` sobre los
+archivos crudos ya descargados de esos días).
+
 ### Pestañas de reportes (2026-10-16)
 
 "Entregas por hora", "Cruce por hora de entrega", "Por zona" y "Ranking de
@@ -542,3 +573,4 @@ correcta), lo primero a revisar es si los nombres de columna en
 | 2026-10-24 | Se conectó la tercera hoja ("Listado de Choferes") para la disponibilidad de sábados — era otra pestaña del mismo documento ya compartido, sin necesitar un link nuevo. Los sábados, el dashboard ahora filtra el denominador de Asistencia confirmada / Pallet retirado a solo quienes están habilitados en el roster (`ASISTE SABADO=TRUE` o sin dato), y el objetivo volvió a 95% (reemplaza el 70% de arranque). Se muestra una nota con la cantidad excluida. De paso se corrigió un bug real: `filasAObjetosRepa()` asumía NOMBRE en la columna 2 (cierto en viva/histórica), pero en el roster NOMBRE es la columna 1 — ahora busca el índice por nombre de columna en vez de asumir una posición fija. |
 | 2026-10-24 | Se agregó un componente genérico de tablas ordenables (`wireSortableTable`/`ordenarPorClave`, sección 13.5) y se aplicó a "Todos los repartidores" (histórico de Repartidores), que antes no tenía ningún `data-key` ni handler de click — los headers no hacían nada. De paso se notó que "Ranking de choferes" (Envíos) ya tenía la lógica de orden pero sin indicador visual, así que no se notaba que era clickeable; ahora ambas tablas muestran una flecha dorada (▲/▼) en la columna activa. |
 | 2026-10-31 | Bug real (sección 13.6): la hoja "viva" de Repartidores cambió de esquema sin avisar — `ASISTE A DEPOSITO (SOPORTE)` pasó a llamarse `ASISTENCIA` y la columna `ALERTADO` quedó sin nombre de columna en el CSV publicado. Asistencia confirmada y Pallet retirado mostraban 0% todo el tiempo (con la cantidad de asignaciones de hoy bien calculada, lo que lo hacía parecer "no muestra datos de hoy") y el Centro de alertas siempre decía "Sin alertas". Sin ningún error de JS — reportado por el usuario a simple vista. Fix: `asisteRepa()` prueba los dos nombres de columna, y la columna de alertas se ubica por posición (siguiente a `ESTADO DEL CHOFER`) en vez de por nombre. |
+| 2026-11-06 | La tarjeta "Entregas Efectivas" (sección 12) suma una sub-sección "Solo Flex de Mercado Libre" con el mismo % y números pero restringidos a envíos Flex (`Origen` = `"ML"` o `"ML TURBO"`, criterio confirmado con el equipo — no hay columna "Flex" explícita en el export). `publicar_firestore.py` agrega un sub-objeto `flex` (`{total, aRetirar, porEstadoHora}`) a cada snapshot diario; el dashboard lo agrega igual que el resto y aplica la misma fórmula de efectividad. Los snapshots publicados antes de este cambio no tienen ese campo, así que muestran "—" hasta que se reprocesen o se acumulen días nuevos. |
