@@ -2368,90 +2368,134 @@
       .trim();
   }
 
-  // Mapa localidad -> zona, criterio ML Flex confirmado con el equipo
-  // (2026-11-11), "no te puedes salir de ahí":
-  //   CABA: Ciudad Autónoma de Buenos Aires.
-  //   Zona Norte: Vicente López, San Isidro, San Fernando, Tigre, San
-  //     Martín, Malvinas Argentinas, San Miguel, Escobar, Pilar, José C. Paz.
-  //   Zona Sur: Avellaneda, Lanús, Lomas de Zamora, Quilmes, Almirante
-  //     Brown, Berazategui, Esteban Echeverría, Ezeiza, Florencio Varela,
-  //     Berisso, Ensenada, La Plata, Presidente Perón, San Vicente.
-  //   Zona Oeste: Tres de Febrero, La Matanza, Morón, Hurlingham,
-  //     Ituzaingó, Merlo, Moreno, General Rodríguez, Marcos Paz.
-  // Los envíos reales traen la localidad FINA (barrio/pueblo), no el
-  // nombre del partido — este mapa ubica cada localidad conocida dentro
-  // de su partido, chequeado contra ~290 localidades reales del
-  // 2026-11-11. Lo que no se reconoce queda "Sin zona" a propósito (mejor
-  // visible y corregible que mal clasificado); si aparece un hueco nuevo,
-  // se agrega acá.
+  // Mapa localidad -> zona, criterio ML Flex dado por el equipo —
+  // actualizado 2026-11-11 con el listado completo por partido/cordón
+  // (CABA 100% de barrios; Norte/Sur/Oeste con cordones 1-2-3). "No te
+  // puedes salir de ahí": los envíos reales traen la localidad FINA
+  // (barrio/pueblo), no el nombre del partido, así que este mapa ubica
+  // cada localidad del listado (y sus variantes de acento/mayúscula/
+  // tipeo vistas en datos reales) dentro de su partido. Lo que no se
+  // reconoce queda "Sin zona" a propósito (mejor visible y corregible —
+  // agregar una entrada acá — que mal clasificado).
+  //
+  // OJO — "Villa Bosch" aparece en el listado del equipo tanto en San
+  // Martín (Norte) como en Tres de Febrero (Oeste); administrativamente
+  // es una localidad de San Martín, así que se resolvió a 'Norte'. Avisar
+  // si el criterio real para esa localidad puntual es otro.
   const ZONA_POR_LOCALIDAD = {
-    // --- CABA (barrios oficiales + alias vistos en datos reales) ---
+    // --- CABA — cobertura 100% de barrios ---
     'caba':'CABA', 'capital federal':'CABA', 'buenos aires':'CABA', 'caba villa lugano':'CABA', 'palermo soho':'CABA',
-    'abasto':'CABA', 'agronomia':'CABA', 'almagro':'CABA', 'balvanera':'CABA', 'barracas':'CABA',
-    'belgrano':'CABA', 'belgrano barrancas':'CABA', 'belgrano r':'CABA', 'billinghurst':'CABA',
-    'boedo':'CABA', 'caballito':'CABA', 'coghlan':'CABA', 'colegiales':'CABA', 'constitucion':'CABA',
-    'flores':'CABA', 'floresta':'CABA', 'la boca':'CABA', 'liniers':'CABA', 'mataderos':'CABA',
-    'monserrat':'CABA', 'monte castro':'CABA', 'nueva pompeya':'CABA', 'nunez':'CABA', 'palermo':'CABA',
+    'agronomia':'CABA', 'almagro':'CABA', 'balvanera':'CABA', 'barracas':'CABA', 'belgrano':'CABA',
+    'boedo':'CABA', 'caballito':'CABA', 'chacarita':'CABA', 'coghlan':'CABA', 'colegiales':'CABA',
+    'constitucion':'CABA', 'flores':'CABA', 'floresta':'CABA', 'la boca':'CABA', 'la paternal':'CABA',
+    'paternal':'CABA', 'liniers':'CABA', 'mataderos':'CABA', 'monte castro':'CABA',
+    'montserrat':'CABA', 'monserrat':'CABA', 'nueva pompeya':'CABA', 'nunez':'CABA', 'palermo':'CABA',
     'parque avellaneda':'CABA', 'parque chacabuco':'CABA', 'parque chas':'CABA', 'parque patricios':'CABA',
-    'paternal':'CABA', 'puerto madero':'CABA', 'recoleta':'CABA', 'retiro':'CABA', 'saavedra':'CABA',
+    'puerto madero':'CABA', 'recoleta':'CABA', 'retiro':'CABA', 'saavedra':'CABA',
     'san cristobal':'CABA', 'san nicolas':'CABA', 'san telmo':'CABA', 'velez sarsfield':'CABA',
-    'versailles':'CABA', 'villa crespo':'CABA', 'villa devoto':'CABA', 'villa gral mitre':'CABA',
-    'villa lugano':'CABA', 'villa luro':'CABA', 'villa ortuzar':'CABA', 'villa pueyrredon':'CABA',
-    'villa real':'CABA', 'villa riachuelo':'CABA', 'villa santa rita':'CABA', 'villa soldati':'CABA',
-    'villa urquiza':'CABA', 'villa del parque':'CABA',
+    'versalles':'CABA', 'versailles':'CABA', 'villa crespo':'CABA', 'villa del parque':'CABA',
+    'villa devoto':'CABA', 'villa general mitre':'CABA', 'villa gral mitre':'CABA', 'villa lugano':'CABA',
+    'villa luro':'CABA', 'villa ortuzar':'CABA', 'villa pueyrredon':'CABA', 'villa real':'CABA',
+    'villa riachuelo':'CABA', 'villa santa rita':'CABA', 'villa soldati':'CABA', 'villa urquiza':'CABA',
+    // alias/sub-barrios vistos en datos reales, no contradicen el listado
+    'abasto':'CABA', 'belgrano barrancas':'CABA', 'belgrano r':'CABA',
 
     // --- Zona Norte ---
-    'vicente lopez':'Norte', 'olivos':'Norte', 'martinez':'Norte', 'florida':'Norte',
-    'florida oeste':'Norte', 'munro':'Norte', 'villa martelli':'Norte', 'carapachay':'Norte', 'la lucila':'Norte',
-    'san isidro':'Norte', 'acassuso':'Norte', 'beccar':'Norte', 'boulogne':'Norte', 'villa adelina':'Norte',
+    // Vicente López
+    'vicente lopez':'Norte', 'olivos':'Norte', 'florida':'Norte', 'florida oeste':'Norte',
+    'la lucila':'Norte', 'munro':'Norte', 'carapachay':'Norte', 'villa martelli':'Norte', 'villa adelina':'Norte',
+    // San Isidro
+    'san isidro':'Norte', 'acassuso':'Norte', 'martinez':'Norte', 'boulogne':'Norte', 'beccar':'Norte',
+    // San Fernando
     'san fernando':'Norte', 'victoria':'Norte', 'virreyes':'Norte', 'vireeyes':'Norte',
+    // Tigre
     'tigre':'Norte', 'don torcuato':'Norte', 'general pacheco':'Norte', 'grl pacheco tigre':'Norte',
-    'ricardo rojas':'Norte', 'el talar':'Norte', 'troncos del talar':'Norte', 'los troncos':'Norte',
-    'los troncos del talar':'Norte', 'rincon de milberg':'Norte', 'nordelta':'Norte',
-    'benavidez':'Norte', 'dique lujan':'Norte',
-    'general san martin':'Norte', 'san martin':'Norte', 'gral san martin':'Norte', 'villa lynch':'Norte',
-    'san andres':'Norte', 'villa maipu':'Norte', 'jose leon suarez':'Norte', 'villa ballester':'Norte',
-    'malvinas argentinas':'Norte', 'grand bourg':'Norte', 'los polvorines':'Norte',
-    'ingeniero adolfo sourdeaux':'Norte', 'tortuguitas':'Norte', 'pablo nogues':'Norte', 'villa de mayo':'Norte',
-    'san miguel':'Norte', 'muniz':'Norte', 'bella vista':'Norte',
+    'el talar':'Norte', 'benavidez':'Norte',
+    'ricardo rojas':'Norte', 'rincon de milberg':'Norte', 'nordelta':'Norte', 'villa nueva':'Norte',
+    'dique lujan':'Norte', 'troncos del talar':'Norte', 'los troncos':'Norte', 'los troncos del talar':'Norte',
+    // San Martín
+    'san martin':'Norte', 'general san martin':'Norte', 'gral san martin':'Norte', 'villa ballester':'Norte',
+    'san andres':'Norte', 'villa maipu':'Norte', 'villa bosch':'Norte', 'jose leon suarez':'Norte', 'billinghurst':'Norte',
+    'villa lynch':'Norte',
+    // Malvinas Argentinas
+    'malvinas argentinas':'Norte', 'los polvorines':'Norte', 'grand bourg':'Norte', 'tortuguitas':'Norte',
+    'tierras altas':'Norte', 'villa de mayo':'Norte', 'ingeniero adolfo sourdeaux':'Norte', 'pablo nogues':'Norte',
+    // San Miguel
+    'san miguel':'Norte', 'bella vista':'Norte', 'muniz':'Norte', 'campo de mayo':'Norte',
+    // Escobar
     'escobar':'Norte', 'belen de escobar':'Norte', 'garin':'Norte', 'garin escobar':'Norte',
-    'pilar':'Norte', 'presidente derqui':'Norte', 'del viso':'Norte', 'villa rosa':'Norte',
-    'manzanares':'Norte', 'zelaya':'Norte', 'pilar el panchito':'Norte', 'fatima':'Norte',
+    'ingeniero maschwitz':'Norte', 'maquinista savio':'Norte', 'matheu':'Norte',
+    // Pilar
+    'pilar':'Norte', 'del viso':'Norte', 'manuel alberti':'Norte', 'villa rosa':'Norte', 'la lonja':'Norte',
+    'pilar sur':'Norte', 'presidente derqui':'Norte', 'manzanares':'Norte', 'zelaya':'Norte',
+    'pilar el panchito':'Norte', 'fatima':'Norte',
+    // José C. Paz
     'jose c paz':'Norte', 'jose clemente paz':'Norte',
 
     // --- Zona Sur ---
-    'avellaneda':'Sur', 'gerli':'Sur', 'pineyro':'Sur', 'sarandi':'Sur', 'dock sud':'Sur',
-    'wilde':'Sur', 'villa dominico':'Sur',
-    'lanus':'Sur', 'lanus oeste':'Sur', 'villa centenario':'Sur',
+    // Avellaneda
+    'avellaneda':'Sur', 'wilde':'Sur', 'sarandi':'Sur', 'gerli':'Sur', 'dock sud':'Sur', 'pineyro':'Sur',
+    'villa dominico':'Sur',
+    // Lanús
+    'lanus oeste':'Sur', 'lanus este':'Sur', 'lanus':'Sur', 'remedios de escalada':'Sur', 'valentin alsina':'Sur',
+    'monte chingolo':'Sur', 'villa centenario':'Sur',
+    // Lomas de Zamora
     'lomas de zamora':'Sur', 'banfield':'Sur', 'temperley':'Sur', 'turdera':'Sur', 'llavallol':'Sur',
-    'villa fiorito':'Sur', 'ingeniero budge':'Sur',
-    'quilmes':'Sur', 'quilmes oeste':'Sur', 'bernal':'Sur', 'bernal este':'Sur', 'bernal oeste':'Sur',
-    'ezpeleta este':'Sur', 'ezpeleta oeste':'Sur', 'san francisco solano':'Sur',
-    'almirante brown':'Sur', 'don orione':'Sur',
-    'berazategui':'Sur', 'berazategui platanos':'Sur', 'platanos':'Sur', 'ranelagh':'Sur', 'hudson':'Sur',
-    'esteban echeverria':'Sur', 'canning':'Sur',
-    'ezeiza':'Sur', 'tristan suarez':'Sur', 'carlos spegazzini':'Sur',
-    'florencio varela':'Sur', 'bosques':'Sur',
-    'berisso':'Sur',
-    'ensenada':'Sur', 'esenada':'Sur', 'punta lara':'Sur',
-    'la plata':'Sur', 'tolosa':'Sur', 'city bell':'Sur', 'villa elisa':'Sur', 'melchor romero':'Sur',
-    'los hornos':'Sur', 'manuel b gonnet':'Sur', 'joaquin gorina':'Sur', 'villa elvira':'Sur',
-    'ringuelet':'Sur', 'lisandro olmos':'Sur', 'arturo segui':'Sur',
+    'san jose':'Sur', 'villa fiorito':'Sur', 'ingeniero budge':'Sur',
+    // Quilmes
+    'quilmes':'Sur', 'bernal':'Sur', 'don bosco':'Sur', 'ezpeleta':'Sur', 'villa la florida':'Sur',
+    'quilmes oeste':'Sur', 'bernal este':'Sur', 'bernal oeste':'Sur', 'ezpeleta este':'Sur', 'ezpeleta oeste':'Sur',
+    // Almirante Brown
+    'almirante brown':'Sur', 'adrogue':'Sur', 'burzaco':'Sur', 'longchamps':'Sur', 'claypole':'Sur',
+    'rafael calzada':'Sur', 'jose marmol':'Sur', 'glew':'Sur', 'don orione':'Sur',
+    // Berazategui
+    'berazategui':'Sur', 'ranelagh':'Sur', 'villa espana':'Sur', 'platanos':'Sur', 'berazategui platanos':'Sur',
+    'hudson':'Sur', 'sourigues':'Sur',
+    // Esteban Echeverría
+    'esteban echeverria':'Sur', 'monte grande':'Sur', 'luis guillon':'Sur', 'el jaguel':'Sur', 'canning':'Sur',
+    // Ezeiza
+    'ezeiza':'Sur', 'tristan suarez':'Sur', 'carlos spegazzini':'Sur', 'la union':'Sur',
+    // Florencio Varela
+    'florencio varela':'Sur', 'bosques':'Sur', 'zeballos':'Sur', 'gobernador costa':'Sur', 'villa vatteone':'Sur',
+    // Berisso
+    'berisso':'Sur', 'villa arguello':'Sur', 'villa zula':'Sur',
+    // Ensenada
+    'ensenada':'Sur', 'esenada':'Sur', 'el carmen':'Sur', 'punta lara':'Sur',
+    // La Plata
+    'la plata':'Sur', 'tolosa':'Sur', 'ringuelet':'Sur', 'manuel b gonnet':'Sur', 'city bell':'Sur',
+    'villa elisa':'Sur', 'los hornos':'Sur', 'san carlos':'Sur', 'melchor romero':'Sur', 'el peligro':'Sur',
+    'villa elvira':'Sur', 'lisandro olmos':'Sur', 'arturo segui':'Sur', 'joaquin gorina':'Sur',
+    // Presidente Perón
     'presidente peron':'Sur', 'guernica':'Sur',
+    // San Vicente
     'san vicente':'Sur', 'alejandro korn':'Sur',
 
     // --- Zona Oeste ---
-    'tres de febrero':'Oeste', 'partido de tres de febrero':'Oeste', 'caseros':'Oeste',
-    'ciudadela':'Oeste', 'el palomar':'Oeste', 'ciudad jardin del palomar':'Oeste', 'loma hermosa':'Oeste',
-    'la matanza':'Oeste', 'isidro casanova':'Oeste', 'gregorio de la ferrere':'Oeste',
-    'ciudad evita':'Oeste', 'ramos mejia':'Oeste',
-    'moron':'Oeste', 'castelar':'Oeste', 'haedo':'Oeste', 'villa sarmiento':'Oeste',
-    'hurlingham':'Oeste', 'william c morris':'Oeste', 'villa tesei':'Oeste',
+    // Tres de Febrero
+    'tres de febrero':'Oeste', 'partido de tres de febrero':'Oeste', 'caseros':'Oeste', 'ciudadela':'Oeste',
+    'santos lugares':'Oeste', 'saenz pena':'Oeste', 'martin coronado':'Oeste', 'pablo podesta':'Oeste',
+    'el palomar':'Oeste', 'ciudad jardin del palomar':'Oeste', 'loma hermosa':'Oeste',
+    // La Matanza (Norte/Centro)
+    'la matanza':'Oeste', 'ramos mejia':'Oeste', 'san justo':'Oeste', 'haedo':'Oeste',
+    'lomas del mirador':'Oeste', 'la tablada':'Oeste', 'villa luzuriaga':'Oeste', 'ciudad evita':'Oeste',
+    'aldo bonzi':'Oeste', 'tapiales':'Oeste', 'villa madero':'Oeste', 'isidro casanova':'Oeste',
+    'rafael castillo':'Oeste', 'gregorio de la ferrere':'Oeste', 'gregorio de laferrere':'Oeste',
+    // Morón
+    'moron':'Oeste', 'castelar':'Oeste', 'villa sarmiento':'Oeste',
+    // Hurlingham
+    'hurlingham':'Oeste', 'villa tesei':'Oeste', 'william c morris':'Oeste',
+    // Ituzaingó
     'ituzaingo':'Oeste', 'villa udaondo':'Oeste',
-    'merlo':'Oeste', 'buenos aires merlo':'Oeste', 'libertad':'Oeste', 'pontevedra':'Oeste',
-    'parque san martin':'Oeste', 'san antonio de padua':'Oeste', 'mariano acosta':'Oeste',
-    'moreno':'Oeste', 'paso del rey':'Oeste', 'la reja':'Oeste', 'trujui':'Oeste', 'francisco alvarez':'Oeste',
-    'general rodriguez':'Oeste', 'open door':'Oeste', 'opendoor':'Oeste',
+    // Merlo
+    'merlo':'Oeste', 'buenos aires merlo':'Oeste', 'san antonio de padua':'Oeste', 'libertad':'Oeste',
+    'parque san martin':'Oeste', 'mariano acosta':'Oeste', 'pontevedra':'Oeste',
+    // Moreno
+    'moreno':'Oeste', 'paso del rey':'Oeste', 'trujui':'Oeste', 'francisco alvarez':'Oeste', 'la reja':'Oeste',
+    // La Matanza (Sur)
+    'gonzalez catan':'Oeste', 'virrey del pino':'Oeste', '20 de junio':'Oeste',
+    // General Rodríguez
+    'general rodriguez':'Oeste', 'las malvinas':'Oeste', 'open door':'Oeste', 'opendoor':'Oeste',
+    // Marcos Paz
     'marcos paz':'Oeste', 'vicente casares':'Oeste',
   };
 

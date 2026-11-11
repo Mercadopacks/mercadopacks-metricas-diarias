@@ -994,6 +994,39 @@ Los chips de arriba y el filtro de columna "Zona" volvieron a ser
 orden) en vez de dinámicos — es un criterio cerrado dado por el equipo,
 no algo que deba variar según lo que traiga LightData ese día.
 
+### 19.4 Mapa de localidades ampliado al listado completo por partido (2026-11-11, mismo día)
+
+El equipo envió el listado completo y oficial, por partido y por
+"cordón" (1/2/3, zonas de cobertura habilitadas), con el detalle de
+localidades de cada uno. Se reemplazó el mapa armado en 19.3 (que solo
+cubría las localidades vistas ese día en los datos reales) por este
+listado completo:
+
+- **CABA**: cobertura 100% de barrios — listado oficial de 46 barrios.
+- **Zona Norte**: Vicente López, San Isidro, San Fernando, Tigre, San
+  Martín, Malvinas Argentinas, San Miguel (cordón 1-2) + Escobar, Pilar,
+  José C. Paz (cordón 3), con sus localidades principales de cada uno
+  (ej. Tigre: Don Torcuato, General Pacheco, El Talar, Benavídez,
+  Nordelta...).
+- **Zona Sur**: Avellaneda, Lanús, Lomas de Zamora, Quilmes, Almirante
+  Brown, Berazategui, Esteban Echeverría, Ezeiza (cordón 1-2) +
+  Florencio Varela, Berisso, Ensenada, La Plata, Presidente Perón, San
+  Vicente (cordón 3).
+- **Zona Oeste**: Tres de Febrero, La Matanza (Norte/Centro), Morón,
+  Hurlingham, Ituzaingó, Merlo, Moreno (cordón 1-2) + La Matanza (Sur),
+  General Rodríguez, Marcos Paz (cordón 3).
+
+Cobertura verificada de nuevo tras ampliar el mapa: 4 de 122 choferes
+(3.3%) en "Sin zona" — en línea con la medición anterior, ahora con un
+mapa más completo y trazable directamente al listado oficial en vez de
+sólo a lo que apareció un día puntual.
+
+**Única ambigüedad encontrada en el listado**: "Villa Bosch" aparece
+listada tanto bajo San Martín (Zona Norte) como bajo Tres de Febrero
+(Zona Oeste) — administrativamente es una localidad de San Martín, así
+que se resolvió a Norte. Si el criterio real para esa localidad puntual
+es otro, avisar para corregir la entrada en `ZONA_POR_LOCALIDAD`.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1022,4 +1055,5 @@ no algo que deba variar según lo que traiga LightData ese día.
 | 2026-11-11 | Sección 18.1: pasada de QA sobre lo anterior — se reemplazó el `<select>` nativo de los filtros de Zona/Turno/Estado por un combo propio (botón + listbox con el estilo del dashboard, ver sección 18.1), porque la lista desplegada de un `<select>` real no se puede estilar con CSS. Se corrigió que la fila de filtros desalineaba columnas en mobile (no copiaba `hide-mobile`), se arreglaron los `aria-label` (decían el nombre interno de la variable en vez del nombre visible de la columna), se agrandó un poco más el número de los mini-kpis en línea, y se corrigió un bug real preexistente: la fila "(sin chofer asignado)" del Ranking de choferes ignoraba el buscador y los filtros de columna. |
 | 2026-11-11 | Sección 19: dos bugs reales corregidos antes de pasar a producción. (1) "Operación en vivo" no traía datos: `URL_REPA_VIVA` apuntaba sin `gid` explícito y, al cambiar la pestaña "por defecto" del documento publicado, empezó a servir en silencio una hoja de referencia ("Localidades") en vez de la operativa ("Seguimiento Diario") — más una fila en blanco antes del header real en esa hoja, que `filasAObjetosRepa()` tomaba como header y vaciaba toda la lectura. (2) "Seguimiento en ruta" pasó de datos mockeados a datos reales, leyendo `envios_detalle/<hoy>/choferes` (el mismo detalle por chofer de LightData que ya alimenta el resto del dashboard); se sacó la columna "Turno" porque LightData no la registra. |
 | 2026-11-11 | Sección 19.3: corrección del criterio de zona del punto anterior — el campo `Zona` de LightData no era el criterio correcto (además de traer valores propios tipo "ZONA 1/2/3", resultó inconsistente: la misma localidad aparecía con distinta `Zona` en envíos distintos). El criterio real es el mapa de localidades ML Flex (CABA/Norte/Sur/Oeste) dado por el equipo. Se agregó `zonaPorLocalidad()` + un mapa de ~160 localidades reales a su partido y zona, aplicado sobre el campo `Localidad` de cada envío (no `Zona`). Cobertura verificada: de 116 choferes reales, solo 4 (3.4%) quedaron en "Sin zona". Los chips y el filtro de columna volvieron a ser fijos (el criterio es cerrado, no depende de lo que traiga LightData cada día). |
+| 2026-11-11 | Sección 19.4: se reemplazó el mapa de localidades de 19.3 (armado contra lo visto un día puntual) por el listado completo y oficial que mandó el equipo, por partido y por cordón (1/2/3) — CABA 100% de barrios, Norte/Sur/Oeste con todas sus localidades principales. Cobertura verificada de nuevo: 4 de 122 choferes (3.3%) en "Sin zona". Única ambigüedad: "Villa Bosch" figuraba en el listado bajo dos partidos (San Martín y Tres de Febrero); se resolvió a Zona Norte (San Martín) por ser su partido administrativo real. |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
