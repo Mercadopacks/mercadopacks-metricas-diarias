@@ -66,8 +66,17 @@ def cargar_export(ruta: Path) -> pd.DataFrame:
     corrupto (falla xlrd con 'Workbook corruption') aunque Excel/LibreOffice
     los abren sin problema. Si falla la lectura directa, se convierte primero
     a .xlsx con LibreOffice y se reintenta.
+
+    Un .csv (generado por descargar_lightdata_api.py, ver ese archivo para
+    el estado de esa integración) ya viene con el header real en la
+    primera fila y sin filas de filtros/totales que descartar, así que se
+    lee directo sin pasar por la detección de header ni el descarte de la
+    fila de totales.
     """
     sufijo = ruta.suffix.lower()
+    if sufijo == ".csv":
+        return pd.read_csv(ruta, dtype=str, keep_default_na=False)
+
 
     def _leer_crudo(path, engine=None):
         return pd.read_excel(path, header=None, engine=engine)

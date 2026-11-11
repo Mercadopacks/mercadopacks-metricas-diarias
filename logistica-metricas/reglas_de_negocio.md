@@ -553,6 +553,75 @@ correcta), lo primero a revisar es si los nombres de columna en
 `dashboard_logistica.html` siguen matcheando el CSV real —
 `curl -sL "<URL_REPA_VIVA>" | head -1` para ver el header actual.
 
+## 14. Migración de la descarga a la API externa de LightData (en curso, 2026-11-11)
+
+**Motivación:** la descarga actual (`descargar_lightdata.py`) loguea con
+Playwright contra la UI de LightData, lo que implica: una VM de GitHub
+Actions efímera que reinstala Chromium + LibreOffice (fallback para .xls
+con BIFF corrupto) en cada corrida (~2 min de las cuales la mayor parte es
+instalación, no descarga), y selectores de UI que se rompen cada vez que
+LightData cambia el diseño de la página (ya pasó más de una vez, ver
+comentarios de `descargar_lightdata.py`). LightData tiene una API externa
+documentada en https://lightdata.app/documentacion_api_externa.html con un
+endpoint pensado justo para esto: `POST /externa/consultar-fecha`, que
+devuelve JSON por rango de fecha sin navegador ni login de UI.
+
+**Estado actual: escrito pero NO conectado al workflow.**
+
+- `descargar_lightdata_api.py` llama a `consultar-fecha`, pagina los
+  resultados (hasta 1000 por página, límite de 50 req/min) y escribe un
+  `.csv` en `datos_crudos/` con los mismos nombres de columna que
+  `generar_reporte.cargar_export()` espera del .xls real — así
+  `procesar()`, `calcular_snapshots()` y el resto del pipeline no
+  necesitan ningún cambio, solo la fuente de datos cambia.
+- `cargar_export()` ahora detecta la extensión `.csv` y la lee directo
+  (sin la detección de header/fila de totales que sí hace falta para el
+  .xls real).
+- La lógica de "qué día descargar" (`calcular_fecha_objetivo`) se movió a
+  `fecha_descarga.py`, compartida por los dos scripts de descarga, para
+  que el script de API no tenga que importar `playwright` solo por esa
+  función (uno de los puntos de esta migración es justamente dejar de
+  depender de un navegador).
+
+**Por qué todavía no reemplaza a Playwright en el workflow — dos bloqueos:**
+
+1. **El endpoint no está habilitado.** `consultar-fecha` devuelve
+   `{"success":false,"message":"Empresa no habilitada"}` para la empresa
+   253 (confirmado llamándolo directamente el 2026-11-11, con el
+   `TokenEmpresa` real) — la documentación ya advertía que este endpoint
+   "no está habilitado para todas las empresas". Hay que pedirle a
+   LightData que lo habilite. Se probaron también los demás endpoints de
+   lectura (`estado-envio`, `estado-envios`, `estado-historial`,
+   `obtener-info-entrega`) y piden además un segundo token ("de
+   integrador cliente") que no tenemos — pero no hace falta, porque esos
+   endpoints son para consultar un envío puntual, no para el export
+   diario completo.
+2. **Mapeos de campo sin confirmar contra datos reales**, en particular
+   dentro de `_mapear_fila()` de `descargar_lightdata_api.py`:
+   - **`Fecha MercadoPacks`** (qué campo de la API corresponde al "día de
+     ingreso al sistema", regla de negocio sensible — sección 5) se deja
+     vacío a propósito en vez de adivinar, lo que fuerza el fallback a
+     `Fecha estado` en `fecha_operativa()` (ese sí confirmado:
+     `fecha_ultimo_estado` de la API). Si se quiere recuperar la
+     semántica exacta de "Fecha MercadoPacks", hay que comparar un día
+     real campo por campo contra el .xls equivalente antes de mapear algo.
+   - **Nombres exactos de `Estado`**: no confirmado si la API devuelve
+     "Entregado 2DA visita" y "reprogramado por meli" (en minúsculas,
+     inconsistencia real del .xls — sección 12, punto 5) tal cual, o con
+     otro formato.
+   - **`Origen`**: la API devuelve un código numérico (0-8) + un flag
+     `turbo`; se mapea a los mismos strings que ya usa el pipeline
+     (`ML`, `ML TURBO`, `Directo`, `TNube`) asumiendo que código 1 = "ML"
+     y que `turbo=1` es lo mismo que el "ML TURBO" del export viejo — sin
+     confirmar todavía contra una fila real.
+
+**Antes de conectar esto al workflow de GitHub Actions**, hay que: pedir
+la habilitación del endpoint, correr `descargar_lightdata_api.py` a mano
+para un día ya conocido, y comparar el resultado fila por fila contra el
+.xls real del mismo día (en especial los tres puntos de arriba). Recién
+después de esa validación se cambia `descarga_diaria.yml` para usar este
+script en vez de `descargar_lightdata.py`.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -574,3 +643,4 @@ correcta), lo primero a revisar es si los nombres de columna en
 | 2026-10-24 | Se agregó un componente genérico de tablas ordenables (`wireSortableTable`/`ordenarPorClave`, sección 13.5) y se aplicó a "Todos los repartidores" (histórico de Repartidores), que antes no tenía ningún `data-key` ni handler de click — los headers no hacían nada. De paso se notó que "Ranking de choferes" (Envíos) ya tenía la lógica de orden pero sin indicador visual, así que no se notaba que era clickeable; ahora ambas tablas muestran una flecha dorada (▲/▼) en la columna activa. |
 | 2026-10-31 | Bug real (sección 13.6): la hoja "viva" de Repartidores cambió de esquema sin avisar — `ASISTE A DEPOSITO (SOPORTE)` pasó a llamarse `ASISTENCIA` y la columna `ALERTADO` quedó sin nombre de columna en el CSV publicado. Asistencia confirmada y Pallet retirado mostraban 0% todo el tiempo (con la cantidad de asignaciones de hoy bien calculada, lo que lo hacía parecer "no muestra datos de hoy") y el Centro de alertas siempre decía "Sin alertas". Sin ningún error de JS — reportado por el usuario a simple vista. Fix: `asisteRepa()` prueba los dos nombres de columna, y la columna de alertas se ubica por posición (siguiente a `ESTADO DEL CHOFER`) en vez de por nombre. |
 | 2026-11-06 | La tarjeta "Entregas Efectivas" (sección 12) suma una sub-sección "Solo Flex de Mercado Libre" con el mismo % y números pero restringidos a envíos Flex (`Origen` = `"ML"` o `"ML TURBO"`, criterio confirmado con el equipo — no hay columna "Flex" explícita en el export). `publicar_firestore.py` agrega un sub-objeto `flex` (`{total, aRetirar, porEstadoHora}`) a cada snapshot diario; el dashboard lo agrega igual que el resto y aplica la misma fórmula de efectividad. Los snapshots publicados antes de este cambio no tienen ese campo, así que muestran "—" hasta que se reprocesen o se acumulen días nuevos. |
+| 2026-11-11 | Sección 14: se escribió `descargar_lightdata_api.py`, una alternativa a la descarga por Playwright usando la API externa de LightData (`POST /externa/consultar-fecha`). Todavía NO está conectada al workflow — el endpoint devuelve "Empresa no habilitada" para la empresa 253 hasta que LightData lo habilite, y faltan validar varios mapeos de campo contra datos reales (ver sección 14). |

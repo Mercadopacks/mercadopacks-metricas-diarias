@@ -52,10 +52,12 @@ actualizar los selectores de abajo (ver README de la carpeta scripts/).
 
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+from fecha_descarga import calcular_fecha_objetivo
 
 LIGHTDATA_URL = "https://mercadopacks.lightdata.app/"
 CARPETA_SALIDA = Path(__file__).resolve().parent.parent / "datos_crudos"
@@ -226,24 +228,6 @@ def seleccionar_estado_todos(page):
     # explícitamente a la clase que Select2 usa para las opciones que SÍ
     # renderiza y muestra.
     page.locator(".select2-results__option").get_by_text("Todos", exact=True).click()
-
-
-def calcular_fecha_objetivo(fecha_objetivo, modo_fecha):
-    """
-    Resuelve qué fecha descargar, en este orden de prioridad:
-    1. fecha_objetivo explícita (backfill manual de un día puntual).
-    2. modo_fecha == "hoy" → fecha UTC actual (coincide con la fecha
-       argentina en todos los horarios intradía programados).
-    3. cualquier otro caso (modo_fecha == "ayer", vacío, o no reconocido)
-       → fecha UTC actual menos un día — comportamiento histórico/default,
-       usado por la corrida de cierre de las 00hs ART.
-    """
-    if fecha_objetivo:
-        return fecha_objetivo
-    hoy_utc = datetime.now(timezone.utc).date()
-    if modo_fecha == "hoy":
-        return hoy_utc
-    return hoy_utc - timedelta(days=1)
 
 
 def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) -> Path:
