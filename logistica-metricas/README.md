@@ -189,13 +189,15 @@ el archivo iniciando sesión manualmente en el navegador. Por eso la
 automatización usa **Playwright** para manejar un navegador real de forma
 desatendida.
 
-**Qué hace, 5 veces por día (hora Argentina): 11:00, 13:00, 15:00, 18:00 y
-00:00, de lunes a sábado** (domingo no es día operativo — ver más abajo):
+**Qué hace, cada 20 minutos de 11:00 a 23:40 ART + el cierre de las 00:00,
+de lunes a sábado** (domingo no es día operativo — ver más abajo; horario
+ampliado el 2026-11-11 para seguimiento en vivo de repartidores, antes
+llegaba solo hasta las 18:00):
 1. `scripts/descargar_lightdata.py` inicia sesión en LightData, filtra el
    listado de envíos SIN filtro de Estado (se necesitan todos los estados) y
-   descarga el `.xls`. Las 4 corridas de 11 a 18hs piden el día **en curso**
-   (una "foto" actualizada de lo que va del día); la corrida de las 00hs
-   pide el día que **acaba de cerrar, y además los 2 días anteriores a ese**
+   descarga el `.xls`. Las corridas intradía (11:00 a 23:40) piden el día
+   **en curso** (una "foto" actualizada de lo que va del día); la corrida de
+   las 00hs pide el día que **acaba de cerrar, y además los 2 días anteriores a ese**
    — una "ventana de repaso" de 3 días para que las entregas que tardan 1-2
    días en confirmarse (recibido el lunes, entregado el miércoles) se
    reflejen en la efectividad de su día de origen en vez de quedar
@@ -235,8 +237,8 @@ workflows de este repo, nada más):
 - Generar y copiar el token (empieza con `github_pat_...`) — no se comparte
   por chat ni se guarda en el repo, solo va cargado en cron-job.org.
 
-**2. Crear una cuenta gratuita en cron-job.org** y crear **5 cronjobs**, uno
-por horario. Todos con la misma configuración base:
+**2. Crear una cuenta gratuita en cron-job.org** y crear **3 cronjobs** con
+horario personalizado ("Custom"). Todos con la misma configuración base:
 - URL: `https://api.github.com/repos/Mercadopacks/mercadopacks-metricas-diarias/actions/workflows/descarga_diaria.yml/dispatches`
 - Request method: `POST`
 - Headers:
@@ -244,19 +246,21 @@ por horario. Todos con la misma configuración base:
   - `Accept: application/vnd.github+json`
   - `Content-Type: application/json`
 - Body (raw JSON):
-  - 4 de los 5 jobs (11, 13, 15 y 18hs ART): `{"ref":"main","inputs":{"modo":"hoy"}}`
-  - 1 job (00hs ART): `{"ref":"main","inputs":{"modo":"ayer"}}`
+  - 2 jobs ("Hoy — día" y "Hoy — noche"): `{"ref":"main","inputs":{"modo":"hoy"}}`
+  - 1 job ("Ayer"): `{"ref":"main","inputs":{"modo":"ayer"}}`
 
 **Horarios (en UTC, tal como los pide cron-job.org — sin offset de minutos,
-porque cron-job.org no sufre la congestión que tiene GitHub):**
+porque cron-job.org no sufre la congestión que tiene GitHub). Actualizado
+el 2026-11-11 a cada 20 minutos hasta las 23:40 ART — ver
+reglas_de_negocio.md sección 16 para por qué son 2 jobs de "hoy" en vez
+de 1 (el campo de día de la semana no puede ser distinto según el tramo
+horario dentro de un mismo job):**
 
-| Hora Argentina | Hora UTC | Días | `modo` |
-|---|---|---|---|
-| 11:00 | 14:00 | Lunes a sábado | `hoy` |
-| 13:00 | 16:00 | Lunes a sábado | `hoy` |
-| 15:00 | 18:00 | Lunes a sábado | `hoy` |
-| 18:00 | 21:00 | Lunes a sábado | `hoy` |
-| 00:00 | 03:00 | Todos menos lunes* | `ayer` |
+| Job | Minutos | Horas UTC | Día semana (UTC) | Representa en ART | `modo` |
+|---|---|---|---|---|---|
+| "Hoy — día" | 0, 20, 40 | 14-23 | Lunes a sábado | 11:00-20:40, lunes a sábado | `hoy` |
+| "Hoy — noche" | 0, 20, 40 | 0-2 | Martes a domingo | 21:00-23:40, lunes a sábado | `hoy` |
+| "Ayer" | 0 | 3 | Todos menos lunes* | Cierre 00:00 | `ayer` |
 
 \* La corrida de las 00hs en realidad ocurre al arrancar el día siguiente y
 cierra el día anterior — por eso se saltea el lunes (cerraría un domingo,
@@ -433,3 +437,4 @@ Ideas para las próximas iteraciones, en orden sugerido:
 | 2026-11-06 | La tarjeta "Entregas Efectivas" (Envíos) ahora incluye una sub-sección "Solo Flex de Mercado Libre" con el mismo % y números de siempre pero limitados a envíos Flex. No hay columna "Flex" en el export de LightData, así que se usó `Origen` = `"ML"` o `"ML TURBO"` (criterio confirmado con el equipo). `publicar_firestore.py` agrega ese desglose a cada snapshot diario nuevo; los días ya publicados antes de este cambio muestran "—" en esa sub-sección hasta que se reprocesen. Detalle completo en `reglas_de_negocio.md` sección 12. |
 | 2026-11-11 | Se escribió `descargar_lightdata_api.py`, una alternativa a la descarga por Playwright usando la API externa de LightData (`POST /externa/consultar-fecha`) — sin navegador, sin LibreOffice, pensada para que cada corrida del workflow tarde segundos en vez de minutos. Todavía no reemplaza a Playwright en producción: el endpoint devuelve "Empresa no habilitada" para la cuenta de Mercadopacks (hay que pedirle a LightData que lo habilite) y faltan validar algunos mapeos de campo contra datos reales. Detalle completo, incluidos los puntos pendientes de validar, en `reglas_de_negocio.md` sección 14. |
 | 2026-11-11 | Independiente de lo anterior (no depende de LightData): el workflow de descarga diaria ahora corre dentro de una imagen Docker propia (Chromium/Playwright + LibreOffice + dependencias de Python ya instalados, publicada en GitHub Container Registry), en vez de reinstalar todo eso en cada corrida. Baja el tiempo de cada corrida de ~2 min a segundos. Detalle completo en `reglas_de_negocio.md` sección 15. |
+| 2026-11-11 | Las corridas intradía se extendieron de "hasta las 18:00 ART" a "cada 20 minutos hasta las 23:40 ART" para seguimiento en vivo de repartidores. De paso se corrigió un bug real: todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina — cierto solo entre las 14:00 y 21:00 UTC, por eso nunca se había notado. Al extender el horario, las corridas de 21:00 a 23:40 ART caen en la madrugada del día UTC siguiente, y con el cálculo viejo se habrían saltado solas (o publicado bajo la fecha equivocada) en silencio. Corregido restando 3 horas antes de calcular fecha/día de semana. Detalle completo, incluido el nuevo esquema de cron-job.org (2 jobs de "hoy" en vez de 1), en `reglas_de_negocio.md` sección 16. |

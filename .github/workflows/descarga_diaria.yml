@@ -97,6 +97,18 @@ jobs:
       # saltea sola en vez de publicar un snapshot inválido. No aplica si se
       # pide una fecha puntual de backfill (eso es una decisión explícita
       # de quien la pide).
+      # OJO (2026-11-11): el chequeo usa "-3 hours" para convertir el
+      # instante UTC actual a su equivalente en hora de Argentina (ART =
+      # UTC-3, sin horario de verano) ANTES de pedir el día de la semana.
+      # Antes se usaba `date -u` directo, lo cual coincidía con el día ART
+      # mientras las corridas de "hoy" solo ocurrían entre las 14:00 y las
+      # 21:00 UTC (11:00-18:00 ART) — un rango que nunca cruza la
+      # medianoche UTC. Al extender las corridas intradía hasta las 23:40
+      # ART (seguimiento de repartidores en tiempo real, ver
+      # reglas_de_negocio.md changelog 2026-11-11), las corridas de las
+      # 21:00-23:40 ART caen en UTC 00:00-02:40 del día calendario
+      # SIGUIENTE — con `date -u` directo, un sábado 22hs ART (operativo)
+      # se leía como domingo UTC y la corrida se saltaba sola, en silencio.
       - name: Verificar que el día a procesar sea operativo (lunes a sábado)
         id: chequeo
         run: |
@@ -104,9 +116,9 @@ jobs:
             echo "saltar=false" >> "$GITHUB_OUTPUT"
           else
             if [ "${{ github.event.inputs.modo }}" = "ayer" ]; then
-              dia_semana=$(date -u -d "yesterday" +%u)  # 1=lunes ... 7=domingo
+              dia_semana=$(date -u -d "-3 hours -1 day" +%u)  # 1=lunes ... 7=domingo, en ART
             else
-              dia_semana=$(date -u +%u)
+              dia_semana=$(date -u -d "-3 hours" +%u)  # en ART, no UTC crudo
             fi
             if [ "$dia_semana" = "7" ]; then
               echo "saltar=true" >> "$GITHUB_OUTPUT"
@@ -143,12 +155,17 @@ jobs:
           MODO_INPUT: ${{ github.event.inputs.modo }}
         run: |
           set -e
+          # Mismo motivo que en el paso "Verificar que el día..." de arriba:
+          # "-3 hours" convierte el instante UTC actual a su fecha
+          # equivalente en ART antes de calcular "hoy"/"ayer", para que las
+          # corridas de la noche (21:00-23:40 ART = 00:00-02:40 UTC del día
+          # calendario siguiente) sigan resolviendo el día ART correcto.
           if [ -n "$FECHA_INPUT" ]; then
             FECHAS="$FECHA_INPUT"
           elif [ "$MODO_INPUT" = "hoy" ]; then
-            FECHAS=$(date -u +%F)
+            FECHAS=$(date -u -d "-3 hours" +%F)
           else
-            FECHAS=$(for i in 1 2 3; do date -u -d "-$i day" +%F; done)
+            FECHAS=$(for i in 1 2 3; do date -u -d "-3 hours -$i day" +%F; done)
           fi
 
           for FECHA in $FECHAS; do

@@ -665,13 +665,67 @@ el tiempo de bajar la imagen (cacheada entre corridas por el runner),
 loguear en LightData, descargar y procesar. Esto despeja el límite real
 que había para aumentar la frecuencia de refresco del dashboard.
 
-**Pendiente de confirmar en la primera corrida real:** que el usuario
-`python` del contenedor base de Microsoft resuelva bien los paths de
-`actions/checkout` y el resto de las actions estándar dentro de un job
-con `container:` — es un patrón común y documentado de GitHub Actions,
-pero esta es la primera vez que se usa en este repo. Si algo falla,
-revisar los logs de la primera corrida después del próximo push a
-`descarga_diaria.yml`.
+**Confirmado en producción (2026-11-11, corrida real post-deploy):** la
+corrida completa tardó 56 segundos de punta a punta (30s bajando la
+imagen + 18s de login a LightData/descarga/publicación), contra los ~2
+minutos de antes — sin errores de permisos bajando la imagen desde GHCR.
+
+## 16. Corridas intradía hasta la noche + bug de fecha UTC/ART corregido (2026-11-11)
+
+**Motivación:** el usuario quiere usar las corridas intradía para hacer
+seguimiento en vivo de repartidores demorados, no solo un refresco del
+dashboard — necesita datos actualizados cada 20 minutos desde las 11:00
+hasta las 23:40 ART (justo antes de la corrida de cierre de las 00hs),
+no solo hasta las 18:00 como antes. Esto dejó de ser un problema de
+"tiempo de Actions" (sección 15 ya lo bajó a segundos) y pasó a ser
+puramente de cuántas veces por día se dispara desde cron-job.org.
+
+**Bug real encontrado al planear esto, corregido antes de habilitar el
+horario extendido:** toda la resolución de "qué día es hoy" (tanto en
+`descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`)
+usaba la fecha UTC cruda (`date -u` / `datetime.now(timezone.utc).date()`)
+asumiendo que coincidía con la fecha de Argentina. Eso es cierto
+**solo** mientras las corridas de `modo=hoy` ocurren entre las 14:00 y
+las 21:00 UTC (11:00-18:00 ART) — un rango que nunca cruza la medianoche
+UTC. Al extender las corridas hasta las 23:40 ART, las de 21:00 a 23:40
+ART caen en **00:00 a 02:40 UTC del día calendario siguiente**:
+- Con la fecha UTC cruda, una corrida de las 22hs ART del sábado se leía
+  como domingo en UTC → el chequeo de "día operativo" la saltaba sola,
+  en silencio (sin error, sin log de alerta — el mismo patrón de fallo
+  silencioso que ya pasó antes en este proyecto, ver incidente del
+  2026-10-01 en `descargar_lightdata.py`).
+- Si no se saltaba, `FECHA_DESCARGA` quedaba con la fecha de **mañana**
+  en vez de la de hoy, y el snapshot se hubiera publicado bajo la fecha
+  equivocada en Firestore.
+
+**Fix:** tanto el chequeo de día operativo como el cálculo de `FECHAS` en
+`descarga_diaria.yml`, y `calcular_fecha_objetivo()` en
+`fecha_descarga.py`, ahora restan 3 horas (ART = UTC-3 fijo, sin horario
+de verano) al instante UTC actual **antes** de tomar la fecha/día de la
+semana — así "hoy" siempre es el día de Argentina, sin importar a qué
+hora UTC se ejecute. Verificado con casos simulados por epoch (sábado
+23:30 UTC, domingo 00:30-01:30 UTC que en ART siguen siendo sábado a la
+noche, lunes 00:30/03:00 UTC que en ART son domingo/lunes) — todos
+resuelven el día ART correcto.
+
+**Nuevo esquema de cron-job.org (reemplaza los 4 jobs de `modo=hoy` por
+2, por la razón de abajo):**
+
+| Job | Minutos | Horas (UTC) | Días (UTC) | Representa en ART |
+|---|---|---|---|---|
+| "Hoy — día" | 0,20,40 | 14-23 | Lunes-Sábado (1-6) | 11:00-20:40 ART, Lunes-Sábado |
+| "Hoy — noche" | 0,20,40 | 0-2 | Martes-Domingo (2-7) | 21:00-23:40 ART, Lunes-Sábado |
+| "Ayer" (sin cambios) | 0 | 3 | Todos menos Lunes | Cierre 00:00 ART |
+
+**Por qué son 2 jobs y no 1 con más horas seleccionadas:** cron-job.org sí
+permite seleccionar horas no contiguas (14-23 y 0-2) dentro de un mismo
+job, pero el campo de **día de la semana es uno solo por job** — y el
+día de la semana en UTC que corresponde a "Lunes ART" es distinto según
+el tramo horario (el tramo 14-23 UTC coincide con el día ART; el tramo
+0-2 UTC es el día ART **siguiente** en el calendario UTC, por el cruce de
+medianoche). Un solo job no puede aplicar dos reglas de día de la semana
+distintas según la hora, así que hace falta separarlos en dos jobs con
+su propio rango de día de la semana cada uno.
 
 | Fecha | Cambio |
 |---|---|
@@ -695,4 +749,5 @@ revisar los logs de la primera corrida después del próximo push a
 | 2026-10-31 | Bug real (sección 13.6): la hoja "viva" de Repartidores cambió de esquema sin avisar — `ASISTE A DEPOSITO (SOPORTE)` pasó a llamarse `ASISTENCIA` y la columna `ALERTADO` quedó sin nombre de columna en el CSV publicado. Asistencia confirmada y Pallet retirado mostraban 0% todo el tiempo (con la cantidad de asignaciones de hoy bien calculada, lo que lo hacía parecer "no muestra datos de hoy") y el Centro de alertas siempre decía "Sin alertas". Sin ningún error de JS — reportado por el usuario a simple vista. Fix: `asisteRepa()` prueba los dos nombres de columna, y la columna de alertas se ubica por posición (siguiente a `ESTADO DEL CHOFER`) en vez de por nombre. |
 | 2026-11-06 | La tarjeta "Entregas Efectivas" (sección 12) suma una sub-sección "Solo Flex de Mercado Libre" con el mismo % y números pero restringidos a envíos Flex (`Origen` = `"ML"` o `"ML TURBO"`, criterio confirmado con el equipo — no hay columna "Flex" explícita en el export). `publicar_firestore.py` agrega un sub-objeto `flex` (`{total, aRetirar, porEstadoHora}`) a cada snapshot diario; el dashboard lo agrega igual que el resto y aplica la misma fórmula de efectividad. Los snapshots publicados antes de este cambio no tienen ese campo, así que muestran "—" hasta que se reprocesen o se acumulen días nuevos. |
 | 2026-11-11 | Sección 14: se escribió `descargar_lightdata_api.py`, una alternativa a la descarga por Playwright usando la API externa de LightData (`POST /externa/consultar-fecha`). Todavía NO está conectada al workflow — el endpoint devuelve "Empresa no habilitada" para la empresa 253 hasta que LightData lo habilite, y faltan validar varios mapeos de campo contra datos reales (ver sección 14). |
-| 2026-11-11 | Sección 15: el workflow de descarga diaria pasó a correr dentro de una imagen Docker propia (`scripts/Dockerfile`, publicada por `build_imagen_ci.yml` en GitHub Container Registry) con Chromium/Playwright, LibreOffice y las dependencias de Python ya instalados, en vez de reinstalar todo eso en cada corrida. Pensado para bajar el tiempo de cada corrida de ~2 min a unos segundos y despejar el límite real que había para aumentar la frecuencia de refresco (el concurrency group del workflow deja solo una corrida en cola a la vez). No depende de que LightData habilite nada — es independiente del punto anterior. |
+| 2026-11-11 | Sección 15: el workflow de descarga diaria pasó a correr dentro de una imagen Docker propia (`scripts/Dockerfile`, publicada por `build_imagen_ci.yml` en GitHub Container Registry) con Chromium/Playwright, LibreOffice y las dependencias de Python ya instalados, en vez de reinstalar todo eso en cada corrida. Pensado para bajar el tiempo de cada corrida de ~2 min a unos segundos y despejar el límite real que había para aumentar la frecuencia de refresco (el concurrency group del workflow deja solo una corrida en cola a la vez). No depende de que LightData habilite nada — es independiente del punto anterior. Confirmado en producción: 56 segundos de punta a punta. |
+| 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
