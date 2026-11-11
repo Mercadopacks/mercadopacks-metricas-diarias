@@ -951,18 +951,6 @@ que pedir chofer por chofer.
 - **Zona** = la más frecuente entre los items asignados de ese chofer
   (un chofer puede tener paquetes de más de una zona en el día).
 
-**Zonas reales — distintas de lo que se había asumido al diseñar la
-pantalla (sección 17):** el mapa de localidades ML Flex (CABA/Zona
-Norte/Zona Sur/Zona Oeste) con el que se armó la UI originalmente NO
-existe en los datos de LightData. La columna `Zona` del export trae sus
-propios valores (confirmado con datos reales del 2026-11-11: `"CABA"`,
-`"ZONA 1"`, `"ZONA 2"`, `"ZONA 3"`, `"Sin zona"`). Los chips de zona de
-arriba de la pantalla y el filtro de columna "Zona" ahora se arman
-**dinámicamente** a partir de lo que aparezca cada día
-(`actualizarChipsZonaRuta()` / `refrescarOpcionesFiltro()`), en vez de
-una lista fija — mismo criterio ya usado para la zona de "Todos los
-repartidores" (sección 18).
-
 **Se sacó la columna "Turno"**: no es un dato que LightData registre
 por envío (es un concepto de la planilla de Repartidores/asistencia,
 sección 13), así que no había forma de calcularlo sin inventarlo.
@@ -970,6 +958,41 @@ sección 13), así que no había forma de calcularlo sin inventarlo.
 **Estado vacío**: si `envios_detalle/<hoy>` todavía no tiene ningún
 chofer (antes de la primera corrida intradía del día, o un domingo no
 operativo), se muestra un estado vacío en vez de una tabla en blanco.
+
+### 19.3 Corrección del criterio de zona (2026-11-11, mismo día)
+
+La primera versión de 19.2 clasificaba por el campo `Zona` que trae el
+export de LightData — resultó ser **el criterio equivocado**: el equipo
+confirmó que el criterio es el mapa de localidades ML Flex (CABA/Zona
+Norte/Zona Sur/Zona Oeste) dado al principio del proyecto (sección 17),
+no la zona interna de LightData. Dos problemas con la zona de LightData,
+además de no ser el criterio pedido:
+- Trae **sus propios valores** (`"CABA"`, `"ZONA 1"`, `"ZONA 2"`,
+  `"ZONA 3"`, `"Sin zona"`), sin relación directa con los 4 grupos ML Flex.
+- Es **inconsistente**: la misma localidad aparecía con distinto valor
+  de `Zona` en envíos distintos del mismo día (ej. "La Plata" repartido
+  entre `ZONA 3` y `Sin zona`, "Esteban Echeverría" entre `ZONA 1`,
+  `ZONA 2` y `Sin zona`) — no es confiable como fuente de zona.
+
+**Fix:** la zona ahora se calcula a partir de la **`Localidad`** de cada
+envío (no de `Zona`), con `zonaPorLocalidad()` + el mapa
+`ZONA_POR_LOCALIDAD` (dashboard_logistica.html). Los envíos reales traen
+la localidad FINA (barrio/pueblo — ej. "Olivos", "Don Torcuato", "Haedo"),
+no el nombre del partido que dio el equipo (San Isidro, Tigre, Morón) —
+`ZONA_POR_LOCALIDAD` ubica cada localidad conocida dentro de su partido
+y de ahí a su zona, construido y chequeado contra las ~290 localidades
+reales del 2026-11-11. Normaliza acentos/mayúsculas/comas
+(`normalizarLocalidad()`) para tolerar variantes como "José C. Paz" /
+"jose clemente paz" / "JOSE C PAZ". Lo que no se reconoce queda **"Sin
+zona"** a propósito (mejor visible y corregible — agregar una entrada
+nueva al mapa — que mal clasificado en una zona que no le corresponde).
+Cobertura real verificada: de 116 choferes del 2026-11-11, solo 4
+(3.4%) cayeron en "Sin zona".
+
+Los chips de arriba y el filtro de columna "Zona" volvieron a ser
+**fijos** (Global/CABA/Zona Norte/Zona Sur/Zona Oeste/Sin zona, en ese
+orden) en vez de dinámicos — es un criterio cerrado dado por el equipo,
+no algo que deba variar según lo que traiga LightData ese día.
 
 | Fecha | Cambio |
 |---|---|
@@ -997,5 +1020,6 @@ operativo), se muestra un estado vacío en vez de una tabla en blanco.
 | 2026-11-11 | Sección 17: nuevo modo "🚚 Seguimiento en ruta" dentro de Repartidores — progreso (asignados vs. entregados), hora de la 1ª entrega, paquetes por hora, entregados antes de las 21hs vs. pendientes, y demora de cada chofer durante el reparto (no asistencia), con filtro por zona ML Flex, lista "Demorados ahora" y tabla ordenable con highlight visual para los demorados. La demora se mide contra el tiempo entre una entrega y la siguiente (criterio confirmado con soporte): ≤5 min óptimo, 6-20 a tiempo, >20 demorado. Corre sobre datos mockeados (`generarMockChoferesRuta()`) hasta definir una fuente real de progreso de ruta en vivo. |
 | 2026-11-11 | Sección 18: se agregó una fila de filtros por columna (además de poder ordenar) en "Choferes en ruta", "Todos los repartidores" y "Ranking de choferes" — `<select>` para Zona/Turno/Estado, texto libre para el resto. Se unificó el estilo de los 4 buscadores de tabla del dashboard (antes cada uno tenía su propio input chico y sin estilo). Los mini-kpis de "Seguimiento en ruta" pasaron de grid a una sola fila compacta, con un ícono ⓘ por tarjeta explicando qué mide cada número. |
 | 2026-11-11 | Sección 18.1: pasada de QA sobre lo anterior — se reemplazó el `<select>` nativo de los filtros de Zona/Turno/Estado por un combo propio (botón + listbox con el estilo del dashboard, ver sección 18.1), porque la lista desplegada de un `<select>` real no se puede estilar con CSS. Se corrigió que la fila de filtros desalineaba columnas en mobile (no copiaba `hide-mobile`), se arreglaron los `aria-label` (decían el nombre interno de la variable en vez del nombre visible de la columna), se agrandó un poco más el número de los mini-kpis en línea, y se corrigió un bug real preexistente: la fila "(sin chofer asignado)" del Ranking de choferes ignoraba el buscador y los filtros de columna. |
-| 2026-11-11 | Sección 19: dos bugs reales corregidos antes de pasar a producción. (1) "Operación en vivo" no traía datos: `URL_REPA_VIVA` apuntaba sin `gid` explícito y, al cambiar la pestaña "por defecto" del documento publicado, empezó a servir en silencio una hoja de referencia ("Localidades") en vez de la operativa ("Seguimiento Diario") — más una fila en blanco antes del header real en esa hoja, que `filasAObjetosRepa()` tomaba como header y vaciaba toda la lectura. (2) "Seguimiento en ruta" pasó de datos mockeados a datos reales, leyendo `envios_detalle/<hoy>/choferes` (el mismo detalle por chofer de LightData que ya alimenta el resto del dashboard). Las zonas resultaron ser distintas de lo asumido al diseñar la pantalla (CABA/ZONA 1/ZONA 2/ZONA 3/Sin zona, no el mapa de localidades ML Flex) y ahora se arman dinámicamente; se sacó la columna "Turno" porque LightData no la registra. |
+| 2026-11-11 | Sección 19: dos bugs reales corregidos antes de pasar a producción. (1) "Operación en vivo" no traía datos: `URL_REPA_VIVA` apuntaba sin `gid` explícito y, al cambiar la pestaña "por defecto" del documento publicado, empezó a servir en silencio una hoja de referencia ("Localidades") en vez de la operativa ("Seguimiento Diario") — más una fila en blanco antes del header real en esa hoja, que `filasAObjetosRepa()` tomaba como header y vaciaba toda la lectura. (2) "Seguimiento en ruta" pasó de datos mockeados a datos reales, leyendo `envios_detalle/<hoy>/choferes` (el mismo detalle por chofer de LightData que ya alimenta el resto del dashboard); se sacó la columna "Turno" porque LightData no la registra. |
+| 2026-11-11 | Sección 19.3: corrección del criterio de zona del punto anterior — el campo `Zona` de LightData no era el criterio correcto (además de traer valores propios tipo "ZONA 1/2/3", resultó inconsistente: la misma localidad aparecía con distinta `Zona` en envíos distintos). El criterio real es el mapa de localidades ML Flex (CABA/Norte/Sur/Oeste) dado por el equipo. Se agregó `zonaPorLocalidad()` + un mapa de ~160 localidades reales a su partido y zona, aplicado sobre el campo `Localidad` de cada envío (no `Zona`). Cobertura verificada: de 116 choferes reales, solo 4 (3.4%) quedaron en "Sin zona". Los chips y el filtro de columna volvieron a ser fijos (el criterio es cerrado, no depende de lo que traiga LightData cada día). |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |

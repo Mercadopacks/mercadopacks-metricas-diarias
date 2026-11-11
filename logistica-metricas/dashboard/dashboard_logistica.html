@@ -741,6 +741,11 @@
 
         <div class="chips" id="rutaZonaFiltro" style="margin-bottom:14px;">
           <button class="chip active" data-zona-ruta="global">Global</button>
+          <button class="chip" data-zona-ruta="CABA">CABA</button>
+          <button class="chip" data-zona-ruta="Norte">Zona Norte</button>
+          <button class="chip" data-zona-ruta="Sur">Zona Sur</button>
+          <button class="chip" data-zona-ruta="Oeste">Zona Oeste</button>
+          <button class="chip" data-zona-ruta="Sin zona">Sin zona</button>
         </div>
 
         <div class="mini-kpis-linea" id="rutaMiniKpis" aria-label="Indicadores de la ruta en curso"></div>
@@ -2333,25 +2338,126 @@
 
   // ======================================================================
   // Seguimiento en ruta (agregado 2026-11-11 como mock, pasó a datos reales
-  // el mismo día — ver reglas_de_negocio.md sección 17/17.1). Lee
+  // el mismo día — ver reglas_de_negocio.md sección 17/19). Lee
   // `envios_detalle/<hoy>/choferes` en Firestore: el mismo detalle por
   // chofer que ya arma `publicar_firestore.py` a partir del export de
   // LightData (fecha/tracking/cliente/localidad/zona/estado/horaEntrega),
   // actualizado cada 20 minutos por la corrida intradía — no depende de
   // ninguna planilla de Google Sheets ni de asistencia/roster.
   //
-  // OJO — la "Zona" acá es la que viene tal cual del export de LightData
-  // ("CABA", "ZONA 1", "ZONA 2", "ZONA 3", "Sin zona" — confirmado
-  // consultando datos reales del 2026-11-11), NO el mapa de localidades ML
-  // Flex (CABA/Norte/Sur/Oeste) que se había pensado al principio para
-  // esta pantalla — esa categorización no existe en los datos de LightData,
-  // así que las zonas (tanto los chips de arriba como el filtro de
-  // columna) se arman dinámicamente a partir de lo que aparezca cada día,
-  // igual que ya se hace para la zona de "Todos los repartidores"
-  // (sección 18, `refrescarOpcionesFiltro`).
+  // OJO — la zona NO sale del campo "Zona" que trae LightData (resultó
+  // tener datos inconsistentes: la misma localidad aparecía con distinto
+  // valor de "Zona" en envíos distintos, y "Sin zona" no quería decir
+  // "fuera de cobertura" sino simplemente "LightData no le asignó
+  // ninguna"). Se arma a partir de la LOCALIDAD de cada envío, con el
+  // criterio ML Flex que dio el equipo — ver zonaPorLocalidad() más abajo
+  // y reglas_de_negocio.md sección 19.3 para el detalle completo.
   const CORTE_21HS_MIN = 21 * 60;
   const ESTADOS_ENTREGA_RUTA = ['Entregado', 'Entregado 2DA visita']; // = ESTADOS_ENTREGA_EFECTIVA de generar_reporte.py
   const ESTADO_A_RETIRAR_RUTA = 'A retirar'; // = ESTADO_A_RETIRAR de generar_reporte.py — aún no llegó al depósito, no cuenta como "en ruta"
+
+  // Quita acentos, pasa a minúsculas y normaliza espacios/comas — para que
+  // "José C. Paz", "jose clemente paz" y "JOSE C PAZ" calcen contra la
+  // misma clave del mapa de abajo sin tener que listar cada variante.
+  function normalizarLocalidad(str){
+    return (str || '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[,.]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Mapa localidad -> zona, criterio ML Flex confirmado con el equipo
+  // (2026-11-11), "no te puedes salir de ahí":
+  //   CABA: Ciudad Autónoma de Buenos Aires.
+  //   Zona Norte: Vicente López, San Isidro, San Fernando, Tigre, San
+  //     Martín, Malvinas Argentinas, San Miguel, Escobar, Pilar, José C. Paz.
+  //   Zona Sur: Avellaneda, Lanús, Lomas de Zamora, Quilmes, Almirante
+  //     Brown, Berazategui, Esteban Echeverría, Ezeiza, Florencio Varela,
+  //     Berisso, Ensenada, La Plata, Presidente Perón, San Vicente.
+  //   Zona Oeste: Tres de Febrero, La Matanza, Morón, Hurlingham,
+  //     Ituzaingó, Merlo, Moreno, General Rodríguez, Marcos Paz.
+  // Los envíos reales traen la localidad FINA (barrio/pueblo), no el
+  // nombre del partido — este mapa ubica cada localidad conocida dentro
+  // de su partido, chequeado contra ~290 localidades reales del
+  // 2026-11-11. Lo que no se reconoce queda "Sin zona" a propósito (mejor
+  // visible y corregible que mal clasificado); si aparece un hueco nuevo,
+  // se agrega acá.
+  const ZONA_POR_LOCALIDAD = {
+    // --- CABA (barrios oficiales + alias vistos en datos reales) ---
+    'caba':'CABA', 'capital federal':'CABA', 'buenos aires':'CABA', 'caba villa lugano':'CABA', 'palermo soho':'CABA',
+    'abasto':'CABA', 'agronomia':'CABA', 'almagro':'CABA', 'balvanera':'CABA', 'barracas':'CABA',
+    'belgrano':'CABA', 'belgrano barrancas':'CABA', 'belgrano r':'CABA', 'billinghurst':'CABA',
+    'boedo':'CABA', 'caballito':'CABA', 'coghlan':'CABA', 'colegiales':'CABA', 'constitucion':'CABA',
+    'flores':'CABA', 'floresta':'CABA', 'la boca':'CABA', 'liniers':'CABA', 'mataderos':'CABA',
+    'monserrat':'CABA', 'monte castro':'CABA', 'nueva pompeya':'CABA', 'nunez':'CABA', 'palermo':'CABA',
+    'parque avellaneda':'CABA', 'parque chacabuco':'CABA', 'parque chas':'CABA', 'parque patricios':'CABA',
+    'paternal':'CABA', 'puerto madero':'CABA', 'recoleta':'CABA', 'retiro':'CABA', 'saavedra':'CABA',
+    'san cristobal':'CABA', 'san nicolas':'CABA', 'san telmo':'CABA', 'velez sarsfield':'CABA',
+    'versailles':'CABA', 'villa crespo':'CABA', 'villa devoto':'CABA', 'villa gral mitre':'CABA',
+    'villa lugano':'CABA', 'villa luro':'CABA', 'villa ortuzar':'CABA', 'villa pueyrredon':'CABA',
+    'villa real':'CABA', 'villa riachuelo':'CABA', 'villa santa rita':'CABA', 'villa soldati':'CABA',
+    'villa urquiza':'CABA', 'villa del parque':'CABA',
+
+    // --- Zona Norte ---
+    'vicente lopez':'Norte', 'olivos':'Norte', 'martinez':'Norte', 'florida':'Norte',
+    'florida oeste':'Norte', 'munro':'Norte', 'villa martelli':'Norte', 'carapachay':'Norte', 'la lucila':'Norte',
+    'san isidro':'Norte', 'acassuso':'Norte', 'beccar':'Norte', 'boulogne':'Norte', 'villa adelina':'Norte',
+    'san fernando':'Norte', 'victoria':'Norte', 'virreyes':'Norte', 'vireeyes':'Norte',
+    'tigre':'Norte', 'don torcuato':'Norte', 'general pacheco':'Norte', 'grl pacheco tigre':'Norte',
+    'ricardo rojas':'Norte', 'el talar':'Norte', 'troncos del talar':'Norte', 'los troncos':'Norte',
+    'los troncos del talar':'Norte', 'rincon de milberg':'Norte', 'nordelta':'Norte',
+    'benavidez':'Norte', 'dique lujan':'Norte',
+    'general san martin':'Norte', 'san martin':'Norte', 'gral san martin':'Norte', 'villa lynch':'Norte',
+    'san andres':'Norte', 'villa maipu':'Norte', 'jose leon suarez':'Norte', 'villa ballester':'Norte',
+    'malvinas argentinas':'Norte', 'grand bourg':'Norte', 'los polvorines':'Norte',
+    'ingeniero adolfo sourdeaux':'Norte', 'tortuguitas':'Norte', 'pablo nogues':'Norte', 'villa de mayo':'Norte',
+    'san miguel':'Norte', 'muniz':'Norte', 'bella vista':'Norte',
+    'escobar':'Norte', 'belen de escobar':'Norte', 'garin':'Norte', 'garin escobar':'Norte',
+    'pilar':'Norte', 'presidente derqui':'Norte', 'del viso':'Norte', 'villa rosa':'Norte',
+    'manzanares':'Norte', 'zelaya':'Norte', 'pilar el panchito':'Norte', 'fatima':'Norte',
+    'jose c paz':'Norte', 'jose clemente paz':'Norte',
+
+    // --- Zona Sur ---
+    'avellaneda':'Sur', 'gerli':'Sur', 'pineyro':'Sur', 'sarandi':'Sur', 'dock sud':'Sur',
+    'wilde':'Sur', 'villa dominico':'Sur',
+    'lanus':'Sur', 'lanus oeste':'Sur', 'villa centenario':'Sur',
+    'lomas de zamora':'Sur', 'banfield':'Sur', 'temperley':'Sur', 'turdera':'Sur', 'llavallol':'Sur',
+    'villa fiorito':'Sur', 'ingeniero budge':'Sur',
+    'quilmes':'Sur', 'quilmes oeste':'Sur', 'bernal':'Sur', 'bernal este':'Sur', 'bernal oeste':'Sur',
+    'ezpeleta este':'Sur', 'ezpeleta oeste':'Sur', 'san francisco solano':'Sur',
+    'almirante brown':'Sur', 'don orione':'Sur',
+    'berazategui':'Sur', 'berazategui platanos':'Sur', 'platanos':'Sur', 'ranelagh':'Sur', 'hudson':'Sur',
+    'esteban echeverria':'Sur', 'canning':'Sur',
+    'ezeiza':'Sur', 'tristan suarez':'Sur', 'carlos spegazzini':'Sur',
+    'florencio varela':'Sur', 'bosques':'Sur',
+    'berisso':'Sur',
+    'ensenada':'Sur', 'esenada':'Sur', 'punta lara':'Sur',
+    'la plata':'Sur', 'tolosa':'Sur', 'city bell':'Sur', 'villa elisa':'Sur', 'melchor romero':'Sur',
+    'los hornos':'Sur', 'manuel b gonnet':'Sur', 'joaquin gorina':'Sur', 'villa elvira':'Sur',
+    'ringuelet':'Sur', 'lisandro olmos':'Sur', 'arturo segui':'Sur',
+    'presidente peron':'Sur', 'guernica':'Sur',
+    'san vicente':'Sur', 'alejandro korn':'Sur',
+
+    // --- Zona Oeste ---
+    'tres de febrero':'Oeste', 'partido de tres de febrero':'Oeste', 'caseros':'Oeste',
+    'ciudadela':'Oeste', 'el palomar':'Oeste', 'ciudad jardin del palomar':'Oeste', 'loma hermosa':'Oeste',
+    'la matanza':'Oeste', 'isidro casanova':'Oeste', 'gregorio de la ferrere':'Oeste',
+    'ciudad evita':'Oeste', 'ramos mejia':'Oeste',
+    'moron':'Oeste', 'castelar':'Oeste', 'haedo':'Oeste', 'villa sarmiento':'Oeste',
+    'hurlingham':'Oeste', 'william c morris':'Oeste', 'villa tesei':'Oeste',
+    'ituzaingo':'Oeste', 'villa udaondo':'Oeste',
+    'merlo':'Oeste', 'buenos aires merlo':'Oeste', 'libertad':'Oeste', 'pontevedra':'Oeste',
+    'parque san martin':'Oeste', 'san antonio de padua':'Oeste', 'mariano acosta':'Oeste',
+    'moreno':'Oeste', 'paso del rey':'Oeste', 'la reja':'Oeste', 'trujui':'Oeste', 'francisco alvarez':'Oeste',
+    'general rodriguez':'Oeste', 'open door':'Oeste', 'opendoor':'Oeste',
+    'marcos paz':'Oeste', 'vicente casares':'Oeste',
+  };
+
+  function zonaPorLocalidad(localidadCruda){
+    return ZONA_POR_LOCALIDAD[normalizarLocalidad(localidadCruda)] || 'Sin zona';
+  }
 
   const stateRuta = {
     zona: 'global',
@@ -2366,12 +2472,12 @@
   // Columnas filtrables de "Choferes en ruta" (alineadas con los <th> de
   // #theadChoferesRuta). "Chofer" queda en null — ya tiene el buscador de
   // texto libre de arriba (#buscarChoferRuta), duplicar el filtro ahí no
-  // suma. Zona/Estado son <select> (valores dinámicos, se completan en
-  // cargarChoferesEnRutaHoy()); el resto son <input> de texto sobre el
-  // valor ya formateado.
+  // suma. Zona/Estado son <select> — zona con el set fijo del criterio ML
+  // Flex (no dinámico: son siempre las mismas 5 opciones, haya o no
+  // choferes hoy en alguna); el resto son <input> de texto.
   const COLUMNAS_FILTRO_RUTA = [
     null,
-    { tipo:'select', campo:'zona', opciones:() => [], todasLabel:'Todas' },
+    { tipo:'select', campo:'zona', opciones:() => ['CABA','Norte','Sur','Oeste','Sin zona'], todasLabel:'Todas' },
     { tipo:'select', campo:'estadoLabel', opciones:() => ['Óptimo','A tiempo','Demorado','Sin entregas aún'], todasLabel:'Todos' },
     { tipo:'texto', campo:'minEntreEntregas', placeholder:'ej. 21' },
     { tipo:'texto', campo:'horaPrimeraEntregaTxt', placeholder:'ej. 09:2' },
@@ -2446,10 +2552,12 @@
     const entregadosPre21 = horasEntregas.filter(m => m < CORTE_21HS_MIN).length;
 
     // Zona del chofer hoy = la más frecuente entre sus paquetes asignados
-    // (un chofer puede tener paquetes de más de una zona en el día).
+    // (un chofer puede tener paquetes de más de una zona en el día),
+    // clasificando cada paquete por su LOCALIDAD (no por el campo "Zona"
+    // de LightData — ver nota arriba de ZONA_POR_LOCALIDAD).
     const conteoZonas = {};
     asignados.forEach(it => {
-      const z = (it.zona || '').trim() || 'Sin zona';
+      const z = zonaPorLocalidad(it.localidad);
       conteoZonas[z] = (conteoZonas[z] || 0) + 1;
     });
     const zona = Object.keys(conteoZonas).sort((a, b) => conteoZonas[b] - conteoZonas[a])[0] || 'Sin zona';
@@ -2485,17 +2593,6 @@
     stateRuta.todasFilas = filas;
     stateRuta.cargado = true;
     return filas;
-  }
-
-  // Reconstruye los chips de zona (#rutaZonaFiltro) a partir de las zonas
-  // que realmente aparecen hoy — "Global" siempre primero y fijo. Si la
-  // zona activa dejó de existir (ej. cambió el día) vuelve a "global".
-  function actualizarChipsZonaRuta(filas){
-    const cont = document.getElementById('rutaZonaFiltro');
-    const zonas = [...new Set(filas.map(f => f.zona))].sort();
-    if(!zonas.includes(stateRuta.zona) && stateRuta.zona !== 'global') stateRuta.zona = 'global';
-    cont.innerHTML = '<button class="chip' + (stateRuta.zona === 'global' ? ' active' : '') + '" data-zona-ruta="global">Global</button>' +
-      zonas.map(z => `<button class="chip${stateRuta.zona === z ? ' active' : ''}" data-zona-ruta="${escapeHtml(z)}">${escapeHtml(z)}</button>`).join('');
   }
 
   function renderRutaMiniKpis(filas){
@@ -2625,11 +2722,6 @@
       return;
     }
     cont.hidden = false; vacio.hidden = true;
-    actualizarChipsZonaRuta(todasFilas);
-    refrescarOpcionesFiltro(
-      document.getElementById('theadChoferesRuta'), stateRuta.filtrosCol, 'zona',
-      [...new Set(todasFilas.map(f => f.zona))].sort(), 'Todas'
-    );
     aplicarFiltroZonaYRenderRuta();
   }
 
