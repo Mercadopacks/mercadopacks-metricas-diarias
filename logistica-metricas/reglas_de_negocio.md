@@ -727,6 +727,250 @@ medianoche). Un solo job no puede aplicar dos reglas de día de la semana
 distintas según la hora, así que hace falta separarlos en dos jobs con
 su propio rango de día de la semana cada uno.
 
+## 17. Seguimiento en ruta (mockeado, 2026-11-11)
+
+Tercer modo dentro de "Seguimiento de Repartidores" (junto a "Operación en
+vivo" y "Rendimiento histórico"), chip `🚚 Seguimiento en ruta`.
+
+**Por qué es un modo distinto de "Operación en vivo":** ese modo existente
+es **asistencia** — quién se presentó hoy, con qué vehículo, por zona
+(lee el roster de Google Sheets). Este modo nuevo es **rendimiento
+durante la ruta** — de los choferes que ya salieron a repartir, quién va
+a tiempo y quién demorado, para que soporte (dividido por zona) accione
+en caliente. Son preguntas distintas aunque las haga la misma persona.
+
+**Mapa de zonas (ML Flex)** usado para los chips de filtro: CABA; Zona
+Norte (Vicente López, San Isidro, San Fernando, Tigre, San Martín,
+Malvinas Argentinas, San Miguel, Escobar, Pilar, José C. Paz); Zona Sur
+(Avellaneda, Lanús, Lomas de Zamora, Quilmes, Almirante Brown,
+Berazategui, Esteban Echeverría, Ezeiza, Florencio Varela, Berisso,
+Ensenada, La Plata, Presidente Perón, San Vicente); Zona Oeste (Tres de
+Febrero, La Matanza, Morón, Hurlingham, Ituzaingó, Merlo, Moreno,
+General Rodríguez, Marcos Paz). Hoy el dato real de "zona" de cada
+chofer sigue viniendo de la planilla de Repartidores (no hay una
+localidad por chofer para mapear contra esta lista); este mapa queda
+documentado para cuando se conecte una fuente real con localidad.
+
+**Estado actual — datos mockeados:** no existe todavía una fuente real
+para "entregado / pendiente de la hoja de ruta en este momento" ni para
+el tiempo real entre entregas de cada chofer. La UI corre sobre
+`generarMockChoferesRuta()` (dashboard_logistica.html), con una semilla
+fija para que la demo sea reproducible al revisarla con el equipo. Antes
+de pasar a producción falta: definir la fuente real de estos datos
+(¿otra columna en la planilla de Repartidores? ¿un sistema de tracking
+GPS/checkpoints?), y reemplazar esa función por la carga real — el resto
+(KPIs, alertas, tabla ordenable, filtro por zona) ya queda armado sobre
+la misma forma de fila.
+
+**Qué datos muestra, definición confirmada con soporte (2026-11-11):**
+- **Progreso**: paquetes asignados vs. entregados, como barra (reutiliza
+  `.repa-meter`).
+- **Hora de la 1ª entrega** y **paquetes por hora** (velocidad real:
+  entregados ÷ horas transcurridas desde esa primera entrega).
+- **Entregados antes de las 21hs** y **pendientes** — para que soporte
+  evalúe a ojo si el chofer va a llegar a terminar su hoja de ruta o no
+  (mismo corte de las 21hs que ya usa el resto del dashboard para la
+  puntualidad de entrega, sección 2).
+- **Demora**, calculada contra el **tiempo entre una entrega y la
+  siguiente** — no contra un horario planificado (no existe esa hoja).
+  Si el chofer se achica de ritmo, se lo marca sin importar cuántos
+  paquetes tenga asignados:
+  - **Óptimo** (verde): hasta 5 min entre entregas.
+  - **A tiempo** (amarillo): entre 6 y 20 min.
+  - **Demorado** (rojo): más de 20 min.
+
+**Componentes:** reutiliza los ya existentes de "Repartidores" para
+mantener consistencia visual — `.repa-rag` (badge de estado),
+`.repa-meter` (barra de progreso, ahora dentro de la tabla en vez de
+solo en mini-kpis), `.repa-alerta-fila` (lista de "Demorados ahora"),
+`mini-kpi` (resumen), y el mismo mecanismo genérico de tabla ordenable
+(`wireSortableTable`/`ordenarPorClave`, sección 13.5) para poder
+ordenar por mayor demora, menor velocidad o más pendientes.
+
+Los 5 mini-kpis de arriba (Choferes en ruta, % dentro de ritmo,
+Demorados ahora, Velocidad promedio, Paquetes pendientes) van en una
+sola fila compacta (`.mini-kpis-linea`, sección 18) en vez del grid de 3
+columnas que usa el resto del dashboard — con un ícono ⓘ por tarjeta que
+explica qué mide cada número, porque sin el texto de detalle ("sub") que
+sí tienen las demás tarjetas, el nombre corto de la etiqueta no siempre
+alcanza para entender la cuenta (ej. "% dentro de ritmo" por sí solo no
+dice que es sobre el filtro de zona activo, no sobre el total general).
+
+## 18. Filtros por columna en tablas (agregado 2026-11-11)
+
+Se agregó un componente genérico reusado en varias tablas del
+dashboard: una segunda fila debajo del header ordenable, con un
+input/select por columna, para poder **acotar** la tabla además de
+**ordenarla** (que ya existía vía `wireSortableTable`/`ordenarPorClave`,
+sección 13.5). Funciones genéricas en el HTML: `crearFilaFiltros()`
+(arma la fila de inputs/selects), `aplicarFiltrosColumna()` (aplica el
+filtro sobre las filas antes de ordenar) y `refrescarOpcionesFiltro()`
+(actualiza las opciones de un `<select>` cuando dependen de datos que
+llegan después por fetch, ej. las zonas reales de una planilla).
+
+Cada columna es, según el tipo de dato: `<select>` de coincidencia
+exacta (Zona/Turno/Estado — un set chico y fijo de valores) o `<input>`
+de texto de coincidencia parcial (métricas numéricas). La columna del
+nombre (Chofer/Repartidor) queda sin filtro de columna a propósito — ya
+tiene su propio buscador de texto libre arriba de la tabla, que además
+se unificó visualmente en este mismo cambio (ver más abajo).
+
+**Tablas donde se aplicó** (las que ya tenían columnas ordenables):
+- **Choferes en ruta** (Repartidores → Seguimiento en ruta): Zona/Turno/
+  Estado como `<select>`; Min. entre entregas/Hora 1ª entrega/Paq. por
+  hora/Progreso/Pendientes como texto.
+- **Todos los repartidores** (Repartidores → Histórico): Zona como
+  `<select>` (con opciones dinámicas según el período cargado — la
+  planilla real puede no usar los mismos nombres de zona que el mapa ML
+  Flex de "Seguimiento en ruta"); Asignaciones/% Asistencia/% A tiempo/
+  Alertas/Score como texto.
+- **Ranking de choferes** (Envíos): las 10 columnas de métricas, todas
+  como texto (Chofer ya tenía su buscador y el filtro por zona/chofer
+  por click en los gráficos — regla #9 — así que no se tocó esa parte).
+
+**Dónde NO se aplicó, a propósito:** "Detalle de envíos por chofer"
+(sección 11) no tenía columnas ordenables antes de este cambio, así que
+quedó fuera de esta pasada para no mezclar dos features en el mismo
+cambio — sigue con su buscador de texto libre (ahora con el estilo
+unificado) pero sin fila de filtros por columna. Si hace falta, es la
+misma función genérica la que habría que conectar ahí.
+
+**Buscador de tabla unificado:** los 4 inputs de búsqueda del dashboard
+(`#buscarChofer`, `#buscarDetalle`, `#buscarChoferRuta`,
+`#buscarRepartidor`) tenían cada uno su propio estilo chico y sin
+padding real (herencia de cuando se agregaron de a uno). Ahora comparten
+la clase `.buscador`, más grande y con la paleta del resto de la
+interfaz (fondo, borde, foco dorado).
+
+### 18.1 Pasada de QA sobre esta misma feature (2026-11-11)
+
+Tras el primer pase (18) se hizo una revisión de UX/QA enfocada en lo
+agregado — se usó la skill `ui-ux-pro-max` para confirmar el criterio de
+"sacar el look nativo de un `<select>`" (no hay match exacto en la base
+de estilos para esa técnica puntual, así que se aplicó la práctica
+estándar documentada abajo, no una recomendación sacada de la skill).
+Se encontraron y corrigieron estos problemas reales:
+
+- **`<select>` con el look nativo del sistema operativo** (reportado por
+  el usuario con captura, dos veces: primero se le sacó el `appearance`
+  nativo y se le dibujó una flecha propia por CSS, pero eso solo cambia
+  el recuadro CERRADO — la lista DESPLEGADA la sigue pintando el
+  navegador/SO sobre un `<select>` real, cuadrada y con el resaltado
+  azul de Windows, sin forma de tocarla con CSS). Solución definitiva:
+  se reemplazó el `<select>` por un combo propio (`crearComboFiltro()`)
+  — un `<button>` + una `<ul role="listbox">` con los mismos colores,
+  bordes y radios que el resto de la interfaz, tanto cerrado como
+  abierto. Mantiene semántica y teclado de un combobox (flechas, Enter,
+  Escape, cierre al click afuera).
+- **Desalineación de columnas en mobile**: la fila de filtros no copiaba
+  la clase `hide-mobile` de las columnas que el dashboard ya oculta en
+  pantallas chicas (ej. "Turno" en Choferes en ruta, la mayoría de las
+  columnas de "Ranking de choferes"). Resultado: en mobile el filtro de
+  una columna oculta seguía ocupando una celda, corriendo todo lo demás
+  un lugar. `crearFilaFiltros()` ahora copia esa clase leyendo el `<th>`
+  del header real, columna por columna.
+- **`aria-label` ilegible para lectores de pantalla**: decían "Filtrar
+  por estadoLabel" / "Filtrar por zonaPrincipal" (el nombre interno de
+  la variable). Ahora se arma leyendo el texto visible del header de esa
+  columna ("Filtrar por Estado", "Filtrar por Zona").
+- **Bug real preexistente, destapado por los filtros nuevos** (no
+  introducido por este cambio): en "Ranking de choferes", la fila
+  resumen "(sin chofer asignado)" se agregaba siempre al final de la
+  tabla sin pasar por el buscador ni ningún filtro — con cualquier
+  filtro activo igual aparecía, aunque sus columnas fueran todas "—" y
+  no tuviera sentido contra ese filtro. Ahora se oculta en cuanto hay un
+  buscador o un filtro de columna activo, igual que cualquier otra fila.
+- **Número de los mini-kpis en línea muy chico** en relación a la
+  etiqueta (quedaba igual de peso visual que el texto de arriba, en vez
+  de destacarse). Se subió de 16px a 19px — sigue siendo más chico que
+  el de las tarjetas en grid (21px) porque la fila es más angosta, pero
+  ya se distingue como el dato principal.
+
+## 19. Dos bugs reales en "Operación en vivo" + "Seguimiento en ruta" pasa a datos reales (2026-11-11)
+
+Al preparar el pase a producción se encontraron y corrigieron dos bugs
+reales — ninguno introducido por los cambios recientes, estaban desde
+antes — y se conectó "Seguimiento en ruta" a datos reales de LightData
+(hasta acá corría sobre `generarMockChoferesRuta()`, ver sección 17).
+
+### 19.1 "Operación en vivo" no traía datos — dos causas combinadas
+
+**Causa 1 — `URL_REPA_VIVA` apuntaba a la hoja equivocada.** Esa URL no
+tenía `gid` en el query string, así que dependía de cuál fuera la
+pestaña "por defecto" del documento publicado — hasta que esa
+configuración cambió (alguien dejó otra pestaña abierta al
+guardar/republicar, lo más probable) y empezó a servir en silencio la
+pestaña **"Localidades"** (gid `620286872`, un cuadro de zonas/horarios
+de ~20 filas) en vez de **"Seguimiento Diario"** (gid `407099768`, la
+hoja operativa real). Confirmado leyendo `/pubhtml` del documento
+publicado — mismo método ya usado en 2026-10-24 para encontrar el gid
+del roster. Fix: `URL_REPA_VIVA` ahora fija `&gid=407099768`
+explícitamente, igual que ya se hacía con `URL_REPA_ROSTER`.
+
+**Causa 2 — fila en blanco antes del header real.** Con el gid
+corregido, la hoja "Seguimiento Diario" resultó tener una fila vacía
+(`,,,,,,,,,,,,,,,,,,,,,,`) ANTES del header real (`FECHA,NOMBRE,...`) —
+algo que la copia histórica no tiene. `filasAObjetosRepa()` tomaba
+`filas[0]` como header a ciegas, así que esa fila en blanco se usaba
+como header: todas las columnas quedaban sin nombre (el loop ya
+descartaba columnas con header vacío), y la planilla entera se leía
+como 0 filas útiles — sin ningún error, "Operación en vivo" mostraba
+"Todavía no hay datos de hoy" con la planilla llena de filas reales.
+Fix: ahora se busca la primera fila que tenga `FECHA` o `NOMBRE` entre
+sus celdas y se usa esa como header, descartando lo que venga antes
+(no cambia nada para histórica/roster, que no tienen esa fila extra).
+
+Ambos bugs se superponían — corregir solo el primero no alcanzaba,
+porque la fila en blanco también está en "Seguimiento Diario"
+(descubierto recién al corregir el gid y volver a probar).
+
+### 19.2 "Seguimiento en ruta" pasa a datos reales
+
+Reemplaza `generarMockChoferesRuta()` por `cargarChoferesEnRutaHoy()`,
+que lee `envios_detalle/<hoy>/choferes` en Firestore — el mismo detalle
+por chofer que ya arma `publicar_firestore.py` a partir del export de
+LightData (sección 11), actualizado cada 20 minutos por la corrida
+intradía (sección 16). Una sola lectura de colección trae TODOS los
+choferes del día (sin necesitar sus ids de antemano), mucho más barato
+que pedir chofer por chofer.
+
+**Cómo se calcula cada fila, a partir de los items de ese chofer:**
+- **Asignados** = items con `estado` distinto de `"A retirar"` (todavía
+  no llegó al depósito — mismo criterio que la regla de negocio #1).
+- **Entregados** = items con `estado` en `{"Entregado", "Entregado 2DA
+  visita"}`.
+- **Pendientes** = asignados − entregados.
+- **Minutos entre entregas** = promedio de los gaps entre los
+  `horaEntrega` (ya vienen como `"HH:MM"`) de los items entregados,
+  ordenados. Con menos de 2 entregas no hay ritmo que medir → estado
+  **"Sin entregas aún"** (gris, cuarto estado agregado al semáforo de la
+  sección 17 — antes solo eran 3), no un falso "Óptimo".
+- **Hora de la 1ª entrega** = el `horaEntrega` más chico entre los
+  entregados.
+- **Pre 21** = entregados con `horaEntrega` antes de las 21:00.
+- **Zona** = la más frecuente entre los items asignados de ese chofer
+  (un chofer puede tener paquetes de más de una zona en el día).
+
+**Zonas reales — distintas de lo que se había asumido al diseñar la
+pantalla (sección 17):** el mapa de localidades ML Flex (CABA/Zona
+Norte/Zona Sur/Zona Oeste) con el que se armó la UI originalmente NO
+existe en los datos de LightData. La columna `Zona` del export trae sus
+propios valores (confirmado con datos reales del 2026-11-11: `"CABA"`,
+`"ZONA 1"`, `"ZONA 2"`, `"ZONA 3"`, `"Sin zona"`). Los chips de zona de
+arriba de la pantalla y el filtro de columna "Zona" ahora se arman
+**dinámicamente** a partir de lo que aparezca cada día
+(`actualizarChipsZonaRuta()` / `refrescarOpcionesFiltro()`), en vez de
+una lista fija — mismo criterio ya usado para la zona de "Todos los
+repartidores" (sección 18).
+
+**Se sacó la columna "Turno"**: no es un dato que LightData registre
+por envío (es un concepto de la planilla de Repartidores/asistencia,
+sección 13), así que no había forma de calcularlo sin inventarlo.
+
+**Estado vacío**: si `envios_detalle/<hoy>` todavía no tiene ningún
+chofer (antes de la primera corrida intradía del día, o un domingo no
+operativo), se muestra un estado vacío en vez de una tabla en blanco.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -750,4 +994,8 @@ su propio rango de día de la semana cada uno.
 | 2026-11-06 | La tarjeta "Entregas Efectivas" (sección 12) suma una sub-sección "Solo Flex de Mercado Libre" con el mismo % y números pero restringidos a envíos Flex (`Origen` = `"ML"` o `"ML TURBO"`, criterio confirmado con el equipo — no hay columna "Flex" explícita en el export). `publicar_firestore.py` agrega un sub-objeto `flex` (`{total, aRetirar, porEstadoHora}`) a cada snapshot diario; el dashboard lo agrega igual que el resto y aplica la misma fórmula de efectividad. Los snapshots publicados antes de este cambio no tienen ese campo, así que muestran "—" hasta que se reprocesen o se acumulen días nuevos. |
 | 2026-11-11 | Sección 14: se escribió `descargar_lightdata_api.py`, una alternativa a la descarga por Playwright usando la API externa de LightData (`POST /externa/consultar-fecha`). Todavía NO está conectada al workflow — el endpoint devuelve "Empresa no habilitada" para la empresa 253 hasta que LightData lo habilite, y faltan validar varios mapeos de campo contra datos reales (ver sección 14). |
 | 2026-11-11 | Sección 15: el workflow de descarga diaria pasó a correr dentro de una imagen Docker propia (`scripts/Dockerfile`, publicada por `build_imagen_ci.yml` en GitHub Container Registry) con Chromium/Playwright, LibreOffice y las dependencias de Python ya instalados, en vez de reinstalar todo eso en cada corrida. Pensado para bajar el tiempo de cada corrida de ~2 min a unos segundos y despejar el límite real que había para aumentar la frecuencia de refresco (el concurrency group del workflow deja solo una corrida en cola a la vez). No depende de que LightData habilite nada — es independiente del punto anterior. Confirmado en producción: 56 segundos de punta a punta. |
+| 2026-11-11 | Sección 17: nuevo modo "🚚 Seguimiento en ruta" dentro de Repartidores — progreso (asignados vs. entregados), hora de la 1ª entrega, paquetes por hora, entregados antes de las 21hs vs. pendientes, y demora de cada chofer durante el reparto (no asistencia), con filtro por zona ML Flex, lista "Demorados ahora" y tabla ordenable con highlight visual para los demorados. La demora se mide contra el tiempo entre una entrega y la siguiente (criterio confirmado con soporte): ≤5 min óptimo, 6-20 a tiempo, >20 demorado. Corre sobre datos mockeados (`generarMockChoferesRuta()`) hasta definir una fuente real de progreso de ruta en vivo. |
+| 2026-11-11 | Sección 18: se agregó una fila de filtros por columna (además de poder ordenar) en "Choferes en ruta", "Todos los repartidores" y "Ranking de choferes" — `<select>` para Zona/Turno/Estado, texto libre para el resto. Se unificó el estilo de los 4 buscadores de tabla del dashboard (antes cada uno tenía su propio input chico y sin estilo). Los mini-kpis de "Seguimiento en ruta" pasaron de grid a una sola fila compacta, con un ícono ⓘ por tarjeta explicando qué mide cada número. |
+| 2026-11-11 | Sección 18.1: pasada de QA sobre lo anterior — se reemplazó el `<select>` nativo de los filtros de Zona/Turno/Estado por un combo propio (botón + listbox con el estilo del dashboard, ver sección 18.1), porque la lista desplegada de un `<select>` real no se puede estilar con CSS. Se corrigió que la fila de filtros desalineaba columnas en mobile (no copiaba `hide-mobile`), se arreglaron los `aria-label` (decían el nombre interno de la variable en vez del nombre visible de la columna), se agrandó un poco más el número de los mini-kpis en línea, y se corrigió un bug real preexistente: la fila "(sin chofer asignado)" del Ranking de choferes ignoraba el buscador y los filtros de columna. |
+| 2026-11-11 | Sección 19: dos bugs reales corregidos antes de pasar a producción. (1) "Operación en vivo" no traía datos: `URL_REPA_VIVA` apuntaba sin `gid` explícito y, al cambiar la pestaña "por defecto" del documento publicado, empezó a servir en silencio una hoja de referencia ("Localidades") en vez de la operativa ("Seguimiento Diario") — más una fila en blanco antes del header real en esa hoja, que `filasAObjetosRepa()` tomaba como header y vaciaba toda la lectura. (2) "Seguimiento en ruta" pasó de datos mockeados a datos reales, leyendo `envios_detalle/<hoy>/choferes` (el mismo detalle por chofer de LightData que ya alimenta el resto del dashboard). Las zonas resultaron ser distintas de lo asumido al diseñar la pantalla (CABA/ZONA 1/ZONA 2/ZONA 3/Sin zona, no el mapa de localidades ML Flex) y ahora se arman dinámicamente; se sacó la columna "Turno" porque LightData no la registra. |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |

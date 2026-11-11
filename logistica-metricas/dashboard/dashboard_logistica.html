@@ -147,6 +147,7 @@
   .mini-dot.verde{ background:var(--verde); }
   .mini-dot.amarillo{ background:var(--amarillo); }
   .mini-dot.rojo{ background:var(--rojo-oscuro); }
+  .mini-dot.gris{ background:var(--slate); }
   .mini-kpi .mini-value{ font-size:21px; font-weight:700; line-height:1.15; }
   .mini-kpi .mini-sub{ color:var(--text-muted); font-size:11px; margin-top:5px; }
 
@@ -159,10 +160,12 @@
   .repa-meter.verde{ background:var(--verde-soft); }
   .repa-meter.amarillo{ background:var(--amarillo-soft); }
   .repa-meter.rojo{ background:var(--rojo-soft); }
+  .repa-meter.gris{ background:var(--panel-2); }
   .repa-meter > div{ height:100%; border-radius:999px; transition:width .25s ease-out; }
   .repa-meter.verde > div{ background:var(--verde); }
   .repa-meter.amarillo > div{ background:var(--amarillo); }
   .repa-meter.rojo > div{ background:var(--rojo-oscuro); }
+  .repa-meter.gris > div{ background:var(--slate); }
 
   /* ---------- grafico de barras apiladas (por zona / por turno) ---------- */
   .repa-chart-wrap{ margin-bottom:16px; }
@@ -181,10 +184,12 @@
   .repa-rag.verde{ background:var(--verde-soft); color:#1a6b31; }
   .repa-rag.amarillo{ background:var(--amarillo-soft); color:#8a4d0f; }
   .repa-rag.rojo{ background:var(--rojo-soft); color:#8a1f1f; }
+  .repa-rag.gris{ background:var(--panel-2); color:var(--text-muted); }
   .repa-rag .repa-rag-dot{ width:7px; height:7px; border-radius:50%; flex:none; }
   .repa-rag.verde .repa-rag-dot{ background:var(--verde); }
   .repa-rag.amarillo .repa-rag-dot{ background:var(--amarillo); }
   .repa-rag.rojo .repa-rag-dot{ background:var(--rojo-oscuro); }
+  .repa-rag.gris .repa-rag-dot{ background:var(--slate); }
 
   /* ---------- modo vivo / historico ---------- */
   .chips#repaModoSwitcher .chip{ font-weight:700; }
@@ -199,6 +204,21 @@
     display:inline-block; background:var(--panel-2); border:1px solid var(--border);
     border-radius:6px; padding:1px 7px; font-size:11px; color:var(--text-muted); margin-left:6px;
   }
+
+  /* ---------- mini-kpis compactos en una sola línea (agregado 2026-11-11,
+     usado en "Seguimiento en ruta") — misma tarjeta .mini-kpi de siempre
+     pero angosta y en fila, con el detalle ("sub") movido al tooltip del
+     ícono de info para no perder altura. ---------- */
+  .mini-kpis-linea{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+  .mini-kpis-linea .mini-kpi{ flex:1 1 150px; padding:9px 12px; }
+  .mini-kpis-linea .mini-label{ font-size:10.5px; margin-bottom:6px; }
+  .mini-kpis-linea .mini-value{ font-size:19px; }
+
+  /* ---------- seguimiento en ruta: progreso y highlight de demorados ---------- */
+  .ruta-progreso{ display:flex; flex-direction:column; gap:4px; min-width:92px; }
+  .ruta-progreso-txt{ font-size:11.5px; color:var(--text-muted); white-space:nowrap; }
+  tr.fila-demorado td:first-child{ border-left:3px solid var(--amarillo); }
+  tr.fila-muy-demorado td:first-child{ border-left:3px solid var(--rojo-oscuro); }
 
   /* ---------- grilla de tarjetas por zona ---------- */
   .repa-zone-grid{ display:grid; grid-template-columns:repeat(1,1fr); gap:10px; }
@@ -309,10 +329,64 @@
   .table-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:10px; flex-wrap:wrap; }
   .table-head h3{ margin:0; font-size:14px; font-weight:600; }
   .tabla-nota{ color:var(--text-muted); font-size:12px; margin:-4px 0 10px; }
-  #buscarChofer{
+
+  /* ---------- buscador de tabla (unificado 2026-11-11 — antes cada tabla
+     tenía su propio input sin estilo, chico y apretado contra el título) ---------- */
+  input.buscador{
     background:var(--panel-2); border:1px solid var(--border); color:var(--text);
-    border-radius:7px; padding:6px 10px; font-size:12.5px; font-family:inherit; width:180px;
+    border-radius:8px; padding:9px 14px; font-size:13.5px; font-family:inherit;
+    flex:1 1 240px; min-width:200px; max-width:360px;
   }
+  input.buscador::placeholder{ color:var(--text-muted); }
+  input.buscador:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; border-color:var(--gold); }
+
+  /* ---------- fila de filtros por columna (agregado 2026-11-11) ----------
+     Segunda fila del thead, un input/select por columna, debajo del
+     header ordenable — para acotar ademas de ordenar. No es sticky (solo
+     el header de arriba lo es) para no competir por el mismo top:0. */
+  tr.fila-filtros th{
+    position:static; top:auto; cursor:default; background:var(--panel-2);
+    padding:6px 8px 10px; border-bottom:1px solid var(--border);
+  }
+  input.col-filtro{
+    width:100%; min-width:62px; background:var(--panel); border:1px solid var(--border);
+    color:var(--text); border-radius:6px; padding:4px 7px; font-size:11.5px; font-family:inherit;
+  }
+  input.col-filtro:focus-visible{ outline:2px solid var(--gold); outline-offset:1px; border-color:var(--gold); }
+  input.col-filtro::placeholder{ color:var(--text-muted); }
+
+  /* ---------- combo propio para filtros de tipo 'select' (2026-11-11) ----------
+     Reemplaza al <select> nativo: un <select> cerrado se puede estilar con
+     CSS, pero la LISTA desplegada la pinta el sistema operativo/navegador
+     (cuadrada, resaltado azul de Windows — bug real reportado por captura,
+     sin relación con la paleta del dashboard, y sin forma de tocarla con
+     CSS sobre un <select> real). Este combo es un <button> + <ul
+     role="listbox"> propios, con los mismos colores/bordes/radios que el
+     resto de la interfaz tanto cerrado como abierto. */
+  .col-filtro-combo{ position:relative; width:100%; }
+  .col-filtro-combo-btn{
+    width:100%; text-align:left; background:var(--panel); border:1px solid var(--border);
+    color:var(--text); border-radius:6px; padding:4px 22px 4px 7px; font-size:11.5px; font-family:inherit;
+    cursor:pointer; position:relative; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .col-filtro-combo-btn::after{
+    content:''; position:absolute; right:7px; top:50%; margin-top:-2px;
+    width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent;
+    border-top:5px solid var(--text-muted);
+  }
+  .col-filtro-combo-btn:focus-visible{ outline:2px solid var(--gold); outline-offset:1px; border-color:var(--gold); }
+  .col-filtro-combo-btn[aria-expanded="true"]{ border-color:var(--gold); }
+  .col-filtro-combo-lista{
+    position:absolute; top:calc(100% + 4px); left:0; min-width:100%; z-index:40;
+    background:var(--panel); border:1px solid var(--border); border-radius:8px;
+    box-shadow:0 10px 24px rgba(26,23,16,.16); padding:4px; margin:0; list-style:none;
+    max-height:220px; overflow-y:auto; font-size:12.5px; white-space:nowrap;
+  }
+  .col-filtro-combo-lista li{ padding:6px 10px; border-radius:6px; cursor:pointer; color:var(--text); }
+  .col-filtro-combo-lista li:hover{ background:var(--panel-2); }
+  .col-filtro-combo-lista li:focus-visible{ outline:2px solid var(--gold); outline-offset:-2px; background:var(--panel-2); }
+  .col-filtro-combo-lista li[aria-selected="true"]{ background:var(--gold); font-weight:600; }
+
   .table-wrap{ overflow-x:auto; max-height:520px; overflow-y:auto; }
   table{ width:100%; border-collapse:collapse; font-size:14px; }
   thead th{
@@ -522,7 +596,7 @@
   <div class="table-card" id="tableCard" hidden>
     <div class="table-head">
       <h3>Ranking de choferes</h3>
-      <input id="buscarChofer" placeholder="Buscar chofer…" />
+      <input id="buscarChofer" class="buscador" placeholder="Buscar chofer…" />
     </div>
     <p class="tabla-nota" id="tablaNota" hidden></p>
     <div class="table-wrap">
@@ -550,7 +624,7 @@
   <div class="table-card" id="detalleChoferCard" hidden>
     <div class="table-head">
       <h3>Detalle de envíos — <span id="detalleChoferNombre"></span></h3>
-      <input id="buscarDetalle" placeholder="Buscar tracking o cliente…" />
+      <input id="buscarDetalle" class="buscador" placeholder="Buscar tracking o cliente…" />
     </div>
     <p class="tabla-nota">Localidad en vez de dirección exacta, a propósito — ver <em>reglas_de_negocio.md</em>, sección 11.</p>
     <div class="table-wrap">
@@ -584,6 +658,7 @@
 
     <div class="chips" id="repaModoSwitcher" style="margin-bottom:18px;">
       <button class="chip active" data-modo-repa="vivo">🟢 Operación en vivo</button>
+      <button class="chip" data-modo-repa="ruta">🚚 Seguimiento en ruta</button>
       <button class="chip" data-modo-repa="historico">📊 Rendimiento histórico</button>
     </div>
 
@@ -644,6 +719,66 @@
 
     </div> <!-- /repaVivo -->
 
+    <!-- ===================== MODO SEGUIMIENTO EN RUTA (2026-11-11, pasó a datos
+         reales el mismo día) =====================
+         Distinto de "Operación en vivo": ese modo es asistencia/roster (quién
+         se presentó, con qué vehículo, lee las planillas de Google Sheets).
+         Este modo es rendimiento DURANTE la ruta — velocidad de entrega y
+         demora de cada chofer en curso, para que soporte accione en caliente.
+         Lee `envios_detalle/<hoy>/choferes` en Firestore — el mismo detalle
+         por chofer que ya alimenta LightData vía `publicar_firestore.py`
+         (ver reglas_de_negocio.md sección 17/17.1), actualizado cada 20
+         minutos por la corrida intradía. No depende de ninguna planilla de
+         Google Sheets ni de asistencia/roster. -->
+    <div id="repaRuta" hidden>
+
+      <div class="empty-state" id="rutaEmpty" hidden>
+        <h2>Todavía no hay datos de hoy</h2>
+        <p>La corrida intradía recién va a publicar el primer detalle del día a las 11hs ART — si ya pasó esa hora, puede ser un día no operativo (domingo) o que la corrida de las 00hs todavía no cerró "ayer".</p>
+      </div>
+
+      <div id="rutaContent" hidden>
+
+        <div class="chips" id="rutaZonaFiltro" style="margin-bottom:14px;">
+          <button class="chip active" data-zona-ruta="global">Global</button>
+        </div>
+
+        <div class="mini-kpis-linea" id="rutaMiniKpis" aria-label="Indicadores de la ruta en curso"></div>
+
+        <div class="card" id="rutaAlertasCard" style="margin-top:4px;">
+          <h3>Demorados ahora</h3>
+          <div class="card-sub">Choferes con demora sobre su hoja de ruta — para accionar primero</div>
+          <div id="rutaAlertasLista"></div>
+        </div>
+
+        <div class="table-card" style="margin-top:18px;">
+          <div class="table-head">
+            <h3>Choferes en ruta</h3>
+            <input id="buscarChoferRuta" class="buscador" placeholder="Buscar chofer…" />
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead id="theadChoferesRuta">
+                <tr>
+                  <th data-key="nombre" scope="col">Chofer</th>
+                  <th data-key="zona" scope="col">Zona</th>
+                  <th data-key="estadoOrden" scope="col">Estado</th>
+                  <th data-key="minEntreEntregas" class="num-col" scope="col">Min. entre entregas</th>
+                  <th data-key="horaPrimeraEntregaMin" class="num-col hide-mobile" scope="col">Hora 1ª entrega</th>
+                  <th data-key="velocidad" class="num-col" scope="col">Paq./hora</th>
+                  <th data-key="pctProgreso" scope="col">Progreso</th>
+                  <th data-key="pendientes" class="num-col" scope="col">Pre 21 / Pendientes</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyChoferesRuta"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div> <!-- /rutaContent -->
+
+    </div> <!-- /repaRuta -->
+
     <!-- ===================== MODO HISTÓRICO ===================== -->
     <div id="repaHistorico" hidden>
 
@@ -687,7 +822,7 @@
         <div class="table-card" style="margin-top:18px;">
           <div class="table-head">
             <h3>Todos los repartidores</h3>
-            <input id="buscarRepartidor" placeholder="Buscar repartidor…" />
+            <input id="buscarRepartidor" class="buscador" placeholder="Buscar repartidor…" />
           </div>
           <div class="table-wrap">
             <table>
@@ -813,6 +948,196 @@
   }
 
   // ======================================================================
+  // Filtros por columna (agregado 2026-11-11) — una segunda fila debajo del
+  // header de una tabla ordenable, con un input/combo por columna, para
+  // poder acotar además de ordenar. Mismo criterio "un solo componente
+  // genérico reusado por todas las tablas" que wireSortableTable/
+  // ordenarPorClave de arriba — ver reglas_de_negocio.md sección 18.
+  //
+  // columnas: array alineado 1 a 1 con los <th> de esa tabla (mismo orden).
+  // Cada posición es:
+  //   null                                          -> sin filtro en esa
+  //     columna (ej. el nombre ya tiene un buscador de texto libre aparte)
+  //   {tipo:'select', campo, opciones:()=>string[], todasLabel?}
+  //     -> combo propio (botón + lista), coincidencia EXACTA contra fila[campo]
+  //   {tipo:'texto', campo, placeholder?}
+  //     -> <input>, coincidencia PARCIAL (substring, case-insensitive)
+  //
+  // filtrosState es un objeto plano {campo: valor} dentro del state de cada
+  // tabla (ej. stateRuta.filtrosCol); onChange vuelve a renderizar esa tabla.
+  //
+  // El tipo 'select' NO usa un <select> nativo a propósito (bug real
+  // reportado el 2026-11-11: el <select> cerrado se podía estilar, pero la
+  // lista desplegada la pinta el sistema operativo/navegador — cuadrada,
+  // con el azul de Windows, sin relación con la paleta del dashboard, y
+  // eso no se puede tocar con CSS sobre un <select> real). Se reemplaza por
+  // un combo casero: un <button> (lo que se ve cerrado) + una <ul
+  // role="listbox"> propia (lo que se ve abierto), ambos con los mismos
+  // colores/bordes que el resto de la interfaz. Mantiene semántica y
+  // teclado de un combobox (flechas, Enter, Escape, cierre al click afuera)
+  // sin depender del render nativo del navegador.
+  function crearFilaFiltros(thead, columnas, filtrosState, onChange){
+    if(!thead || thead.querySelector('tr.fila-filtros')) return; // ya armada
+    thead._combosFiltro = {}; // campo -> {btn, lista, todasLabel}, para refrescarOpcionesFiltro()
+    // Los <th> del header (ej. "hide-mobile" en columnas secundarias) se
+    // ocultan por CSS en pantallas chicas — si la fila de filtros no copia
+    // esa misma clase, esas celdas quedan visibles y desalinean el resto de
+    // las columnas contra el header y el cuerpo de la tabla (bug real
+    // encontrado el 2026-11-11 al revisar la tabla en mobile).
+    const headerCells = thead.querySelectorAll('tr')[0].children;
+    const fila = document.createElement('tr');
+    fila.className = 'fila-filtros';
+    columnas.forEach((col, i) => {
+      const th = document.createElement('th');
+      if(headerCells[i] && headerCells[i].classList.contains('hide-mobile')) th.classList.add('hide-mobile');
+      // Nombre de columna leído directo del <th> del header (ej. "Zona",
+      // no "zonaPrincipal") para que el aria-label sea legible por un
+      // lector de pantalla — ::after ("↕") es contenido CSS, no texto real,
+      // así que no se cuela en textContent.
+      const etiquetaCol = headerCells[i] ? headerCells[i].textContent.trim() : (col && col.campo) || '';
+      if(col && col.tipo === 'select'){
+        th.appendChild(crearComboFiltro(col, etiquetaCol, filtrosState, onChange, thead));
+      } else if(col && col.tipo === 'texto'){
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'col-filtro';
+        inp.placeholder = col.placeholder || 'Filtrar…';
+        inp.setAttribute('aria-label', 'Filtrar por ' + etiquetaCol);
+        inp.addEventListener('input', ()=>{ filtrosState[col.campo] = inp.value; onChange(); });
+        th.appendChild(inp);
+      }
+      fila.appendChild(th);
+    });
+    thead.appendChild(fila);
+  }
+
+  // Combo custom para una columna de tipo 'select'. Devuelve el
+  // contenedor <div> listo para meter en la celda; guarda sus referencias
+  // en thead._combosFiltro[campo] para que refrescarOpcionesFiltro() pueda
+  // reconstruir la lista más tarde (ej. cuando llegan datos por fetch).
+  function crearComboFiltro(col, etiquetaCol, filtrosState, onChange, thead){
+    const cont = document.createElement('div');
+    cont.className = 'col-filtro-combo';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'col-filtro-combo-btn';
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-label', 'Filtrar por ' + etiquetaCol);
+    const lista = document.createElement('ul');
+    lista.className = 'col-filtro-combo-lista';
+    lista.setAttribute('role', 'listbox');
+    lista.hidden = true;
+
+    const todasLabel = col.todasLabel || 'Todas';
+    const seleccionar = (valor, texto) => {
+      filtrosState[col.campo] = valor;
+      btn.textContent = texto;
+      lista.querySelectorAll('li').forEach(li => li.setAttribute('aria-selected', String(li.dataset.valor === valor)));
+      cerrarCombo();
+      onChange();
+    };
+    const construirOpciones = (valores) => {
+      lista.innerHTML = '';
+      [{ valor:'', texto:todasLabel }, ...valores.map(v => ({ valor:v, texto:v }))].forEach(({valor, texto}) => {
+        const li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.tabIndex = -1;
+        li.dataset.valor = valor;
+        li.textContent = texto;
+        li.setAttribute('aria-selected', String((filtrosState[col.campo] || '') === valor));
+        li.addEventListener('click', ()=> seleccionar(valor, texto));
+        lista.appendChild(li);
+      });
+    };
+    const moverFoco = (delta) => {
+      const items = Array.from(lista.querySelectorAll('li'));
+      const actualIdx = items.findIndex(li => li === document.activeElement);
+      const siguiente = items[Math.max(0, Math.min(items.length - 1, (actualIdx < 0 ? 0 : actualIdx) + delta))];
+      if(siguiente) siguiente.focus();
+    };
+    const abrirCombo = () => {
+      if(comboFiltroAbierto && comboFiltroAbierto !== lista) cerrarComboGlobal();
+      lista.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      comboFiltroAbierto = lista;
+      const seleccionada = lista.querySelector('li[aria-selected="true"]') || lista.querySelector('li');
+      if(seleccionada) seleccionada.focus();
+    };
+    function cerrarCombo(){
+      lista.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      if(comboFiltroAbierto === lista) comboFiltroAbierto = null;
+    }
+
+    btn.addEventListener('click', ()=> lista.hidden ? abrirCombo() : cerrarCombo());
+    btn.addEventListener('keydown', (e)=>{
+      if(e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' '){ e.preventDefault(); abrirCombo(); }
+    });
+    lista.addEventListener('keydown', (e)=>{
+      if(e.key === 'ArrowDown'){ e.preventDefault(); moverFoco(1); }
+      else if(e.key === 'ArrowUp'){ e.preventDefault(); moverFoco(-1); }
+      else if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); document.activeElement.click(); }
+      else if(e.key === 'Escape'){ e.preventDefault(); cerrarCombo(); btn.focus(); }
+      else if(e.key === 'Tab'){ cerrarCombo(); }
+    });
+
+    construirOpciones(col.opciones());
+    cont.appendChild(btn);
+    cont.appendChild(lista);
+    btn.textContent = todasLabel;
+    thead._combosFiltro[col.campo] = { btn, lista, todasLabel, construirOpciones, seleccionar };
+    return cont;
+  }
+
+  // Un solo combo abierto a la vez (entre todas las tablas de la página) —
+  // variable de módulo en vez de por-combo para poder cerrar "el que estaba
+  // abierto" sin tener que recorrer el DOM.
+  let comboFiltroAbierto = null;
+  function cerrarComboGlobal(){
+    if(!comboFiltroAbierto) return;
+    comboFiltroAbierto.hidden = true;
+    const btn = comboFiltroAbierto.previousElementSibling;
+    if(btn) btn.setAttribute('aria-expanded', 'false');
+    comboFiltroAbierto = null;
+  }
+  document.addEventListener('click', (e)=>{
+    if(comboFiltroAbierto && !e.target.closest('.col-filtro-combo')) cerrarComboGlobal();
+  });
+
+  // Para un combo cuyas opciones dependen de datos que todavía no habían
+  // llegado cuando se armó la fila de filtros (ej. zonas reales de una
+  // planilla recién cargada por fetch) — conserva la selección actual si
+  // sigue siendo una opción válida.
+  function refrescarOpcionesFiltro(thead, filtrosState, campo, valores, todasLabel){
+    const combo = thead && thead._combosFiltro && thead._combosFiltro[campo];
+    if(!combo) return;
+    const actual = filtrosState[campo] || '';
+    combo.construirOpciones(valores);
+    // Si la zona/turno/estado seleccionado ya no existe en los datos nuevos
+    // (ej. cambió el período), se limpia también en el state y en el botón
+    // — si no, el combo mostraría "Todas" pero el filtro viejo seguiría
+    // aplicado en silencio.
+    if(actual && !valores.includes(actual)){
+      filtrosState[campo] = '';
+      combo.btn.textContent = combo.todasLabel;
+    } else if(actual){
+      combo.btn.textContent = actual;
+    }
+  }
+
+  function aplicarFiltrosColumna(filas, columnas, filtrosState){
+    const activos = columnas.filter(c => c && filtrosState[c.campo]);
+    if(activos.length === 0) return filas;
+    return filas.filter(f => activos.every(c => {
+      const val = f[c.campo];
+      if(val === undefined || val === null) return false;
+      if(c.tipo === 'select') return String(val) === filtrosState[c.campo];
+      return String(val).toLowerCase().includes(filtrosState[c.campo].toLowerCase());
+    }));
+  }
+
+  // ======================================================================
   // Storage compartido — Firestore (Firebase). Reemplaza al viejo
   // window.storage, que solo existía dentro de Claude.ai como Artifact.
   // Ahora que el dashboard vive como sitio estático independiente (GitHub
@@ -908,6 +1233,7 @@
     sort: { key: 'pctEfectividad', dir: 'desc' },
     search: '',
     searchDetalle: '',
+    filtrosCol: {},
     lastUpdated: null,
     // Filtros interactivos: click en zona / franja horaria / chofer filtra
     // el resto del dashboard. zona y chofer son mutuamente excluyentes
@@ -1662,6 +1988,24 @@
   }
 
 
+  // Columnas filtrables de "Ranking de choferes". "Chofer" va en null — ya
+  // tiene el buscador de texto libre (#buscarChofer) arriba de la tabla.
+  // El resto son todas métricas numéricas, así que quedan como filtro de
+  // texto libre sobre el valor crudo (sin el "%" ni separador de miles).
+  const COLUMNAS_FILTRO_CHOFERES = [
+    null,
+    { tipo:'texto', campo:'total', placeholder:'ej. 50' },
+    { tipo:'texto', campo:'efectivas', placeholder:'ej. 40' },
+    { tipo:'texto', campo:'pendientes', placeholder:'ej. 0' },
+    { tipo:'texto', campo:'pctEfectividad', placeholder:'ej. 90' },
+    { tipo:'texto', campo:'pctAntes', placeholder:'ej. 80' },
+    { tipo:'texto', campo:'antes21', placeholder:'ej. 10' },
+    { tipo:'texto', campo:'e21_22', placeholder:'ej. 5' },
+    { tipo:'texto', campo:'e22_23', placeholder:'ej. 2' },
+    { tipo:'texto', campo:'despues23', placeholder:'ej. 0' },
+    { tipo:'texto', campo:'cancelados', placeholder:'ej. 0' },
+  ];
+
   function renderTabla(agg){
     let filas = Object.entries(agg.porChofer).map(([cadete, v]) => ({
       cadete, total:v.total, efectivas:v.efectivas, cancelados:v.cancelados,
@@ -1693,7 +2037,15 @@
     document.getElementById('tablaNota').hidden = !nota;
 
     const q = state.search.trim().toLowerCase();
-    const filtradas = q ? filas.filter(f=>f.cadete.toLowerCase().includes(q)) : filas;
+    const porNombre = q ? filas.filter(f=>f.cadete.toLowerCase().includes(q)) : filas;
+    const filtradas = aplicarFiltrosColumna(porNombre, COLUMNAS_FILTRO_CHOFERES, state.filtrosCol);
+    // Bug real (encontrado el 2026-11-11 al probar los filtros nuevos): la
+    // fila resumen "(sin chofer asignado)" se agrega siempre, sin pasar por
+    // el buscador ni los filtros de columna — con cualquier filtro activo
+    // aparecía igual aunque no tuviera sentido contra ese filtro (sus
+    // columnas son todas "—"). Ahora se oculta en cuanto hay un buscador o
+    // filtro de columna activo.
+    const hayFiltroDeTablaActivo = !!q || Object.values(state.filtrosCol).some(v => v);
 
     const {key, dir} = state.sort;
     filtradas.sort((a,b)=>{
@@ -1720,7 +2072,7 @@
         <td class="num-col">${fmtNum(f.despues23)}</td>
         <td class="num-col">${fmtNum(f.cancelados)}</td>
       </tr>`;
-    }).join('') + (agg.sinChofer ? `
+    }).join('') + ((agg.sinChofer && !hayFiltroDeTablaActivo) ? `
       <tr style="opacity:.6">
         <td>(sin chofer asignado)</td>
         <td class="num-col">${fmtNum(agg.sinChofer)}</td>
@@ -1882,6 +2234,8 @@
       await refreshIndex(); await render();
     }else if(stateRepa.modo === 'vivo'){
       await renderRepartidoresVivo();
+    }else if(stateRepa.modo === 'ruta'){
+      await renderRepartidoresRuta(true);
     }else{
       await renderRepartidoresHistorico();
     }
@@ -1897,6 +2251,7 @@
   });
 
   wireSortableTable(document.getElementById('theadChoferes'), state.sort, async ()=>{ await render(); });
+  crearFilaFiltros(document.getElementById('theadChoferes'), COLUMNAS_FILTRO_CHOFERES, state.filtrosCol, async ()=>{ await render(); });
 
   // ======================================================================
   // Seguimiento de Repartidores (agregado 2026-10-23)
@@ -1909,7 +2264,18 @@
   // ya existe para LightData, pero sin indice/snapshots: cada hoja es una
   // lista plana de filas (una por asignacion chofer+turno+zona) que se
   // filtra por fecha en el momento.
-  const URL_REPA_VIVA = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMlxJ09UzQevg183EP4DAZ4VdsMoAuTCsSYl4Q0JuJJFzrbONEccUGwY_zxApX0C5iQJRsI4Ro7CEV/pub?output=csv';
+  // OJO (bug real encontrado el 2026-11-11): este link se publicó durante
+  // mucho tiempo SIN gid, confiando en que la hoja "por defecto" del
+  // documento publicado fuera "Seguimiento Diario" — hasta que en algún
+  // momento esa configuración cambió (alguien dejó abierta otra pestaña al
+  // guardar/republicar, probablemente) y empezó a servir en silencio la
+  // pestaña "Localidades" (gid 620286872, un cuadro de zonas/horarios de
+  // ~20 filas) en vez de la operativa — "Operación en vivo" dejó de traer
+  // datos sin ningún error visible. Mismo patrón de fragilidad ya
+  // documentado para el roster (sección 13.6/13.7): la solución es la
+  // misma, fijar el gid explícito en vez de confiar en el default.
+  // Confirmado vía /pubhtml que "Seguimiento Diario" = gid 407099768.
+  const URL_REPA_VIVA = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMlxJ09UzQevg183EP4DAZ4VdsMoAuTCsSYl4Q0JuJJFzrbONEccUGwY_zxApX0C5iQJRsI4Ro7CEV/pub?output=csv&gid=407099768';
   const URL_REPA_HIST = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSdkuu23UUeUjF-QLjPkC0nXSdqN3BZivvvbxpHDIEVYsJ0IdT2B_DWi7y048tQPdiFMexkGd5twMrO/pub?output=csv';
   // "Listado de Choferes" — otra pestaña del MISMO documento publicado que
   // la hoja viva (mismo ID de publicación, distinto gid) — confirmado
@@ -1937,15 +2303,350 @@
   }
 
   const stateRepa = {
-    modo: 'vivo',       // 'vivo' | 'historico'
+    modo: 'vivo',       // 'vivo' | 'ruta' | 'historico'
     periodo: '7d',
     rangeStart: null,
     rangeEnd: null,
     search: '',
     sort: { key: 'score', dir: 'desc' },
+    filtrosCol: {},
     filasVivo: [],         // cache de las filas de hoy, para filtrar el detalle de zona sin re-pedir la planilla
     zonaSeleccionada: null,
   };
+
+  // Columnas filtrables de "Todos los repartidores" (histórico). "Repartidor"
+  // va con un <select> de Zona en vez de quedar en null — la columna ya
+  // incluye la zona principal como chip, y el nombre en sí ya tiene su
+  // buscador de texto libre (#buscarRepartidor) arriba de la tabla. Las
+  // opciones de zona se llenan dinámicamente (refrescarOpcionesFiltro) con
+  // las que efectivamente aparezcan en el período cargado, en vez de una
+  // lista fija — la planilla real puede no usar los mismos nombres que el
+  // mapa ML Flex de "Seguimiento en ruta".
+  const COLUMNAS_FILTRO_REPA_HIST = [
+    { tipo:'select', campo:'zonaPrincipal', opciones:() => [], todasLabel:'Todas' },
+    { tipo:'texto', campo:'asignaciones', placeholder:'ej. 10' },
+    { tipo:'texto', campo:'pctAsistencia', placeholder:'ej. 90' },
+    { tipo:'texto', campo:'pctATiempo', placeholder:'ej. 80' },
+    { tipo:'texto', campo:'alertas', placeholder:'ej. 0' },
+    { tipo:'texto', campo:'score', placeholder:'ej. 8' },
+  ];
+
+  // ======================================================================
+  // Seguimiento en ruta (agregado 2026-11-11 como mock, pasó a datos reales
+  // el mismo día — ver reglas_de_negocio.md sección 17/17.1). Lee
+  // `envios_detalle/<hoy>/choferes` en Firestore: el mismo detalle por
+  // chofer que ya arma `publicar_firestore.py` a partir del export de
+  // LightData (fecha/tracking/cliente/localidad/zona/estado/horaEntrega),
+  // actualizado cada 20 minutos por la corrida intradía — no depende de
+  // ninguna planilla de Google Sheets ni de asistencia/roster.
+  //
+  // OJO — la "Zona" acá es la que viene tal cual del export de LightData
+  // ("CABA", "ZONA 1", "ZONA 2", "ZONA 3", "Sin zona" — confirmado
+  // consultando datos reales del 2026-11-11), NO el mapa de localidades ML
+  // Flex (CABA/Norte/Sur/Oeste) que se había pensado al principio para
+  // esta pantalla — esa categorización no existe en los datos de LightData,
+  // así que las zonas (tanto los chips de arriba como el filtro de
+  // columna) se arman dinámicamente a partir de lo que aparezca cada día,
+  // igual que ya se hace para la zona de "Todos los repartidores"
+  // (sección 18, `refrescarOpcionesFiltro`).
+  const CORTE_21HS_MIN = 21 * 60;
+  const ESTADOS_ENTREGA_RUTA = ['Entregado', 'Entregado 2DA visita']; // = ESTADOS_ENTREGA_EFECTIVA de generar_reporte.py
+  const ESTADO_A_RETIRAR_RUTA = 'A retirar'; // = ESTADO_A_RETIRAR de generar_reporte.py — aún no llegó al depósito, no cuenta como "en ruta"
+
+  const stateRuta = {
+    zona: 'global',
+    search: '',
+    sort: { key: 'minEntreEntregas', dir: 'desc' },
+    filtrosCol: {},
+    filas: [],       // filas visibles del render actual (post filtro de zona)
+    todasFilas: [],  // cache de TODOS los choferes de hoy, sin filtrar — se recalcula solo al cambiar de pestaña o tocar "Actualizar"
+    cargado: false,
+  };
+
+  // Columnas filtrables de "Choferes en ruta" (alineadas con los <th> de
+  // #theadChoferesRuta). "Chofer" queda en null — ya tiene el buscador de
+  // texto libre de arriba (#buscarChoferRuta), duplicar el filtro ahí no
+  // suma. Zona/Estado son <select> (valores dinámicos, se completan en
+  // cargarChoferesEnRutaHoy()); el resto son <input> de texto sobre el
+  // valor ya formateado.
+  const COLUMNAS_FILTRO_RUTA = [
+    null,
+    { tipo:'select', campo:'zona', opciones:() => [], todasLabel:'Todas' },
+    { tipo:'select', campo:'estadoLabel', opciones:() => ['Óptimo','A tiempo','Demorado','Sin entregas aún'], todasLabel:'Todos' },
+    { tipo:'texto', campo:'minEntreEntregas', placeholder:'ej. 21' },
+    { tipo:'texto', campo:'horaPrimeraEntregaTxt', placeholder:'ej. 09:2' },
+    { tipo:'texto', campo:'velocidad', placeholder:'ej. 10' },
+    { tipo:'texto', campo:'progresoTxt', placeholder:'ej. 15 de' },
+    { tipo:'texto', campo:'pendientes', placeholder:'ej. 0' },
+  ];
+
+  // Formatea un minuto-del-día (0-1439) como "HH:MM".
+  function fmtHoraDelDia(min){
+    const h = Math.floor(min / 60) % 24, m = Math.round(min % 60);
+    return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+  }
+
+  // "HH:MM" (tal cual se guarda `horaEntrega`) -> minuto del día, o null si
+  // no viene (paquete sin ningún cambio de estado registrado todavía hoy).
+  function horaHHMMaMinutos(str){
+    if(!str) return null;
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(str).trim());
+    if(!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  }
+
+  // Criterio confirmado con soporte (2026-11-11): la demora NO se mide
+  // contra un horario planificado (no existe esa hoja), sino contra el
+  // tiempo que el chofer está tardando ENTRE una entrega y la siguiente —
+  // si se achica el ritmo, está "cayéndose" del horario sin importar
+  // cuántos paquetes tenga asignados.
+  //   Óptimo:    hasta 5 min entre entregas
+  //   A tiempo:  entre 6 y 20 min
+  //   Demorado:  más de 20 min
+  // Con menos de 2 entregas todavía no hay ritmo que medir (recién salió,
+  // o no entregó nada en el día) — estado neutro "Sin entregas aún", no un
+  // falso "Óptimo" por falta de datos.
+  function calcularEstadoRuta(minEntreEntregas){
+    if(minEntreEntregas === null) return { color: 'gris', label: 'Sin entregas aún', orden: 3 };
+    if(minEntreEntregas <= 5) return { color: 'verde', label: 'Óptimo', orden: 0 };
+    if(minEntreEntregas <= 20) return { color: 'amarillo', label: 'A tiempo', orden: 1 };
+    return { color: 'rojo', label: 'Demorado', orden: 2 };
+  }
+
+  // Arma la fila de un chofer a partir de los items de
+  // envios_detalle/<hoy>/choferes/<id> (mismo "item" que ya usa el detalle
+  // de Envíos: tracking/cliente/localidad/zona/estado/horaEntrega).
+  function construirFilaRutaDesdeItems(nombre, items){
+    // "A retirar" = todavía no llegó al depósito, no es parte de la ruta de
+    // hoy de este chofer (mismo criterio que el resto del dashboard,
+    // regla de negocio #1).
+    const asignados = items.filter(it => (it.estado || '') !== ESTADO_A_RETIRAR_RUTA);
+    const entregados = asignados.filter(it => ESTADOS_ENTREGA_RUTA.includes(it.estado));
+
+    const horasEntregas = entregados
+      .map(it => horaHHMMaMinutos(it.horaEntrega))
+      .filter(m => m !== null)
+      .sort((a, b) => a - b);
+
+    let minEntreEntregas = null;
+    if(horasEntregas.length >= 2){
+      let suma = 0;
+      for(let i = 1; i < horasEntregas.length; i++) suma += (horasEntregas[i] - horasEntregas[i - 1]);
+      minEntreEntregas = Math.round((suma / (horasEntregas.length - 1)) * 10) / 10;
+    }
+    const horaPrimeraEntregaMin = horasEntregas.length ? horasEntregas[0] : null;
+    const pendientes = asignados.length - entregados.length;
+    // Paq./hora es la inversa directa del ritmo entre entregas (60 /
+    // minEntreEntregas) — a propósito NO "entregados ÷ horas desde la
+    // primera entrega": ese cálculo diluye el promedio con el tiempo que
+    // el chofer pasa parado después de terminar su hoja de ruta (bug real
+    // encontrado el 2026-11-11 probando esto con datos mockeados, ver
+    // reglas_de_negocio.md sección 18.1).
+    const velocidad = minEntreEntregas ? Math.round((60 / minEntreEntregas) * 10) / 10 : null;
+    const entregadosPre21 = horasEntregas.filter(m => m < CORTE_21HS_MIN).length;
+
+    // Zona del chofer hoy = la más frecuente entre sus paquetes asignados
+    // (un chofer puede tener paquetes de más de una zona en el día).
+    const conteoZonas = {};
+    asignados.forEach(it => {
+      const z = (it.zona || '').trim() || 'Sin zona';
+      conteoZonas[z] = (conteoZonas[z] || 0) + 1;
+    });
+    const zona = Object.keys(conteoZonas).sort((a, b) => conteoZonas[b] - conteoZonas[a])[0] || 'Sin zona';
+
+    const estado = calcularEstadoRuta(minEntreEntregas);
+    return {
+      nombre, zona,
+      asignados: asignados.length, entregados: entregados.length, pendientes,
+      minEntreEntregas, velocidad, horaPrimeraEntregaMin, entregadosPre21,
+      pctProgreso: asignados.length ? (entregados.length / asignados.length) * 100 : 0,
+      estadoColor: estado.color, estadoLabel: estado.label, estadoOrden: estado.orden,
+      // Versiones en texto de columnas que se muestran formateadas, para
+      // poder filtrarlas por substring igual que cualquier otra columna.
+      horaPrimeraEntregaTxt: horaPrimeraEntregaMin === null ? '—' : fmtHoraDelDia(horaPrimeraEntregaMin),
+      progresoTxt: `${entregados.length} de ${asignados.length}`,
+    };
+  }
+
+  // Trae TODOS los choferes con detalle hoy en una sola lectura de
+  // colección (sin saber sus ids de antemano) — mucho más barato que pedir
+  // chofer por chofer como hace cargarDetalleChofer() para la vista de
+  // Envíos. Cachea en stateRuta.todasFilas; `forzar=true` (botón
+  // "Actualizar") vuelve a leer igual.
+  async function cargarChoferesEnRutaHoy(forzar){
+    if(stateRuta.cargado && !forzar) return stateRuta.todasFilas;
+    const hoy = todayISO();
+    const snap = await db.collection('envios_detalle').doc(hoy).collection('choferes').get();
+    const filas = [];
+    snap.forEach(doc => {
+      const data = doc.data() || {};
+      filas.push(construirFilaRutaDesdeItems(data.chofer || doc.id, data.items || []));
+    });
+    stateRuta.todasFilas = filas;
+    stateRuta.cargado = true;
+    return filas;
+  }
+
+  // Reconstruye los chips de zona (#rutaZonaFiltro) a partir de las zonas
+  // que realmente aparecen hoy — "Global" siempre primero y fijo. Si la
+  // zona activa dejó de existir (ej. cambió el día) vuelve a "global".
+  function actualizarChipsZonaRuta(filas){
+    const cont = document.getElementById('rutaZonaFiltro');
+    const zonas = [...new Set(filas.map(f => f.zona))].sort();
+    if(!zonas.includes(stateRuta.zona) && stateRuta.zona !== 'global') stateRuta.zona = 'global';
+    cont.innerHTML = '<button class="chip' + (stateRuta.zona === 'global' ? ' active' : '') + '" data-zona-ruta="global">Global</button>' +
+      zonas.map(z => `<button class="chip${stateRuta.zona === z ? ' active' : ''}" data-zona-ruta="${escapeHtml(z)}">${escapeHtml(z)}</button>`).join('');
+  }
+
+  function renderRutaMiniKpis(filas){
+    const cont = document.getElementById('rutaMiniKpis');
+    if(filas.length === 0){ cont.innerHTML = '<p class="empty-note">Sin choferes en ruta para este filtro.</p>'; return; }
+    const total = filas.length;
+    // "Sin entregas aún" (gris) se saca del % dentro de ritmo y del promedio
+    // de velocidad — todavía no hay ritmo que medir, y contarlos como
+    // "dentro de ritmo" por defecto inflaría el %.
+    const conRitmo = filas.filter(f => f.estadoColor !== 'gris');
+    const demorados = conRitmo.filter(f => f.estadoColor === 'rojo').length;
+    const pctDentroRitmo = conRitmo.length ? ((conRitmo.length - demorados) / conRitmo.length) * 100 : null;
+    const conVelocidad = filas.filter(f => f.velocidad !== null);
+    const velocidadProm = conVelocidad.length ? conVelocidad.reduce((s,f) => s + f.velocidad, 0) / conVelocidad.length : null;
+    const pendientesTotal = filas.reduce((s,f) => s + f.pendientes, 0);
+    const colorPct = pctDentroRitmo === null ? 'gris' : pctDentroRitmo >= 80 ? 'verde' : pctDentroRitmo >= 60 ? 'amarillo' : 'rojo';
+    const tarjetas = [
+      { label: 'Choferes en ruta', valor: fmtNum(total),
+        info: 'Cantidad de choferes que entran en el filtro de zona y búsqueda actual (no el total de la operación).' },
+      { label: '% dentro de ritmo', valor: pctDentroRitmo === null ? '—' : fmtPct(pctDentroRitmo), dot: colorPct,
+        info: 'Porcentaje con estado "Óptimo" o "A tiempo" (hasta 20 min entre una entrega y la siguiente), sobre los choferes que ya tienen al menos 2 entregas (sin contar "Sin entregas aún").' },
+      { label: 'Demorados ahora', valor: fmtNum(demorados), dot: demorados > 0 ? 'rojo' : 'verde',
+        info: 'Choferes en estado "Demorado": más de 20 minutos entre una entrega y la siguiente.' },
+      { label: 'Velocidad promedio', valor: velocidadProm === null ? '—' : velocidadProm.toFixed(1),
+        info: 'Paquetes por hora promedio de los choferes con al menos 2 entregas hoy (60 ÷ minutos entre entregas de cada chofer).' },
+      { label: 'Paquetes pendientes', valor: fmtNum(pendientesTotal),
+        info: 'Suma de paquetes sin entregar de todas las hojas de ruta de este filtro (asignados − entregados).' },
+    ];
+    cont.innerHTML = tarjetas.map(t => `
+      <div class="mini-kpi">
+        <div class="mini-label">
+          <span>${escapeHtml(t.label)}</span>
+          <span class="mini-info" tabindex="0" role="img" aria-label="${escapeHtml(t.info)}">
+            i
+            <span class="mini-tooltip">${escapeHtml(t.info)}</span>
+          </span>
+        </div>
+        <div class="mini-value-row">
+          ${t.dot ? `<span class="mini-dot ${t.dot}"></span>` : ''}
+          <span class="mini-value num">${t.valor}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderRutaAlertas(filas){
+    const cont = document.getElementById('rutaAlertasLista');
+    const demorados = filas.filter(f => f.estadoColor === 'rojo')
+      .slice().sort((a,b) => b.minEntreEntregas - a.minEntreEntregas);
+    if(demorados.length === 0){
+      cont.innerHTML = '<p class="empty-note">Ningún chofer está demorado en este filtro.</p>';
+      return;
+    }
+    cont.innerHTML = demorados.map(f => `
+      <div class="repa-alerta-fila">
+        <span>${escapeHtml(f.nombre)}<span class="repa-alerta-chip-zona">${escapeHtml(f.zona)}</span></span>
+        <span style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+          <span style="color:var(--text-muted); font-size:12px;">${fmtNum(f.entregados)}/${fmtNum(f.asignados)} entregados · faltan ${fmtNum(f.pendientes)}</span>
+          <span class="repa-rag ${f.estadoColor}" style="margin-top:0;"><span class="repa-rag-dot"></span>${escapeHtml(f.estadoLabel)} · ${f.minEntreEntregas.toFixed(1)} min/entrega</span>
+        </span>
+      </div>
+    `).join('');
+  }
+
+  function renderRutaTabla(filas){
+    const texto = stateRuta.search.trim().toLowerCase();
+    const porNombre = texto ? filas.filter(f => f.nombre.toLowerCase().includes(texto)) : filas;
+    const filtradas = aplicarFiltrosColumna(porNombre, COLUMNAS_FILTRO_RUTA, stateRuta.filtrosCol);
+    const ordenadas = ordenarPorClave(filtradas, stateRuta.sort);
+    const tbody = document.getElementById('tbodyChoferesRuta');
+    if(ordenadas.length === 0){
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-note">Sin resultados.</td></tr>';
+    } else {
+      tbody.innerHTML = ordenadas.map(f => {
+        const filaClase = f.estadoColor === 'rojo' ? 'fila-muy-demorado' : f.estadoColor === 'amarillo' ? 'fila-demorado' : '';
+        return `
+        <tr class="${filaClase}">
+          <td>${escapeHtml(f.nombre)}</td>
+          <td>${escapeHtml(f.zona)}</td>
+          <td><span class="repa-rag ${f.estadoColor}" style="margin-top:0;"><span class="repa-rag-dot"></span>${escapeHtml(f.estadoLabel)}</span></td>
+          <td class="num-col">${f.minEntreEntregas === null ? '—' : f.minEntreEntregas.toFixed(1) + ' min'}</td>
+          <td class="num-col hide-mobile">${f.horaPrimeraEntregaTxt}</td>
+          <td class="num-col">${f.velocidad === null ? '—' : f.velocidad.toFixed(1)}</td>
+          <td>
+            <div class="ruta-progreso">
+              <span class="ruta-progreso-txt">${fmtNum(f.entregados)} de ${fmtNum(f.asignados)}</span>
+              <div class="repa-meter ${f.estadoColor}"><div style="width:${f.pctProgreso.toFixed(0)}%;"></div></div>
+            </div>
+          </td>
+          <td class="num-col">
+            <div class="ruta-progreso-txt">Pre 21: ${fmtNum(f.entregadosPre21)}</div>
+            <div class="ruta-progreso-txt" style="${f.pendientes > 0 ? 'color:var(--text); font-weight:600;' : ''}">Faltan: ${fmtNum(f.pendientes)}</div>
+          </td>
+        </tr>
+      `; }).join('');
+    }
+    actualizarIndicadorSort(document.getElementById('theadChoferesRuta'), stateRuta.sort);
+  }
+
+  // Filtra stateRuta.todasFilas (ya cargado) por zona y vuelve a renderizar
+  // todo — NO vuelve a leer Firestore. Es lo que se llama al tocar un chip
+  // de zona, tipear en el buscador, ordenar o filtrar una columna.
+  function aplicarFiltroZonaYRenderRuta(){
+    const filas = stateRuta.zona === 'global'
+      ? stateRuta.todasFilas
+      : stateRuta.todasFilas.filter(f => f.zona === stateRuta.zona);
+    stateRuta.filas = filas;
+    renderRutaMiniKpis(filas);
+    renderRutaAlertas(filas);
+    renderRutaTabla(filas);
+  }
+
+  // Esta sí lee Firestore (o usa el cache si no se pide forzar) — se llama
+  // al entrar a la pestaña y al tocar "Actualizar".
+  async function renderRepartidoresRuta(forzar){
+    const cont = document.getElementById('rutaContent');
+    const vacio = document.getElementById('rutaEmpty');
+    let todasFilas;
+    try{
+      todasFilas = await cargarChoferesEnRutaHoy(forzar);
+    }catch(e){
+      console.error('Error cargando choferes en ruta', e);
+      todasFilas = [];
+    }
+    if(todasFilas.length === 0){
+      cont.hidden = true; vacio.hidden = false;
+      return;
+    }
+    cont.hidden = false; vacio.hidden = true;
+    actualizarChipsZonaRuta(todasFilas);
+    refrescarOpcionesFiltro(
+      document.getElementById('theadChoferesRuta'), stateRuta.filtrosCol, 'zona',
+      [...new Set(todasFilas.map(f => f.zona))].sort(), 'Todas'
+    );
+    aplicarFiltroZonaYRenderRuta();
+  }
+
+  document.getElementById('rutaZonaFiltro').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.chip'); if(!btn) return;
+    stateRuta.zona = btn.dataset.zonaRuta;
+    document.querySelectorAll('#rutaZonaFiltro .chip').forEach(b => b.classList.toggle('active', b === btn));
+    aplicarFiltroZonaYRenderRuta();
+  });
+
+  document.getElementById('buscarChoferRuta').addEventListener('input', (e)=>{
+    stateRuta.search = e.target.value;
+    renderRutaTabla(stateRuta.filas);
+  });
+
+  wireSortableTable(document.getElementById('theadChoferesRuta'), stateRuta.sort, () => renderRutaTabla(stateRuta.filas));
+  crearFilaFiltros(document.getElementById('theadChoferesRuta'), COLUMNAS_FILTRO_RUTA, stateRuta.filtrosCol, () => renderRutaTabla(stateRuta.filas));
 
   // Parser de CSV a mano (sin libreria externa, mismo criterio que el
   // resto del dashboard): soporta campos entre comillas con comas adentro
@@ -1980,7 +2681,22 @@
   // no son datos — confirmado contando 41 columnas totales contra 23 con
   // nombre real).
   function filasAObjetosRepa(csvTexto){
-    const filas = parsearCSV(csvTexto);
+    const todasFilas = parsearCSV(csvTexto);
+    if(todasFilas.length === 0) return [];
+    // Bug real encontrado el 2026-11-11: la hoja "viva" ("Seguimiento
+    // Diario") a veces publica una fila en blanco antes del header real
+    // (una fila de formato/congelada en Sheets que la copia histórica no
+    // tiene) — con header = filas[0] a ciegas, esa fila en blanco se
+    // tomaba como header, TODAS las columnas quedaban sin nombre (el loop
+    // de abajo descarta header vacío), y la planilla entera se leía como 0
+    // filas útiles sin ningún error — "Operación en vivo" mostraba "sin
+    // datos de hoy" con la planilla llena de filas reales. Ahora se busca
+    // la primera fila que tenga "FECHA" o "NOMBRE" entre sus celdas y se
+    // usa esa como header, descartando lo que venga antes (nunca pasa en
+    // la histórica/el roster, que no tienen esa fila extra, así que no
+    // cambia nada para esos dos casos).
+    const idxHeader = todasFilas.findIndex(f => f.some(c => ['FECHA','NOMBRE'].includes((c||'').trim())));
+    const filas = idxHeader === -1 ? todasFilas : todasFilas.slice(idxHeader);
     if(filas.length === 0) return [];
     const header = filas[0];
     // Antes era un índice fijo (f[1]) asumiendo que NOMBRE siempre está en
@@ -2610,8 +3326,16 @@
       80, 60
     );
 
+    const theadHist = document.getElementById('theadRepartidoresHist');
+    refrescarOpcionesFiltro(
+      theadHist, stateRepa.filtrosCol, 'zonaPrincipal',
+      [...new Set(porRepartidor.map(r => r.zonaPrincipal).filter(Boolean))].sort(),
+      'Todas'
+    );
+
     const q = stateRepa.search.trim().toLowerCase();
-    const filtrados = q ? porRepartidor.filter(r => r.nombre.toLowerCase().includes(q)) : porRepartidor;
+    const porNombre = q ? porRepartidor.filter(r => r.nombre.toLowerCase().includes(q)) : porRepartidor;
+    const filtrados = aplicarFiltrosColumna(porNombre, COLUMNAS_FILTRO_REPA_HIST, stateRepa.filtrosCol);
     const ordenados = ordenarPorClave(filtrados, stateRepa.sort);
     document.getElementById('tbodyRepartidores').innerHTML = ordenados.map(r => `
       <tr>
@@ -2630,8 +3354,10 @@
     stateRepa.modo = modo;
     document.querySelectorAll('#repaModoSwitcher .chip').forEach(b => b.classList.toggle('active', b.dataset.modoRepa===modo));
     document.getElementById('repaVivo').hidden = modo !== 'vivo';
+    document.getElementById('repaRuta').hidden = modo !== 'ruta';
     document.getElementById('repaHistorico').hidden = modo !== 'historico';
     if(modo === 'vivo') renderRepartidoresVivo();
+    else if(modo === 'ruta') renderRepartidoresRuta();
     else renderRepartidoresHistorico();
   }
   document.getElementById('repaModoSwitcher').addEventListener('click', (e)=>{
@@ -2695,6 +3421,7 @@
   document.getElementById('rangeEndRepa').addEventListener('change', (e)=>{ stateRepa.rangeEnd = e.target.value; renderRepartidoresHistorico(); });
   document.getElementById('buscarRepartidor').addEventListener('input', (e)=>{ stateRepa.search = e.target.value; renderRepartidoresHistorico(); });
   wireSortableTable(document.getElementById('theadRepartidoresHist'), stateRepa.sort, ()=>{ renderRepartidoresHistorico(); });
+  crearFilaFiltros(document.getElementById('theadRepartidoresHist'), COLUMNAS_FILTRO_REPA_HIST, stateRepa.filtrosCol, ()=>{ renderRepartidoresHistorico(); });
 
   // Pedido 2026-10-24: a lo largo del día se van agregando repartidores a
   // la hoja viva — si la pestaña de Repartidores queda abierta, se
