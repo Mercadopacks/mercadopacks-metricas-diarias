@@ -1,0 +1,53 @@
+name: Build imagen CI (Playwright + LibreOffice + deps)
+
+# Arma y publica en GitHub Container Registry la imagen que usa
+# descarga_diaria.yml como contenedor del job, para no tener que
+# reinstalar Chromium + LibreOffice + las dependencias de Python en cada
+# corrida (ver reglas_de_negocio.md seccion 15). Se dispara sola cuando
+# cambia el Dockerfile o requirements.txt, y tambien se puede correr a
+# mano (workflow_dispatch) si hace falta reconstruirla sin haber tocado
+# ninguno de los dos.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'logistica-metricas/scripts/Dockerfile'
+      - 'logistica-metricas/scripts/requirements.txt'
+      - '.github/workflows/build_imagen_ci.yml'
+  workflow_dispatch: {}
+
+jobs:
+  build-y-publicar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Descargar repo
+        uses: actions/checkout@v4
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login a GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Nombre de imagen en minúscula a propósito (fijo, no interpolado
+      # desde github.repository): GHCR no acepta mayúsculas en el path de
+      # la imagen, y el repo se llama "Mercadopacks/..." con M mayúscula.
+      - name: Build y push de la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: logistica-metricas/scripts
+          file: logistica-metricas/scripts/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/mercadopacks/mercadopacks-metricas-diarias/ci:latest
+            ghcr.io/mercadopacks/mercadopacks-metricas-diarias/ci:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -69,6 +69,22 @@ concurrency:
 jobs:
   descargar-y-publicar:
     runs-on: ubuntu-latest
+    # Imagen con Python + Playwright/Chromium + LibreOffice + las
+    # dependencias de requirements.txt ya instaladas (ver
+    # scripts/Dockerfile y build_imagen_ci.yml, que la reconstruye sola
+    # cuando cambia alguno de los dos) — reglas_de_negocio.md seccion 15.
+    # Reemplaza los 3 pasos de instalacion que antes corrian en cada
+    # corrida ("Configurar Python" / "Instalar LibreOffice" / "Instalar
+    # dependencias"), bajando el tiempo de la corrida de ~2 min a
+    # segundos.
+    container:
+      image: ghcr.io/mercadopacks/mercadopacks-metricas-diarias/ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Descargar repo
         uses: actions/checkout@v4
@@ -98,32 +114,6 @@ jobs:
               echo "saltar=false" >> "$GITHUB_OUTPUT"
             fi
           fi
-
-      - name: Configurar Python
-        if: steps.chequeo.outputs.saltar != 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Instalar LibreOffice (respaldo para .xls con BIFF corrupto)
-        if: steps.chequeo.outputs.saltar != 'true'
-        run: |
-          # "|| true" en el update: el runner de GitHub trae preinstalado el
-          # repo de Google Chrome, que a veces queda con un cache
-          # desincronizado y tira "Hash Sum mismatch" — no tiene nada que
-          # ver con nuestro código ni con libreoffice-calc (viene de los
-          # repos estándar de Ubuntu, que si se actualizan bien). Sin el
-          # "|| true", esa falla de un repo que ni usamos tumbaba todo el
-          # workflow.
-          sudo apt-get update || true
-          sudo apt-get install -y libreoffice-calc
-
-      - name: Instalar dependencias
-        if: steps.chequeo.outputs.saltar != 'true'
-        working-directory: logistica-metricas/scripts
-        run: |
-          pip install -r requirements.txt
-          playwright install --with-deps chromium
 
       # Qué fechas se procesan en esta corrida:
       # - Si viene "fecha" explícita (backfill manual): solo esa, sin
@@ -164,10 +154,10 @@ jobs:
           for FECHA in $FECHAS; do
             echo "=== Procesando $FECHA ==="
             export FECHA_DESCARGA="$FECHA"
-            SALIDA=$(python descargar_lightdata.py)
+            SALIDA=$(python3 descargar_lightdata.py)
             echo "$SALIDA"
             RUTA=$(echo "$SALIDA" | tail -n1 | sed 's/^Archivo descargado: //')
-            python publicar_firestore.py "$RUTA"
+            python3 publicar_firestore.py "$RUTA"
           done
 
       # El .xls crudo (con datos personales de destinatarios) NO se commitea

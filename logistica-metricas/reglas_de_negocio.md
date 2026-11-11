@@ -622,6 +622,57 @@ para un día ya conocido, y comparar el resultado fila por fila contra el
 después de esa validación se cambia `descarga_diaria.yml` para usar este
 script en vez de `descargar_lightdata.py`.
 
+## 15. Imagen Docker de CI para la corrida diaria (2026-11-11)
+
+**Problema que resuelve:** cada corrida de `descarga_diaria.yml` arrancaba
+en una VM de GitHub Actions totalmente vacía y reinstalaba, de cero,
+Chromium + sus dependencias de sistema (`playwright install --with-deps
+chromium`), LibreOffice (`apt-get install libreoffice-calc`) y las
+dependencias de Python (`pip install -r requirements.txt`) — de los ~2
+minutos que tardaba la corrida completa, la mayor parte era instalación,
+no descarga ni procesamiento. Esto no era un problema de costo (repo
+público = Actions gratis e ilimitado), pero sí de tiempo: con el
+concurrency group del workflow (una sola corrida en cola a la vez), ese
+tiempo de instalación limitaba cuán seguido se podía disparar el workflow
+sin perder corridas encoladas (ver changelog 2026-11-07).
+
+**Solución:** una imagen Docker propia, con todo lo de arriba ya
+instalado, publicada en GitHub Container Registry (gratis para repos
+públicos) y reconstruida sola cuando hace falta:
+
+- `scripts/Dockerfile` — parte de la imagen oficial de Microsoft
+  `mcr.microsoft.com/playwright/python:v1.62.0-jammy` (Python + Playwright
+  + Chromium + todas sus dependencias de sistema ya instalados), le suma
+  `libreoffice-calc` (no viene en la imagen base) y corre `pip install -r
+  requirements.txt`. El tag de versión de la imagen base tiene que
+  coincidir con la versión de `playwright` fijada en `requirements.txt`
+  (ambas en `1.62.0`) — si se actualiza una, hay que actualizar la otra.
+- `.github/workflows/build_imagen_ci.yml` — arma y publica la imagen en
+  `ghcr.io/mercadopacks/mercadopacks-metricas-diarias/ci:latest` cuando
+  cambia el Dockerfile o `requirements.txt` (o a mano, por
+  `workflow_dispatch`).
+- `descarga_diaria.yml` ahora corre el job entero dentro de esa imagen
+  (`container: image: ...`) en vez de instalar nada — se sacaron los 3
+  pasos de instalación ("Configurar Python" / "Instalar LibreOffice" /
+  "Instalar dependencias"). El job necesita `permissions: packages: read`
+  y credenciales (`${{ secrets.GITHUB_TOKEN }}`, automático, no es un
+  secret que haya que cargar a mano) para poder bajar la imagen desde
+  GHCR, aunque sea del mismo repo.
+
+**Resultado esperado:** la corrida pasa de ~2 minutos a (en teoría, a
+confirmar con la primera corrida real post-deploy) unos segundos — solo
+el tiempo de bajar la imagen (cacheada entre corridas por el runner),
+loguear en LightData, descargar y procesar. Esto despeja el límite real
+que había para aumentar la frecuencia de refresco del dashboard.
+
+**Pendiente de confirmar en la primera corrida real:** que el usuario
+`python` del contenedor base de Microsoft resuelva bien los paths de
+`actions/checkout` y el resto de las actions estándar dentro de un job
+con `container:` — es un patrón común y documentado de GitHub Actions,
+pero esta es la primera vez que se usa en este repo. Si algo falla,
+revisar los logs de la primera corrida después del próximo push a
+`descarga_diaria.yml`.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -644,3 +695,4 @@ script en vez de `descargar_lightdata.py`.
 | 2026-10-31 | Bug real (sección 13.6): la hoja "viva" de Repartidores cambió de esquema sin avisar — `ASISTE A DEPOSITO (SOPORTE)` pasó a llamarse `ASISTENCIA` y la columna `ALERTADO` quedó sin nombre de columna en el CSV publicado. Asistencia confirmada y Pallet retirado mostraban 0% todo el tiempo (con la cantidad de asignaciones de hoy bien calculada, lo que lo hacía parecer "no muestra datos de hoy") y el Centro de alertas siempre decía "Sin alertas". Sin ningún error de JS — reportado por el usuario a simple vista. Fix: `asisteRepa()` prueba los dos nombres de columna, y la columna de alertas se ubica por posición (siguiente a `ESTADO DEL CHOFER`) en vez de por nombre. |
 | 2026-11-06 | La tarjeta "Entregas Efectivas" (sección 12) suma una sub-sección "Solo Flex de Mercado Libre" con el mismo % y números pero restringidos a envíos Flex (`Origen` = `"ML"` o `"ML TURBO"`, criterio confirmado con el equipo — no hay columna "Flex" explícita en el export). `publicar_firestore.py` agrega un sub-objeto `flex` (`{total, aRetirar, porEstadoHora}`) a cada snapshot diario; el dashboard lo agrega igual que el resto y aplica la misma fórmula de efectividad. Los snapshots publicados antes de este cambio no tienen ese campo, así que muestran "—" hasta que se reprocesen o se acumulen días nuevos. |
 | 2026-11-11 | Sección 14: se escribió `descargar_lightdata_api.py`, una alternativa a la descarga por Playwright usando la API externa de LightData (`POST /externa/consultar-fecha`). Todavía NO está conectada al workflow — el endpoint devuelve "Empresa no habilitada" para la empresa 253 hasta que LightData lo habilite, y faltan validar varios mapeos de campo contra datos reales (ver sección 14). |
+| 2026-11-11 | Sección 15: el workflow de descarga diaria pasó a correr dentro de una imagen Docker propia (`scripts/Dockerfile`, publicada por `build_imagen_ci.yml` en GitHub Container Registry) con Chromium/Playwright, LibreOffice y las dependencias de Python ya instalados, en vez de reinstalar todo eso en cada corrida. Pensado para bajar el tiempo de cada corrida de ~2 min a unos segundos y despejar el límite real que había para aumentar la frecuencia de refresco (el concurrency group del workflow deja solo una corrida en cola a la vez). No depende de que LightData habilite nada — es independiente del punto anterior. |

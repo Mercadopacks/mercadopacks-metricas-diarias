@@ -2,6 +2,6 @@ pandas
 numpy
 openpyxl
 xlrd
-playwright
+playwright==1.62.0
 firebase-admin
 requests
