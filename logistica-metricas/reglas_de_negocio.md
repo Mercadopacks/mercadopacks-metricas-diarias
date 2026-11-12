@@ -1271,6 +1271,48 @@ sesión previa) se concluyó erróneamente que una superposición vista en una
 captura era un artefacto de Playwright, cuando en realidad era este bug
 real.
 
+### 20.7 Bug real (segunda vuelta, mismo día): el offset del header quedaba mal cuando se scrollea la TABLA en vez de la página
+
+El usuario reportó, de nuevo con captura real (en "Choferes en ruta"), que
+el header de columnas seguía viéndose separado de los envíos — "no es una
+cabecera de tabla", con una fila de datos completa asomando por ENCIMA del
+bloque título+header, como si el header flotara en el medio de la tabla en
+vez de pegado arriba.
+
+**Causa real (distinta de 20.6, aunque en la misma zona de código):** el
+offset `--table-head-h` (que el `thead` usa para no quedar tapado por el
+`.table-head` sticky-a-la-página) se calculaba UNA sola vez al cargar la
+página y se daba por hecho que, siempre que el usuario scrollee lo
+suficiente como para que el `thead` necesite ese offset, el
+`.table-head` YA está pegado arriba del todo (ocupando esos mismos
+píxeles). Eso es cierto si el usuario scrollea la PÁGINA — pero no es
+cierto si el usuario scrollea la TABLA directamente (posando el mouse
+sobre la tabla y usando la rueda, el gesto más natural cuando una tabla
+tiene su propio scroll interno por `max-height`): ahí el scroll INTERNO de
+`.table-wrap` arranca antes de que la página haya scrolleado lo suficiente
+como para pegar el título. El `thead` igual reservaba el espacio del título
+(como si ya estuviera pegado), dejando un hueco real donde se veía una fila
+de datos completa de la tabla.
+
+**Fix:** se reemplazó la medición fija por un `IntersectionObserver` con un
+centinela de alto 0 (`.sticky-sentinel`) puesto justo antes de cada
+`.table-head`. Mientras el centinela sigue siendo visible en el viewport,
+`.table-head` todavía NO está pegado (está en su posición normal, más
+abajo) y `--table-head-h` se fuerza a `0px` — así el `thead` se pega
+directo arriba de `.table-wrap`, sin hueco. Recién cuando el centinela sale
+del viewport **por arriba** (`!isIntersecting && boundingClientRect.top <
+0`, para no confundirlo con que la tarjeta entera se scrolleó por abajo),
+`.table-head` pasa a estar realmente pegado y ahí sí se activa el offset
+real (su alto medido). Se autoactualiza con cualquier scroll — de la
+página, de la tabla, o de ambos combinados — sin necesitar un listener de
+scroll aparte ni volver a medir en cada resize.
+
+**Verificado:** con el mismo gesto que reportó el usuario (mouse posado
+sobre la tabla, `page.mouse.wheel` real, no `scrollTop` por JS) sobre
+"Choferes en ruta" con datos reales de Firestore (127 choferes, no
+mockeados) — el header ahora queda pegado directo contra el título sin
+hueco visible en ningún punto del scroll. Smoke test completo sin errores.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1307,4 +1349,5 @@ real.
 | 2026-11-12 | Sección 20.4: bug real en `publicar_firestore.py` (no en el dashboard) — un chofer que perdía todos sus envíos durante el día (reasignados a otro chofer) seguía mostrando en "Seguimiento en ruta" las asignaciones de una corrida anterior, porque `publicar()` nunca borraba el documento de un chofer ausente en la corrida actual. Ahora se borran los documentos de choferes que ya no tienen ningún ítem en la corrida actual de esa fecha. Se autocorrige hacia adelante y en los últimos 3 días (ventana de repaso); fechas más viejas con el dato fantasma necesitan un backfill manual. Se hizo el backfill manual de lunes a jueves de esa semana — verificado que se borró lo fantasma y se mantuvo lo real. |
 | 2026-11-12 | Sección 20.5: tres ajustes de UX pedidos sobre "Seguimiento en ruta" (aplicados a todas las tablas del dashboard por consistencia) — título + buscador de cada tabla quedan fijos al hacer scroll (con un ajuste de offset para que no tapen el header de columnas, que es un sticky aparte); "Demorados ahora" se limita a ~10 filas visibles con scroll propio; y la celda "Faltan: N" de cada chofer ahora es clickeable y abre el detalle de esos envíos puntuales pendientes, mismo patrón que "Detalle de envíos" de la sección 11. |
 | 2026-11-12 | Sección 20.6: bug real reportado por el usuario con capturas — el header de columnas de toda tabla ordenable nunca quedaba sticky de verdad (`thead th[data-key]{position:relative}` pisaba el `sticky`, sección 13.5), mientras la fila de filtros sí lo estaba; al scrollear se cruzaban y el texto se veía superpuesto. Se sacó ese `relative` innecesario y se agregó `--thead-row1-h` para que la fila de filtros se pegue debajo de la de nombres de columna (no en el mismo `top`). De paso, `tbody td:first-child{white-space:nowrap}` para evitar filas más altas de lo normal (nombre + tag "muestra chica" a 2 líneas) que hacían más visible el recorte normal de una fila a mitad de scroll. Verificado con scroll real de mouse wheel (no solo geometría) — la sesión anterior había descartado por error esta misma superposición como "artefacto de Playwright"; no lo era. |
+| 2026-11-12 | Sección 20.7: segundo bug real reportado por el usuario el mismo día, también con captura — el header de columnas seguía viéndose "separado" del header de título en "Choferes en ruta" (una fila de datos asomaba por encima). Causa: `--table-head-h` se calculaba una sola vez asumiendo que el título siempre está pegado arriba cuando el `thead` lo necesita, cierto solo si se scrollea la página, no si se scrollea la tabla directamente (el gesto real del usuario). Se reemplazó por un `IntersectionObserver` con un centinela que detecta el momento real en que el título queda pegado, y solo ahí activa el offset. Verificado con scroll real de mouse wheel sobre datos reales (127 choferes). |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |

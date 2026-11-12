@@ -346,6 +346,10 @@
      margen negativo + padding "estira" el sticky al ancho completo de la
      tarjeta (si no, quedaría con el padding de .table-card sin cubrir a
      los costados al pegarse). */
+  /* Centinela de altura 0 para detectar (vía IntersectionObserver, en JS)
+     el momento real en que .table-head queda pegado arriba del viewport —
+     ver configurarStickySentinels(). No debe ocupar espacio ni ser visible. */
+  .sticky-sentinel{ height:0; margin:0; padding:0; border:0; }
   .table-head{
     display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
     position:sticky; top:0; z-index:15; background:var(--panel);
@@ -2224,30 +2228,21 @@
     return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // Mide el alto real de cada .table-head (título + buscador, sticky desde
-  // el 2026-11-12) y lo guarda en --table-head-h de su .table-card, para
-  // que el thead de esa tabla (sticky aparte, relativo a .table-wrap) se
-  // pegue justo debajo en vez de quedar tapado. También mide la fila de
-  // encabezados (labels ordenables) y la guarda en --thead-row1-h, para que
-  // la fila de filtros por columna (también sticky, cuando existe) se pegue
-  // DEBAJO de esa fila en vez de en el mismo top — si no, ambas filas
-  // quedaban "pegadas" en el mismo lugar y el texto de una se mezclaba con
-  // el de la otra (y con la primera fila del body) al scrollear la tabla
-  // (bug real reportado por captura el 2026-11-12, no un artefacto de
-  // Playwright). Se vuelve a correr en resize (el buscador puede pasar a
-  // otra línea en pantallas angostas) y cada vez que algo con `hidden`
-  // cambia en la página (una tarjeta oculta mide 0 — hay que remedirla
-  // recién cuando se muestra), y también justo después de armar la fila de
-  // filtros de cada tabla (crearFilaFiltros), porque recién ahí existen las
-  // dos filas del thead para medir.
+  // Mide la fila de encabezados (labels ordenables) de cada tabla y la
+  // guarda en --thead-row1-h de su .table-card, para que la fila de
+  // filtros por columna (también sticky, cuando existe) se pegue DEBAJO de
+  // esa fila en vez de en el mismo top — si no, ambas quedaban "pegadas" en
+  // el mismo lugar y el texto de una se mezclaba con el de la otra (bug
+  // real reportado por captura el 2026-11-12). Se vuelve a correr cada vez
+  // que algo con `hidden` cambia en la página (una tarjeta oculta mide 0 —
+  // hay que remedirla recién cuando se muestra) y justo después de armar la
+  // fila de filtros de cada tabla (crearFilaFiltros), porque recién ahí
+  // existen las dos filas del thead para medir. Esta parte NO depende del
+  // scroll (el alto de la fila es siempre el mismo), a diferencia de
+  // --table-head-h — ver configurarStickySentinels() más abajo.
   function ajustarOffsetTheadSticky(){
     document.querySelectorAll('.table-card').forEach(card => {
       if(card.hidden) return;
-      const head = card.querySelector(':scope > .table-head');
-      if(head){
-        const h = head.offsetHeight;
-        if(h > 0) card.style.setProperty('--table-head-h', h + 'px');
-      }
       const filaRotulos = card.querySelector('thead tr:first-child');
       if(filaRotulos){
         const h1 = filaRotulos.offsetHeight;
@@ -2258,6 +2253,44 @@
   window.addEventListener('load', ajustarOffsetTheadSticky);
   window.addEventListener('resize', ajustarOffsetTheadSticky);
   new MutationObserver(ajustarOffsetTheadSticky)
+    .observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+
+  // --table-head-h (el alto que el thead de la tabla tiene que "regalarle"
+  // al título+buscador para no quedar tapado) solo tiene sentido MIENTRAS
+  // el título+buscador esté realmente pegado arriba del viewport (scroll de
+  // PÁGINA). Si en cambio el usuario scrollea la tabla en sí (la rueda del
+  // mouse sobre la tabla dispara el scroll INTERNO de `.table-wrap` antes
+  // de que la página haya scrolleado lo suficiente como para pegar el
+  // título), el título sigue viéndose en su lugar normal, más abajo — y
+  // reservarle espacio igual dejaba un hueco donde se veía (mal) una fila
+  // de datos de la tabla por encima del header de columnas (bug real
+  // reportado por captura el 2026-11-12, con scroll real de mouse wheel
+  // sobre la tabla). Un `IntersectionObserver` con un "centinela" de alto 0
+  // justo antes del título detecta el momento exacto en que pasa a estar
+  // realmente pegado (el centinela sale del viewport por arriba) y recién
+  // ahí activa el offset — se autoactualiza solo con cualquier scroll o
+  // cambio de layout, sin necesidad de medir en load/resize aparte.
+  function configurarStickySentinels(){
+    document.querySelectorAll('.table-card').forEach(card => {
+      if(card.dataset.stickySentinelListo) return;
+      const head = card.querySelector(':scope > .table-head');
+      if(!head) return;
+      card.dataset.stickySentinelListo = '1';
+      const sentinel = document.createElement('div');
+      sentinel.className = 'sticky-sentinel';
+      sentinel.setAttribute('aria-hidden', 'true');
+      head.before(sentinel);
+      new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          const pegado = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+          const h = head.offsetHeight;
+          card.style.setProperty('--table-head-h', (pegado && h > 0) ? h + 'px' : '0px');
+        });
+      }, { threshold: 0 }).observe(sentinel);
+    });
+  }
+  window.addEventListener('load', configurarStickySentinels);
+  new MutationObserver(configurarStickySentinels)
     .observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
 
   function setStatus(fresh){
