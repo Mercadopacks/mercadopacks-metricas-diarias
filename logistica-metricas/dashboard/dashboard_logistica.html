@@ -369,7 +369,8 @@
      header ordenable — para acotar ademas de ordenar. No es sticky (solo
      el header de arriba lo es) para no competir por el mismo top:0. */
   tr.fila-filtros th{
-    position:static; top:auto; cursor:default; background:var(--panel-2);
+    position:sticky; top:calc(var(--table-head-h, 0px) + var(--thead-row1-h, 0px));
+    z-index:9; cursor:default; background:var(--panel-2);
     padding:6px 8px 10px; border-bottom:1px solid var(--border);
   }
   input.col-filtro{
@@ -419,7 +420,7 @@
      sticky de arriba (agregado 2026-11-12) lo tapa por completo al
      scrollear, porque son dos stickies en contextos de scroll distintos
      (uno pegado a la página, el otro a .table-wrap). */
-  .table-card{ --table-head-h: 0px; }
+  .table-card{ --table-head-h: 0px; --thead-row1-h: 0px; }
   thead th{
     position:sticky; top:var(--table-head-h, 0px); background:var(--panel); z-index:10;
     text-align:left; color:var(--text-muted); font-weight:600; font-size:12.5px; letter-spacing:0.02em;
@@ -428,12 +429,26 @@
   }
   thead th:hover, thead th:focus-visible{ color:var(--text); background:var(--panel-2); }
   thead th.num-col, td.num-col{ text-align:right; }
-  thead th[data-key]{ position:relative; }
+  /* ::after (flechita de orden) solo necesita que el th NO sea
+     position:static para posicionarse — "sticky" ya cumple eso, así que no
+     hace falta forzar "relative" acá. Antes SÍ se forzaba a "relative" y
+     eso pisaba el "sticky" de la regla de arriba (mayor especificidad:
+     "thead th[data-key]" > "thead th"), dejando el header de columnas SIN
+     pegar mientras la fila de filtros de abajo sí quedaba pegada — las dos
+     se cruzaban y el texto se superponía al hacer scroll (bug real
+     reportado por captura el 2026-11-12). */
   thead th[data-key]::after{ content:'↕'; display:inline-block; margin-left:5px; font-size:10px; opacity:.35; }
   thead th[data-key].th-sort-asc::after{ content:'▲'; opacity:1; color:var(--gold); }
   thead th[data-key].th-sort-desc::after{ content:'▼'; opacity:1; color:var(--gold); }
   thead th:not([data-key]){ cursor:default; }
   tbody td{ padding:10px 12px; border-bottom:1px solid var(--border); color:var(--text); }
+  /* La primera columna (nombre/tracking) no debe wrappear a 2 líneas: una
+     fila más alta que el resto (ej. "Nombre Largo" + el tag "muestra
+     chica" quedando en su propio renglón) se nota mucho más al scrollear
+     bajo el header sticky (asoma un fragmento recortado de esa fila justo
+     debajo del header, se ve como texto "roto" — detectado el 2026-11-12
+     haciendo scroll real con mouse wheel sobre "Ranking de choferes"). */
+  tbody td:first-child{ white-space:nowrap; }
   tbody tr:hover{ background:rgba(246,190,5,.08); }
   tbody tr.clickable{ cursor:pointer; transition:background .15s; }
   tbody tr.clickable:focus-within{ outline:2px solid var(--gold); outline-offset:-2px; }
@@ -1082,6 +1097,9 @@
       fila.appendChild(th);
     });
     thead.appendChild(fila);
+    // Recién acá existen las dos filas del thead para medir — ver el
+    // comentario de ajustarOffsetTheadSticky() para el porqué.
+    if(typeof ajustarOffsetTheadSticky === 'function') ajustarOffsetTheadSticky();
   }
 
   // Combo custom para una columna de tipo 'select'. Devuelve el
@@ -2209,17 +2227,32 @@
   // Mide el alto real de cada .table-head (título + buscador, sticky desde
   // el 2026-11-12) y lo guarda en --table-head-h de su .table-card, para
   // que el thead de esa tabla (sticky aparte, relativo a .table-wrap) se
-  // pegue justo debajo en vez de quedar tapado. Se vuelve a correr en
-  // resize (el buscador puede pasar a otra línea en pantallas angostas) y
-  // cada vez que algo con `hidden` cambia en la página (una tarjeta oculta
-  // mide 0 — hay que remedirla recién cuando se muestra).
+  // pegue justo debajo en vez de quedar tapado. También mide la fila de
+  // encabezados (labels ordenables) y la guarda en --thead-row1-h, para que
+  // la fila de filtros por columna (también sticky, cuando existe) se pegue
+  // DEBAJO de esa fila en vez de en el mismo top — si no, ambas filas
+  // quedaban "pegadas" en el mismo lugar y el texto de una se mezclaba con
+  // el de la otra (y con la primera fila del body) al scrollear la tabla
+  // (bug real reportado por captura el 2026-11-12, no un artefacto de
+  // Playwright). Se vuelve a correr en resize (el buscador puede pasar a
+  // otra línea en pantallas angostas) y cada vez que algo con `hidden`
+  // cambia en la página (una tarjeta oculta mide 0 — hay que remedirla
+  // recién cuando se muestra), y también justo después de armar la fila de
+  // filtros de cada tabla (crearFilaFiltros), porque recién ahí existen las
+  // dos filas del thead para medir.
   function ajustarOffsetTheadSticky(){
     document.querySelectorAll('.table-card').forEach(card => {
       if(card.hidden) return;
       const head = card.querySelector(':scope > .table-head');
-      if(!head) return;
-      const h = head.offsetHeight;
-      if(h > 0) card.style.setProperty('--table-head-h', h + 'px');
+      if(head){
+        const h = head.offsetHeight;
+        if(h > 0) card.style.setProperty('--table-head-h', h + 'px');
+      }
+      const filaRotulos = card.querySelector('thead tr:first-child');
+      if(filaRotulos){
+        const h1 = filaRotulos.offsetHeight;
+        if(h1 > 0) card.style.setProperty('--thead-row1-h', h1 + 'px');
+      }
     });
   }
   window.addEventListener('load', ajustarOffsetTheadSticky);

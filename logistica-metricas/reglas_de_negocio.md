@@ -1200,6 +1200,77 @@ Pedidos explícitos del usuario tras usar la pantalla con datos reales:
    cambiar de fecha (el detalle de una fecha vieja ya no tiene sentido
    tras cargar otra).
 
+### 20.6 Bug real: el header de columnas de TODAS las tablas ordenables nunca llegó a quedar sticky (2026-11-12, mismo día)
+
+El usuario reportó, con capturas de la pantalla real (no de una prueba), que
+después del punto 20.5 el header de "Choferes en ruta" se veía roto al
+scrollear: texto de una fila de datos superpuesto, mezclado, con la fila de
+filtros por columna.
+
+**Causa real:** la regla `thead th[data-key]{ position:relative; }`
+(agregada mucho antes, sección 13.5, solo para que la flechita de orden
+`::after` tuviera un contenedor posicionado) tiene más especificidad que
+`thead th{ position:sticky; ... }`, así que GANA y pisa el `sticky` en
+CUALQUIER columna ordenable — es decir, en la práctica, en casi todas las
+columnas de casi todas las tablas del dashboard. Resultado real: la fila de
+**filtros** (`tr.fila-filtros`, sin `[data-key]`) sí quedaba sticky, pero la
+fila de **nombres de columna** (con `[data-key]` en casi todas sus celdas)
+quedaba `position:relative`, es decir NO sticky — scrolleaba junto con los
+datos, cruzándose con la fila de filtros (que sí estaba fija) y con las
+filas de la tabla. Esto afectaba a TODO el dashboard desde que existen
+columnas ordenables (sección 13.5, 2026-10-24), no solo a "Seguimiento en
+ruta" — simplemente no se había notado antes porque recién el 20.5 agregó
+el sticky de página que hizo que el usuario se quedara mirando el header
+mientras scrolleaba.
+
+**Fix:** se sacó el `position:relative` de esa regla — `position:sticky` ya
+alcanza para que el `::after` tenga dónde posicionarse (cualquier valor de
+`position` que no sea `static` sirve), así que no hacía falta forzarlo a
+`relative` y pisar el sticky de la regla general.
+
+Para que la fila de filtros (que sí es sticky, `tr.fila-filtros th`) quede
+**debajo** de la fila de nombres de columna (también sticky) en vez de en
+el mismo `top`, se agregó una segunda variable CSS, `--thead-row1-h`
+(alto real de la primera fila del `thead`, medida por la misma función
+`ajustarOffsetTheadSticky()` del punto 20.5, extendida para esto), y el
+`top` de la fila de filtros pasó a ser `calc(var(--table-head-h) +
+var(--thead-row1-h))`.
+
+**Mejora de paso:** se encontró, probando con scroll real de mouse wheel
+(no solo mediciones de geometría), que una fila cuyo nombre + el tag
+"muestra chica" wrappeaba a 2 líneas quedaba casi el doble de alta que el
+resto — al estar en la frontera exacta del scroll, un fragmento recortado
+de esa fila quedaba asomando debajo del header fijo, con pinta de texto
+roto (aunque la causa estructural ya estuviera arreglada). Se agregó
+`tbody td:first-child{ white-space:nowrap; }` para que la primera columna
+(nombre/tracking) nunca wrappee, manteniendo las filas a una altura
+uniforme.
+
+**Verificado:** con Playwright, simulando scroll real con la rueda del
+mouse (`page.mouse.wheel`, no solo `scrollTop` por JS) sobre "Ranking de
+choferes" (la tabla con más filas de prueba disponibles), comparando
+capturas de pantalla antes/después del fix — la superposición de texto
+visible en las capturas del usuario no se reproduce más; a lo sumo, en una
+posición de scroll exacta "a mitad de fila", se ve un hairline de 1-2px
+(normal en cualquier tabla con header sticky, invisible en scroll continuo
+real). Smoke test completo de todas las pestañas sin errores de consola.
+
+**Regla de proceso agregada explícitamente por el usuario:** antes de subir
+cualquier cambio visual, hay que probarlo con una mirada de QA de
+UX/UI — no alcanza con verificar que la geometría calculada da el
+resultado esperado en abstracto (eso fue lo que falló en 20.5: medir con
+`getBoundingClientRect()` y dar por buena una conclusión sin haber
+reproducido el gesto real de un usuario scrolleando con la rueda del
+mouse). Antes de cada publish: (1) reproducir el caso con el mismo gesto
+que usaría una persona real (scroll con rueda, no solo `scrollTop` por
+JS), (2) sacar una captura de pantalla real del resultado y mirarla, no
+solo confiar en números, (3) si algo se ve raro en la captura, no
+descartarlo como "artefacto de la herramienta" sin antes probar con un
+gesto de usuario real — la vez anterior (sección "Current Work" de la
+sesión previa) se concluyó erróneamente que una superposición vista en una
+captura era un artefacto de Playwright, cuando en realidad era este bug
+real.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1235,4 +1306,5 @@ Pedidos explícitos del usuario tras usar la pantalla con datos reales:
 | 2026-11-12 | Se agregaron Zárate y Campana a `ZONA_POR_LOCALIDAD` (Zona Norte, confirmado por el usuario) — eran los 2 choferes que seguían quedando en "Sin zona" tras el fix anterior. Con esto, 0 de 131 choferes reales del 2026-11-11 quedan sin zona. |
 | 2026-11-12 | Sección 20.4: bug real en `publicar_firestore.py` (no en el dashboard) — un chofer que perdía todos sus envíos durante el día (reasignados a otro chofer) seguía mostrando en "Seguimiento en ruta" las asignaciones de una corrida anterior, porque `publicar()` nunca borraba el documento de un chofer ausente en la corrida actual. Ahora se borran los documentos de choferes que ya no tienen ningún ítem en la corrida actual de esa fecha. Se autocorrige hacia adelante y en los últimos 3 días (ventana de repaso); fechas más viejas con el dato fantasma necesitan un backfill manual. Se hizo el backfill manual de lunes a jueves de esa semana — verificado que se borró lo fantasma y se mantuvo lo real. |
 | 2026-11-12 | Sección 20.5: tres ajustes de UX pedidos sobre "Seguimiento en ruta" (aplicados a todas las tablas del dashboard por consistencia) — título + buscador de cada tabla quedan fijos al hacer scroll (con un ajuste de offset para que no tapen el header de columnas, que es un sticky aparte); "Demorados ahora" se limita a ~10 filas visibles con scroll propio; y la celda "Faltan: N" de cada chofer ahora es clickeable y abre el detalle de esos envíos puntuales pendientes, mismo patrón que "Detalle de envíos" de la sección 11. |
+| 2026-11-12 | Sección 20.6: bug real reportado por el usuario con capturas — el header de columnas de toda tabla ordenable nunca quedaba sticky de verdad (`thead th[data-key]{position:relative}` pisaba el `sticky`, sección 13.5), mientras la fila de filtros sí lo estaba; al scrollear se cruzaban y el texto se veía superpuesto. Se sacó ese `relative` innecesario y se agregó `--thead-row1-h` para que la fila de filtros se pegue debajo de la de nombres de columna (no en el mismo `top`). De paso, `tbody td:first-child{white-space:nowrap}` para evitar filas más altas de lo normal (nombre + tag "muestra chica" a 2 líneas) que hacían más visible el recorte normal de una fila a mitad de scroll. Verificado con scroll real de mouse wheel (no solo geometría) — la sesión anterior había descartado por error esta misma superposición como "artefacto de Playwright"; no lo era. |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
