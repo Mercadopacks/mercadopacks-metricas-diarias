@@ -2624,12 +2624,25 @@
     // (un chofer puede tener paquetes de más de una zona en el día),
     // clasificando cada paquete por su LOCALIDAD (no por el campo "Zona"
     // de LightData — ver nota arriba de ZONA_POR_LOCALIDAD).
+    //
+    // Bug real reportado el 2026-11-12: LightData a veces no trae la
+    // localidad de algún paquete puntual (viene vacía), y esos paquetes
+    // sin dato se contaban como "Sin zona" igual que uno realmente no
+    // reconocido — si un chofer tenía varios paquetes así, "Sin zona"
+    // podía ganarle a la zona real por cantidad, aunque el resto de sus
+    // paquetes sí tuvieran localidad reconocida. Ahora "Sin zona" se
+    // ignora al elegir la más frecuente — gana la zona real con más
+    // paquetes aunque sea minoría frente a los "sin dato" — y solo se usa
+    // como resultado si NINGÚN paquete del chofer tiene zona reconocible.
     const conteoZonas = {};
     asignados.forEach(it => {
       const z = zonaPorLocalidad(it.localidad);
       conteoZonas[z] = (conteoZonas[z] || 0) + 1;
     });
-    const zona = Object.keys(conteoZonas).sort((a, b) => conteoZonas[b] - conteoZonas[a])[0] || 'Sin zona';
+    const zonasReconocidas = Object.keys(conteoZonas).filter(z => z !== 'Sin zona');
+    const zona = zonasReconocidas.length
+      ? zonasReconocidas.sort((a, b) => conteoZonas[b] - conteoZonas[a])[0]
+      : 'Sin zona';
 
     const estado = calcularEstadoRuta(minEntreEntregas);
     return {

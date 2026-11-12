@@ -1091,6 +1091,26 @@ asignando `stateRuta.todasFilas = todasFilas` antes de aplicar el filtro
 de zona. Verificado con Playwright contra "Ayer" (131 choferes reales)
 y una fecha elegida a mano, dos días atrás (137 choferes reales).
 
+### 20.3 Bug real: "Sin zona" ganaba por paquetes sin localidad (2026-11-12, mismo día)
+
+Reportado por el usuario: choferes que claramente reparten en una zona
+reconocida aparecían como "Sin zona". Causa: LightData a veces no trae
+la `Localidad` de algún paquete puntual (viene vacía) — y
+`zonaPorLocalidad('')` devuelve `'Sin zona'` igual que una localidad
+realmente no reconocida. En `construirFilaRutaDesdeItems()`, la zona del
+chofer se elige por mayoría entre TODOS sus paquetes asignados — si
+tenía varios paquetes sin ese dato, `"Sin zona"` podía juntar más votos
+que la zona real, aunque el resto de sus paquetes sí tuvieran localidad
+reconocida.
+
+**Fix:** al elegir la zona más frecuente del chofer, `"Sin zona"` ahora
+se ignora como candidata — gana la zona real con más paquetes, sea cual
+sea su cantidad frente a los paquetes sin dato. Solo se devuelve `"Sin
+zona"` cuando NINGÚN paquete del chofer tiene una zona reconocible (ni
+por localidad vacía, ni por localidad no mapeada). Verificado con datos
+reales del 2026-11-11: "Sin zona" bajó de varios choferes a solo 2 de
+131 (los que de verdad no tienen ningún paquete clasificable).
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1122,4 +1142,5 @@ y una fecha elegida a mano, dos días atrás (137 choferes reales).
 | 2026-11-11 | Sección 19.4: se reemplazó el mapa de localidades de 19.3 (armado contra lo visto un día puntual) por el listado completo y oficial que mandó el equipo, por partido y por cordón (1/2/3) — CABA 100% de barrios, Norte/Sur/Oeste con todas sus localidades principales. Cobertura verificada de nuevo: 4 de 122 choferes (3.3%) en "Sin zona". Única ambigüedad: "Villa Bosch" figuraba en el listado bajo dos partidos (San Martín y Tres de Febrero); se resolvió a Zona Norte (San Martín) por ser su partido administrativo real. |
 | 2026-11-12 | Sección 20.1: otro bug real en "Operación en vivo"/"Histórico" (causa distinta de 19.1) — alguien tipeó los datos de un chofer directo en la fila de header de "Seguimiento Diario", pisando FECHA/NOMBRE/TIPO DE VEHICULO/TURNO. `filasAObjetosRepa()` ahora reconoce ese caso por otros fragmentos de columna que quedaron intactos (ESTADO DEL CHOFER, etc.) y usa un header fijo hardcodeado en vez de intentar leerlo de la hoja. |
 | 2026-11-12 | Sección 20.2: "Seguimiento en ruta" ahora deja ver el historial día por día (antes solo mostraba "hoy") — chips Hoy/Ayer/Elegir fecha…, leyendo `envios_detalle/<fecha>/choferes` de la fecha elegida, con cache por fecha para no releer Firestore al ir y volver. De paso se encontró y corrigió, antes de subir, un bug real propio de este cambio: el filtro de zona quedó leyendo una variable que ya no se actualizaba, mostrando "0 choferes" en cualquier fecha que no fuera la primera cargada. |
+| 2026-11-12 | Sección 20.3: bug real reportado por el usuario — choferes con paquetes en una zona reconocida igual aparecían como "Sin zona", porque LightData a veces no trae la `Localidad` de algún paquete puntual, y esos paquetes sin dato competían por mayoría contra la zona real. Ahora "Sin zona" se ignora al elegir la zona más votada del chofer; solo gana si NINGÚN paquete tiene zona reconocible. Verificado: "Sin zona" bajó a 2 de 131 choferes reales. |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
