@@ -1117,6 +1117,43 @@ partido (sección 19.4). Confirmado por el usuario: van a **Zona
 Norte**. Agregadas a `ZONA_POR_LOCALIDAD`; con esto, "Sin zona" bajó a
 0 de 131 choferes reales del 2026-11-11.
 
+### 20.4 Bug real en `publicar_firestore.py`: choferes con asignaciones "fantasma" (2026-11-12)
+
+Reportado por el usuario: "Leyderman Martinez" y "Adriano Tovani"
+aparecían en "Seguimiento en ruta" con paquetes asignados (14 y otro
+número) y 0 entregados, pero al consultar LightData directamente no
+tenían nada asignado ese día. Hipótesis del usuario, correcta: sus
+envíos se habían reasignado a otro chofer durante el día.
+
+**Causa real**, en `publicar_firestore.py` (no en el dashboard):
+`publicar()` escribe un documento `envios_detalle/<fecha>/choferes/<id>`
+por cada chofer que aparece en la corrida ACTUAL, pero nunca tocaba (ni
+borraba) el documento de un chofer que en una corrida anterior tenía
+envíos y después los perdió — como la corrida de las 20:00 ART no
+vuelve a ver a ese chofer entre las claves de `detalle[fecha]` (tiene 0
+filas), simplemente lo salteaba, y su documento quedaba para siempre
+con la foto de la corrida vieja (ej. la de las 11:00, cuando sí tenía
+14 envíos asignados). Como "Seguimiento en ruta" lee esa colección
+completa sin filtrar por si el documento es reciente, mostraba esas
+asignaciones fantasma como si fueran reales.
+
+**Fix:** `publicar()` ahora arma `choferes_actuales` (el set de todos
+los choferes con al menos un ítem en la corrida actual para esa fecha)
+y, después de escribir sus documentos, recorre TODOS los documentos
+existentes en `envios_detalle/<fecha>/choferes` y borra cualquiera que
+no esté en `choferes_actuales` — `detalle[fecha]` es la verdad completa
+y actual de esa fecha en el momento en que se reprocesa (el export se
+vuelve a bajar entero, no es incremental), así que un chofer ausente
+ahí genuinamente ya no tiene nada asignado ese día.
+
+**Alcance de la corrección**: se autocorrige solo en los próximos días
+hacia adelante, y en los últimos 3 días hacia atrás cada vez que corre
+el cierre de las 00hs (la "ventana de repaso" de la regla #5 ya
+reprocesa esos días igual). Para fechas más viejas que ya tienen
+documentos fantasma y que no van a volver a reprocesarse solas, hace
+falta un backfill manual (volver a correr `descarga_diaria.yml` con
+`fecha` puntual para ese día) para que se limpien.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1150,4 +1187,5 @@ Norte**. Agregadas a `ZONA_POR_LOCALIDAD`; con esto, "Sin zona" bajó a
 | 2026-11-12 | Sección 20.2: "Seguimiento en ruta" ahora deja ver el historial día por día (antes solo mostraba "hoy") — chips Hoy/Ayer/Elegir fecha…, leyendo `envios_detalle/<fecha>/choferes` de la fecha elegida, con cache por fecha para no releer Firestore al ir y volver. De paso se encontró y corrigió, antes de subir, un bug real propio de este cambio: el filtro de zona quedó leyendo una variable que ya no se actualizaba, mostrando "0 choferes" en cualquier fecha que no fuera la primera cargada. |
 | 2026-11-12 | Sección 20.3: bug real reportado por el usuario — choferes con paquetes en una zona reconocida igual aparecían como "Sin zona", porque LightData a veces no trae la `Localidad` de algún paquete puntual, y esos paquetes sin dato competían por mayoría contra la zona real. Ahora "Sin zona" se ignora al elegir la zona más votada del chofer; solo gana si NINGÚN paquete tiene zona reconocible. Verificado: "Sin zona" bajó a 2 de 131 choferes reales. |
 | 2026-11-12 | Se agregaron Zárate y Campana a `ZONA_POR_LOCALIDAD` (Zona Norte, confirmado por el usuario) — eran los 2 choferes que seguían quedando en "Sin zona" tras el fix anterior. Con esto, 0 de 131 choferes reales del 2026-11-11 quedan sin zona. |
+| 2026-11-12 | Sección 20.4: bug real en `publicar_firestore.py` (no en el dashboard) — un chofer que perdía todos sus envíos durante el día (reasignados a otro chofer) seguía mostrando en "Seguimiento en ruta" las asignaciones de una corrida anterior, porque `publicar()` nunca borraba el documento de un chofer ausente en la corrida actual. Ahora se borran los documentos de choferes que ya no tienen ningún ítem en la corrida actual de esa fecha. Se autocorrige hacia adelante y en los últimos 3 días (ventana de repaso); fechas más viejas con el dato fantasma necesitan un backfill manual. |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |

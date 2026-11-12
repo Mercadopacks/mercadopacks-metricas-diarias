@@ -257,11 +257,32 @@ def publicar(snapshots: dict, sa_json: str, detalle: dict | None = None):
     # un día (ventana de repaso), el detalle también queda actualizado.
     if detalle:
         for fecha, por_chofer in detalle.items():
+            choferes_actuales = set()
             for cadete, items in por_chofer.items():
                 doc_id = sanitizar_id_chofer(cadete)
+                choferes_actuales.add(doc_id)
                 db.collection("envios_detalle").document(fecha) \
                     .collection("choferes").document(doc_id) \
                     .set({"chofer": cadete, "fecha": fecha, "items": items})
+
+            # Bug real reportado el 2026-11-12 ("Seguimiento en ruta"
+            # mostraba choferes con paquetes asignados que en LightData ya
+            # no tenían nada): un chofer que en una corrida anterior tenía
+            # envíos asignados y después los perdió (reasignados a otro
+            # chofer durante el día) dejaba de aparecer como key en
+            # `detalle[fecha]` — su documento viejo nunca se tocaba de
+            # nuevo y quedaba para siempre con la foto de la corrida vieja,
+            # mostrando asignaciones que ya no existen. Se borran acá los
+            # documentos de choferes que YA NO tienen ningún ítem en esta
+            # fecha según la corrida actual — `detalle[fecha]` es la
+            # verdad completa y actual de esa fecha en el momento en que
+            # se la reprocesa (el export se vuelve a bajar entero), así
+            # que cualquier chofer que no esté en `choferes_actuales` es
+            # porque genuinamente ya no tiene nada asignado ese día.
+            coleccion_choferes = db.collection("envios_detalle").document(fecha).collection("choferes")
+            for doc in coleccion_choferes.stream():
+                if doc.id not in choferes_actuales:
+                    doc.reference.delete()
 
 
 def main():
