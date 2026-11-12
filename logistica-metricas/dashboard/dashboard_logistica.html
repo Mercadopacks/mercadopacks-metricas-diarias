@@ -732,9 +732,23 @@
          Google Sheets ni de asistencia/roster. -->
     <div id="repaRuta" hidden>
 
+      <div class="controls">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <div class="chips" id="rutaFechaFiltro">
+            <button class="chip active" data-fecha-ruta="hoy">Hoy</button>
+            <button class="chip" data-fecha-ruta="ayer">Ayer</button>
+            <button class="chip" data-fecha-ruta="elegir">Elegir fecha…</button>
+          </div>
+          <div class="range-inputs" id="rutaFechaInputWrap">
+            <label for="rutaFechaInput" class="sr-only">Fecha</label>
+            <input type="date" id="rutaFechaInput" aria-label="Fecha a mostrar" />
+          </div>
+        </div>
+      </div>
+
       <div class="empty-state" id="rutaEmpty" hidden>
-        <h2>Todavía no hay datos de hoy</h2>
-        <p>La corrida intradía recién va a publicar el primer detalle del día a las 11hs ART — si ya pasó esa hora, puede ser un día no operativo (domingo) o que la corrida de las 00hs todavía no cerró "ayer".</p>
+        <h2>Todavía no hay datos para esa fecha</h2>
+        <p id="rutaEmptyTexto">La corrida intradía recién va a publicar el primer detalle del día a las 11hs ART — si ya pasó esa hora, puede ser un día no operativo (domingo) o que la corrida de las 00hs todavía no cerró "ayer".</p>
       </div>
 
       <div id="rutaContent" hidden>
@@ -758,7 +772,7 @@
 
         <div class="table-card" style="margin-top:18px;">
           <div class="table-head">
-            <h3>Choferes en ruta</h3>
+            <h3>Choferes en ruta — <span id="rutaFechaTitulo"></span></h3>
             <input id="buscarChoferRuta" class="buscador" placeholder="Buscar chofer…" />
           </div>
           <div class="table-wrap">
@@ -2509,9 +2523,20 @@
     sort: { key: 'minEntreEntregas', dir: 'desc' },
     filtrosCol: {},
     filas: [],       // filas visibles del render actual (post filtro de zona)
-    todasFilas: [],  // cache de TODOS los choferes de hoy, sin filtrar — se recalcula solo al cambiar de pestaña o tocar "Actualizar"
-    cargado: false,
+    todasFilas: [],  // choferes de la fecha seleccionada, sin filtrar
+    modoFecha: 'hoy',       // 'hoy' | 'ayer' | 'elegir'
+    fechaElegida: null,     // ISO, solo cuando modoFecha === 'elegir'
+    cachePorFecha: {},      // ISO -> filas ya calculadas, para no releer Firestore al volver a una fecha ya vista
   };
+
+  // Resuelve qué fecha (ISO) mostrar según los chips de arriba de
+  // "Seguimiento en ruta" — permite ver el historial día por día, no solo
+  // "hoy" (pedido explícito 2026-11-12).
+  function fechaRutaActual(){
+    if(stateRuta.modoFecha === 'ayer') return isoMinusDays(todayISO(), 1);
+    if(stateRuta.modoFecha === 'elegir') return stateRuta.fechaElegida || todayISO();
+    return todayISO();
+  }
 
   // Columnas filtrables de "Choferes en ruta" (alineadas con los <th> de
   // #theadChoferesRuta). "Chofer" queda en null — ya tiene el buscador de
@@ -2620,22 +2645,23 @@
     };
   }
 
-  // Trae TODOS los choferes con detalle hoy en una sola lectura de
-  // colección (sin saber sus ids de antemano) — mucho más barato que pedir
-  // chofer por chofer como hace cargarDetalleChofer() para la vista de
-  // Envíos. Cachea en stateRuta.todasFilas; `forzar=true` (botón
-  // "Actualizar") vuelve a leer igual.
+  // Trae TODOS los choferes con detalle de la fecha seleccionada
+  // (fechaRutaActual()) en una sola lectura de colección (sin saber sus
+  // ids de antemano) — mucho más barato que pedir chofer por chofer como
+  // hace cargarDetalleChofer() para la vista de Envíos. Cachea por fecha
+  // en stateRuta.cachePorFecha, para no releer Firestore al ir y volver
+  // entre "Hoy"/"Ayer"/una fecha ya vista; `forzar=true` (botón
+  // "Actualizar") vuelve a leer igual la fecha actual.
   async function cargarChoferesEnRutaHoy(forzar){
-    if(stateRuta.cargado && !forzar) return stateRuta.todasFilas;
-    const hoy = todayISO();
-    const snap = await db.collection('envios_detalle').doc(hoy).collection('choferes').get();
+    const fecha = fechaRutaActual();
+    if(stateRuta.cachePorFecha[fecha] && !forzar) return stateRuta.cachePorFecha[fecha];
+    const snap = await db.collection('envios_detalle').doc(fecha).collection('choferes').get();
     const filas = [];
     snap.forEach(doc => {
       const data = doc.data() || {};
       filas.push(construirFilaRutaDesdeItems(data.chofer || doc.id, data.items || []));
     });
-    stateRuta.todasFilas = filas;
-    stateRuta.cargado = true;
+    stateRuta.cachePorFecha[fecha] = filas;
     return filas;
   }
 
@@ -2750,10 +2776,12 @@
   }
 
   // Esta sí lee Firestore (o usa el cache si no se pide forzar) — se llama
-  // al entrar a la pestaña y al tocar "Actualizar".
+  // al entrar a la pestaña, al cambiar de fecha y al tocar "Actualizar".
   async function renderRepartidoresRuta(forzar){
     const cont = document.getElementById('rutaContent');
     const vacio = document.getElementById('rutaEmpty');
+    const fecha = fechaRutaActual();
+    document.getElementById('rutaFechaTitulo').textContent = fmtCorto(fecha);
     let todasFilas;
     try{
       todasFilas = await cargarChoferesEnRutaHoy(forzar);
@@ -2763,9 +2791,13 @@
     }
     if(todasFilas.length === 0){
       cont.hidden = true; vacio.hidden = false;
+      document.getElementById('rutaEmptyTexto').textContent = fecha === todayISO()
+        ? 'La corrida intradía recién va a publicar el primer detalle del día a las 11hs ART — si ya pasó esa hora, puede ser un día no operativo (domingo) o que la corrida de las 00hs todavía no cerró "ayer".'
+        : 'Puede ser un día no operativo (domingo), o una fecha anterior al 2026-09-17 (desde cuando se guarda el detalle por chofer).';
       return;
     }
     cont.hidden = false; vacio.hidden = true;
+    stateRuta.todasFilas = todasFilas;
     aplicarFiltroZonaYRenderRuta();
   }
 
@@ -2780,6 +2812,28 @@
     stateRuta.search = e.target.value;
     renderRutaTabla(stateRuta.filas);
   });
+
+  // Hoy / Ayer / Elegir fecha — para ver el historial día por día de
+  // "Seguimiento en ruta", no solo la jornada en curso (pedido 2026-11-12).
+  document.getElementById('rutaFechaFiltro').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.chip'); if(!btn) return;
+    stateRuta.modoFecha = btn.dataset.fechaRuta;
+    document.querySelectorAll('#rutaFechaFiltro .chip').forEach(b => b.classList.toggle('active', b === btn));
+    document.getElementById('rutaFechaInputWrap').classList.toggle('show', stateRuta.modoFecha === 'elegir');
+    if(stateRuta.modoFecha === 'elegir'){
+      if(!stateRuta.fechaElegida) stateRuta.fechaElegida = todayISO();
+      document.getElementById('rutaFechaInput').value = stateRuta.fechaElegida;
+    }
+    renderRepartidoresRuta();
+  });
+  document.getElementById('rutaFechaInput').addEventListener('change', (e)=>{
+    stateRuta.fechaElegida = e.target.value;
+    renderRepartidoresRuta();
+  });
+  // El detalle por chofer se guarda desde el 2026-09-17 (regla #5) — antes
+  // de esa fecha no hay nada que mostrar acá.
+  document.getElementById('rutaFechaInput').min = '2026-09-17';
+  document.getElementById('rutaFechaInput').max = todayISO();
 
   wireSortableTable(document.getElementById('theadChoferesRuta'), stateRuta.sort, () => renderRutaTabla(stateRuta.filas));
   crearFilaFiltros(document.getElementById('theadChoferesRuta'), COLUMNAS_FILTRO_RUTA, stateRuta.filtrosCol, () => renderRutaTabla(stateRuta.filas));
@@ -2816,43 +2870,80 @@
   // descarta columnas sin encabezado (checkboxes de UI de la hoja viva que
   // no son datos — confirmado contando 41 columnas totales contra 23 con
   // nombre real).
+  // Encabezado canónico de "viva"/"histórica" (23 columnas, mismo orden
+  // confirmado en las dos hojas) — respaldo para cuando NINGUNA fila sirve
+  // como header confiable. Bug real encontrado el 2026-11-12: alguien
+  // tipeó los datos de un chofer directamente en lo que debía ser la fila
+  // de header de "Seguimiento Diario", pisando FECHA/NOMBRE/TIPO DE
+  // VEHICULO/TURNO con valores reales — pero sin tocar el resto de los
+  // títulos de columna (ESTADO DEL CHOFER, ALERTADO, etc., que siguieron
+  // ahí). Resultado: ni "FECHA" ni "NOMBRE" aparecían ya en ninguna fila
+  // completa, la detección por nombre fallaba de nuevo (misma clase de
+  // bug que la fila en blanco de la sección 19.1, causa distinta), y
+  // "Operación en vivo"/"Histórico" volvieron a mostrar "sin datos".
+  const HEADER_REPA_VIVA_HIST = [
+    'FECHA','NOMBRE','TIPO DE VEHICULO','TURNO','ZONA','LOCALIDADES','OBSERVACIONES',
+    'ESTADO DEL CHOFER','ALERTADO','ASISTE A DEPOSITO (SOPORTE)','HORA DE AVISO (SOPORTE)',
+    'TIENE FALLIDOS (SOPORTE)','FALLIDOS RECIBIDOS (DEPÓSITO)','HORA FALLIDOS RECIBIDOS',
+    'PALLET LISTO (DEPÓSITO)','HORA PALLET LISTO','CONFIRMA RETIRO (SOPORTE)',
+    'HORA CONFIRMA RETIRO','LLEGÓ AL DEPÓSITO (DEPÓSITO)','HORA LLEGADA',
+    'PALLET RETIRADO (DEPÓSITO)','HORA PALLET RETIRADO','IMPRESO',
+  ];
+  // Fragmentos de columna lo bastante largos/específicos como para no
+  // aparecer nunca por casualidad como un dato real (nombre, fecha, etc.)
+  // — confirman "esto es viva/histórica" cuando FECHA/NOMBRE ya no sirven
+  // por estar pisados.
+  const FRAGMENTOS_HEADER_VIVA_HIST = ['ESTADO DEL CHOFER', 'TIENE FALLIDOS (SOPORTE)', 'CONFIRMA RETIRO (SOPORTE)', 'PALLET RETIRADO (DEPÓSITO)'];
+
   function filasAObjetosRepa(csvTexto){
     const todasFilas = parsearCSV(csvTexto);
     if(todasFilas.length === 0) return [];
-    // Bug real encontrado el 2026-11-11: la hoja "viva" ("Seguimiento
-    // Diario") a veces publica una fila en blanco antes del header real
-    // (una fila de formato/congelada en Sheets que la copia histórica no
-    // tiene) — con header = filas[0] a ciegas, esa fila en blanco se
-    // tomaba como header, TODAS las columnas quedaban sin nombre (el loop
-    // de abajo descarta header vacío), y la planilla entera se leía como 0
-    // filas útiles sin ningún error — "Operación en vivo" mostraba "sin
-    // datos de hoy" con la planilla llena de filas reales. Ahora se busca
-    // la primera fila que tenga "FECHA" o "NOMBRE" entre sus celdas y se
-    // usa esa como header, descartando lo que venga antes (nunca pasa en
-    // la histórica/el roster, que no tienen esa fila extra, así que no
-    // cambia nada para esos dos casos).
-    const idxHeader = todasFilas.findIndex(f => f.some(c => ['FECHA','NOMBRE'].includes((c||'').trim())));
-    const filas = idxHeader === -1 ? todasFilas : todasFilas.slice(idxHeader);
-    if(filas.length === 0) return [];
-    const header = filas[0];
+
+    const idxHeaderPorNombre = todasFilas.findIndex(f => f.some(c => ['FECHA','NOMBRE'].includes((c||'').trim())));
+    let header, filasDatos;
+    if(idxHeaderPorNombre !== -1){
+      // Caso normal: hay una fila real con "FECHA" o "NOMBRE" — se usa esa
+      // como header y se descarta lo que venga antes (ej. la fila en
+      // blanco de la sección 19.1, si está).
+      const filas = todasFilas.slice(idxHeaderPorNombre);
+      header = filas[0];
+      filasDatos = filas.slice(1);
+    } else if(todasFilas.some(f => f.some(c => FRAGMENTOS_HEADER_VIVA_HIST.includes((c||'').trim())))){
+      // Ningún header detectable por nombre, pero sí quedan fragmentos
+      // reconocibles en alguna fila -> es viva/histórica con el header
+      // pisado (ver comentario arriba). Se usa el header fijo y se toman
+      // TODAS las filas como datos — la fila con el header pisado entra
+      // como una fila más (su propio NOMBRE/FECHA son reales, solo sus
+      // columnas de más a la derecha van a salir con el texto del título
+      // en vez de un valor real, hasta que se corrija a mano en Sheets).
+      header = HEADER_REPA_VIVA_HIST;
+      filasDatos = todasFilas;
+    } else {
+      // Ni lo uno ni lo otro (ej. "Listado de Choferes", con su propio
+      // esquema) — comportamiento de siempre: primera fila = header.
+      header = todasFilas[0];
+      filasDatos = todasFilas.slice(1);
+    }
+    if(!header) return [];
+
     // Antes era un índice fijo (f[1]) asumiendo que NOMBRE siempre está en
     // la 2da columna — cierto en viva/histórica (FECHA,NOMBRE,...) pero NO
     // en "Listado de Choferes" (NOMBRE va primero). Bug real encontrado al
     // conectar esa hoja el 2026-10-24: con índice fijo, el filtro de filas
     // vacías terminaba mirando la columna equivocada ahí.
     const idxNombre = header.findIndex(h => (h||'').trim() === 'NOMBRE');
-    // La hoja "viva"/"histórica" tiene una columna de alertas (antes
-    // llamada ALERTADO) que en algún momento quedó SIN nombre de columna
-    // al republicar — siempre pegada justo después de "ESTADO DEL CHOFER".
-    // Bug real encontrado el 2026-10-31: el loop de abajo descarta
-    // cualquier columna con header vacío, así que esa columna
-    // desaparecía del todo (y con ella, el Centro de alertas). La
-    // recuperamos por posición y la exponemos bajo la clave ALERTADO de
-    // siempre, para no tocar el resto del código que ya la usa.
+    // La hoja "viva"/"histórica" a veces tiene una columna de alertas
+    // (antes llamada ALERTADO) sin nombre de columna propio al republicar
+    // — siempre pegada justo después de "ESTADO DEL CHOFER". Bug real
+    // encontrado el 2026-10-31: el loop de abajo descarta cualquier
+    // columna con header vacío, así que esa columna desaparecía del todo
+    // (y con ella, el Centro de alertas). Se recupera por posición y se
+    // expone bajo la clave ALERTADO de siempre. No hace falta con el
+    // header fijo de arriba (ya tiene nombre), pero no está de más.
     const idxEstadoChofer = header.findIndex(h => (h||'').trim() === 'ESTADO DEL CHOFER');
     const idxAlertado = (idxEstadoChofer !== -1 && (header[idxEstadoChofer + 1] || '').trim() === '')
       ? idxEstadoChofer + 1 : -1;
-    return filas.slice(1)
+    return filasDatos
       .filter(f => idxNombre === -1 || (f[idxNombre] || '').trim())
       .map(f => {
         const obj = {};

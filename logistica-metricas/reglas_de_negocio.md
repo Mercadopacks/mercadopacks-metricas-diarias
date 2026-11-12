@@ -1027,6 +1027,70 @@ listada tanto bajo San Martín (Zona Norte) como bajo Tres de Febrero
 que se resolvió a Norte. Si el criterio real para esa localidad puntual
 es otro, avisar para corregir la entrada en `ZONA_POR_LOCALIDAD`.
 
+## 20. Bug real: header de la hoja "viva" pisado por datos + historial en "Seguimiento en ruta" (2026-11-12)
+
+### 20.1 "Operación en vivo" y "Rendimiento histórico" sin datos — otra vez, otra causa
+
+Reportado por el usuario el día después de 19.1 (que ya había corregido
+un problema de header distinto). Encontrado: alguien tipeó los datos de
+un chofer (Miguel Gomez, 12/11) directamente en lo que debía ser la fila
+de header de "Seguimiento Diario" — pisó `FECHA`/`NOMBRE`/`TIPO DE
+VEHICULO`/`TURNO` con valores reales, pero sin tocar el resto de los
+títulos de columna (`ESTADO DEL CHOFER`, `ALERTADO`, etc., que
+quedaron intactos más a la derecha de esa misma fila). Resultado: ni
+`"FECHA"` ni `"NOMBRE"` aparecían ya en ninguna fila completa, la
+detección por nombre de 19.1 fallaba de nuevo (mismo síntoma, causa
+distinta), y la hoja entera se volvía a leer como "sin datos".
+
+**Fix:** se agregó un segundo nivel de detección en `filasAObjetosRepa()`.
+Si ninguna fila tiene `"FECHA"`/`"NOMBRE"` literal pero alguna fila tiene
+alguno de 4 fragmentos de columna lo bastante largos/específicos como
+para no aparecer nunca por casualidad como dato real (`"ESTADO DEL
+CHOFER"`, `"TIENE FALLIDOS (SOPORTE)"`, `"CONFIRMA RETIRO (SOPORTE)"`,
+`"PALLET RETIRADO (DEPÓSITO)"`), se usa un **header fijo hardcodeado**
+(`HEADER_REPA_VIVA_HIST`, las 23 columnas en el orden confirmado tanto
+en viva como en histórica) en vez de intentar extraerlo de la hoja, y se
+toman TODAS las filas como datos (se filtran por `NOMBRE` no vacío, como
+siempre). La fila con el header pisado entra como una fila más — su
+`FECHA`/`NOMBRE`/`TIPO DE VEHICULO`/`TURNO` son reales (son los datos
+que alguien tipeó ahí), pero sus columnas de `ESTADO DEL CHOFER` en
+adelante van a mostrar el texto del título en vez de un valor real,
+hasta que alguien del equipo corrija la hoja a mano (retipear la fila de
+header en las columnas 1 a 7 de "Seguimiento Diario", sin tocar las
+demás). Verificado: con el fix, "Operación en vivo" volvió a traer las
+~160 filas reales del día, con Miguel Gomez visible en el Centro de
+Alertas mostrando el dato corrupto de forma aislada (no afecta al resto).
+
+### 20.2 "Seguimiento en ruta" — historial día por día
+
+Hasta ahora "Seguimiento en ruta" (sección 19) solo mostraba "hoy"
+(`todayISO()` fijo). Pedido explícito: poder ver también días
+anteriores, igual que el resto del dashboard.
+
+Se agregaron chips **Hoy / Ayer / Elegir fecha…** arriba de los chips de
+zona (nuevo `#rutaFechaFiltro`, con un `<input type="date">` que aparece
+solo con "Elegir fecha…", acotado entre `2026-09-17` —desde cuando se
+guarda `envios_detalle`— y hoy). `fechaRutaActual()` resuelve qué fecha
+ISO mostrar según el chip activo; `cargarChoferesEnRutaHoy()` ahora lee
+`envios_detalle/<fecha>/choferes` de la fecha resuelta (no siempre
+"hoy"), cacheando por fecha en `stateRuta.cachePorFecha` para no releer
+Firestore al ir y volver entre fechas ya vistas — "Actualizar" fuerza
+una relectura de la fecha actual. El título de la tabla ahora muestra la
+fecha que se está viendo (`"Choferes en ruta — DD/MM"`), y el estado
+vacío distingue entre "hoy, antes de la primera corrida intradía
+(11hs ART)" y "un día pasado sin detalle guardado" (domingo no
+operativo, o anterior al 2026-09-17).
+
+**Bug real encontrado probando esto antes de enviarlo** (no llegó a
+producción): al mover la carga de datos al cache por fecha, se dejó de
+asignar `stateRuta.todasFilas` — la función de filtro por zona seguía
+leyendo esa variable, que ya no se actualizaba nunca, así que cualquier
+fecha distinta de la primera mostraba "Sin choferes en ruta" con 0 filas
+aunque la lectura de Firestore sí hubiera traído datos reales. Corregido
+asignando `stateRuta.todasFilas = todasFilas` antes de aplicar el filtro
+de zona. Verificado con Playwright contra "Ayer" (131 choferes reales)
+y una fecha elegida a mano, dos días atrás (137 choferes reales).
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1056,4 +1120,6 @@ es otro, avisar para corregir la entrada en `ZONA_POR_LOCALIDAD`.
 | 2026-11-11 | Sección 19: dos bugs reales corregidos antes de pasar a producción. (1) "Operación en vivo" no traía datos: `URL_REPA_VIVA` apuntaba sin `gid` explícito y, al cambiar la pestaña "por defecto" del documento publicado, empezó a servir en silencio una hoja de referencia ("Localidades") en vez de la operativa ("Seguimiento Diario") — más una fila en blanco antes del header real en esa hoja, que `filasAObjetosRepa()` tomaba como header y vaciaba toda la lectura. (2) "Seguimiento en ruta" pasó de datos mockeados a datos reales, leyendo `envios_detalle/<hoy>/choferes` (el mismo detalle por chofer de LightData que ya alimenta el resto del dashboard); se sacó la columna "Turno" porque LightData no la registra. |
 | 2026-11-11 | Sección 19.3: corrección del criterio de zona del punto anterior — el campo `Zona` de LightData no era el criterio correcto (además de traer valores propios tipo "ZONA 1/2/3", resultó inconsistente: la misma localidad aparecía con distinta `Zona` en envíos distintos). El criterio real es el mapa de localidades ML Flex (CABA/Norte/Sur/Oeste) dado por el equipo. Se agregó `zonaPorLocalidad()` + un mapa de ~160 localidades reales a su partido y zona, aplicado sobre el campo `Localidad` de cada envío (no `Zona`). Cobertura verificada: de 116 choferes reales, solo 4 (3.4%) quedaron en "Sin zona". Los chips y el filtro de columna volvieron a ser fijos (el criterio es cerrado, no depende de lo que traiga LightData cada día). |
 | 2026-11-11 | Sección 19.4: se reemplazó el mapa de localidades de 19.3 (armado contra lo visto un día puntual) por el listado completo y oficial que mandó el equipo, por partido y por cordón (1/2/3) — CABA 100% de barrios, Norte/Sur/Oeste con todas sus localidades principales. Cobertura verificada de nuevo: 4 de 122 choferes (3.3%) en "Sin zona". Única ambigüedad: "Villa Bosch" figuraba en el listado bajo dos partidos (San Martín y Tres de Febrero); se resolvió a Zona Norte (San Martín) por ser su partido administrativo real. |
+| 2026-11-12 | Sección 20.1: otro bug real en "Operación en vivo"/"Histórico" (causa distinta de 19.1) — alguien tipeó los datos de un chofer directo en la fila de header de "Seguimiento Diario", pisando FECHA/NOMBRE/TIPO DE VEHICULO/TURNO. `filasAObjetosRepa()` ahora reconoce ese caso por otros fragmentos de columna que quedaron intactos (ESTADO DEL CHOFER, etc.) y usa un header fijo hardcodeado en vez de intentar leerlo de la hoja. |
+| 2026-11-12 | Sección 20.2: "Seguimiento en ruta" ahora deja ver el historial día por día (antes solo mostraba "hoy") — chips Hoy/Ayer/Elegir fecha…, leyendo `envios_detalle/<fecha>/choferes` de la fecha elegida, con cache por fecha para no releer Firestore al ir y volver. De paso se encontró y corrigió, antes de subir, un bug real propio de este cambio: el filtro de zona quedó leyendo una variable que ya no se actualizaba, mostrando "0 choferes" en cualquier fecha que no fuera la primera cargada. |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
