@@ -1111,6 +1111,12 @@ por localidad vacía, ni por localidad no mapeada). Verificado con datos
 reales del 2026-11-11: "Sin zona" bajó de varios choferes a solo 2 de
 131 (los que de verdad no tienen ningún paquete clasificable).
 
+Los 2 choferes que seguían quedando en "Sin zona" eran de **Zárate** y
+**Campana** — localidades que no estaban en el listado original por
+partido (sección 19.4). Confirmado por el usuario: van a **Zona
+Norte**. Agregadas a `ZONA_POR_LOCALIDAD`; con esto, "Sin zona" bajó a
+0 de 131 choferes reales del 2026-11-11.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1143,4 +1149,5 @@ reales del 2026-11-11: "Sin zona" bajó de varios choferes a solo 2 de
 | 2026-11-12 | Sección 20.1: otro bug real en "Operación en vivo"/"Histórico" (causa distinta de 19.1) — alguien tipeó los datos de un chofer directo en la fila de header de "Seguimiento Diario", pisando FECHA/NOMBRE/TIPO DE VEHICULO/TURNO. `filasAObjetosRepa()` ahora reconoce ese caso por otros fragmentos de columna que quedaron intactos (ESTADO DEL CHOFER, etc.) y usa un header fijo hardcodeado en vez de intentar leerlo de la hoja. |
 | 2026-11-12 | Sección 20.2: "Seguimiento en ruta" ahora deja ver el historial día por día (antes solo mostraba "hoy") — chips Hoy/Ayer/Elegir fecha…, leyendo `envios_detalle/<fecha>/choferes` de la fecha elegida, con cache por fecha para no releer Firestore al ir y volver. De paso se encontró y corrigió, antes de subir, un bug real propio de este cambio: el filtro de zona quedó leyendo una variable que ya no se actualizaba, mostrando "0 choferes" en cualquier fecha que no fuera la primera cargada. |
 | 2026-11-12 | Sección 20.3: bug real reportado por el usuario — choferes con paquetes en una zona reconocida igual aparecían como "Sin zona", porque LightData a veces no trae la `Localidad` de algún paquete puntual, y esos paquetes sin dato competían por mayoría contra la zona real. Ahora "Sin zona" se ignora al elegir la zona más votada del chofer; solo gana si NINGÚN paquete tiene zona reconocible. Verificado: "Sin zona" bajó a 2 de 131 choferes reales. |
+| 2026-11-12 | Se agregaron Zárate y Campana a `ZONA_POR_LOCALIDAD` (Zona Norte, confirmado por el usuario) — eran los 2 choferes que seguían quedando en "Sin zona" tras el fix anterior. Con esto, 0 de 131 choferes reales del 2026-11-11 quedan sin zona. |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
