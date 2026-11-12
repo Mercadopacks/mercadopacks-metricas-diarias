@@ -1154,6 +1154,52 @@ documentos fantasma y que no van a volver a reprocesarse solas, hace
 falta un backfill manual (volver a correr `descarga_diaria.yml` con
 `fecha` puntual para ese día) para que se limpien.
 
+Backfill hecho a mano el mismo día para la semana en curso (lunes
+2026-11-09 a jueves 2026-11-12, las 4 fechas con dato hasta ese momento)
+— los 4 `workflow_dispatch` con `fecha` puntual corrieron con éxito.
+Verificado contra Firestore: los documentos fantasma se borraron en los
+4 días; donde el chofer sí tenía envíos reales esos días (ej. Leyderman
+Martinez el 09/11 y 10/11), el documento se mantuvo intacto — el fix
+distingue correctamente entre dato real y dato fantasma.
+
+### 20.5 Tres ajustes de UX en "Seguimiento en ruta" (2026-11-12, mismo día)
+
+Pedidos explícitos del usuario tras usar la pantalla con datos reales:
+
+1. **Título + buscador de cada tabla, fijos al hacer scroll.**
+   `.table-head` (el `<h3>` + el buscador, y el botón "Cerrar" en los
+   paneles de detalle) pasó a `position:sticky; top:0` — se aplica a
+   TODAS las tablas del dashboard (Ranking de choferes, Todos los
+   repartidores, Choferes en ruta, los paneles de detalle), no solo a
+   Ruta, por consistencia. Efecto secundario que hubo que corregir: el
+   header de columnas de cada tabla (`thead`, ya `sticky` desde antes
+   pero relativo a `.table-wrap`, un contexto de scroll distinto) quedaba
+   tapado detrás del `.table-head` ahora también sticky — dos stickies
+   compitiendo por el mismo `top:0` en marcos de referencia distintos.
+   Se agregó `ajustarOffsetTheadSticky()`, que mide el alto real de cada
+   `.table-head` y lo guarda en la variable CSS `--table-head-h` de su
+   `.table-card`; el `thead` usa esa variable como su propio `top` en vez
+   de `0`, así se pega justo debajo en vez de superponerse. Se vuelve a
+   medir en `resize` y cada vez que algo con el atributo `hidden` cambia
+   en la página (vía `MutationObserver`) — una tarjeta oculta mide alto 0,
+   así que hace falta remedirla recién cuando se muestra.
+2. **"Demorados ahora" limitado a ~10 filas visibles**, con scroll propio
+   para el resto (`#rutaAlertasLista{ max-height:420px; overflow-y:auto }`)
+   — antes la lista completa (hasta 13+ demorados en un día real) estiraba
+   la página entera.
+3. **Detalle de los envíos pendientes de un chofer**, mismo patrón que
+   "Detalle de envíos" de Seguimiento de Envíos (sección 11): la celda
+   "Faltan: N" de la tabla ahora es un botón clickeable (solo cuando
+   `pendientes > 0`) que abre una tarjeta nueva (`#rutaDetalleCard`) con
+   la lista de esos envíos puntuales (Tracking/Cliente/Localidad/Zona/
+   Estado/Hora), buscador propio y botón "Cerrar". No pide nada a
+   Firestore: `construirFilaRutaDesdeItems()` ahora también guarda
+   `itemsPendientes` (los items de ese chofer que no están en
+   `ESTADOS_ENTREGA_RUTA`) junto con el resto de la fila, así que el
+   detalle sale de datos que ya estaban en memoria. Se cierra solo al
+   cambiar de fecha (el detalle de una fecha vieja ya no tiene sentido
+   tras cargar otra).
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1187,5 +1233,6 @@ falta un backfill manual (volver a correr `descarga_diaria.yml` con
 | 2026-11-12 | Sección 20.2: "Seguimiento en ruta" ahora deja ver el historial día por día (antes solo mostraba "hoy") — chips Hoy/Ayer/Elegir fecha…, leyendo `envios_detalle/<fecha>/choferes` de la fecha elegida, con cache por fecha para no releer Firestore al ir y volver. De paso se encontró y corrigió, antes de subir, un bug real propio de este cambio: el filtro de zona quedó leyendo una variable que ya no se actualizaba, mostrando "0 choferes" en cualquier fecha que no fuera la primera cargada. |
 | 2026-11-12 | Sección 20.3: bug real reportado por el usuario — choferes con paquetes en una zona reconocida igual aparecían como "Sin zona", porque LightData a veces no trae la `Localidad` de algún paquete puntual, y esos paquetes sin dato competían por mayoría contra la zona real. Ahora "Sin zona" se ignora al elegir la zona más votada del chofer; solo gana si NINGÚN paquete tiene zona reconocible. Verificado: "Sin zona" bajó a 2 de 131 choferes reales. |
 | 2026-11-12 | Se agregaron Zárate y Campana a `ZONA_POR_LOCALIDAD` (Zona Norte, confirmado por el usuario) — eran los 2 choferes que seguían quedando en "Sin zona" tras el fix anterior. Con esto, 0 de 131 choferes reales del 2026-11-11 quedan sin zona. |
-| 2026-11-12 | Sección 20.4: bug real en `publicar_firestore.py` (no en el dashboard) — un chofer que perdía todos sus envíos durante el día (reasignados a otro chofer) seguía mostrando en "Seguimiento en ruta" las asignaciones de una corrida anterior, porque `publicar()` nunca borraba el documento de un chofer ausente en la corrida actual. Ahora se borran los documentos de choferes que ya no tienen ningún ítem en la corrida actual de esa fecha. Se autocorrige hacia adelante y en los últimos 3 días (ventana de repaso); fechas más viejas con el dato fantasma necesitan un backfill manual. |
+| 2026-11-12 | Sección 20.4: bug real en `publicar_firestore.py` (no en el dashboard) — un chofer que perdía todos sus envíos durante el día (reasignados a otro chofer) seguía mostrando en "Seguimiento en ruta" las asignaciones de una corrida anterior, porque `publicar()` nunca borraba el documento de un chofer ausente en la corrida actual. Ahora se borran los documentos de choferes que ya no tienen ningún ítem en la corrida actual de esa fecha. Se autocorrige hacia adelante y en los últimos 3 días (ventana de repaso); fechas más viejas con el dato fantasma necesitan un backfill manual. Se hizo el backfill manual de lunes a jueves de esa semana — verificado que se borró lo fantasma y se mantuvo lo real. |
+| 2026-11-12 | Sección 20.5: tres ajustes de UX pedidos sobre "Seguimiento en ruta" (aplicados a todas las tablas del dashboard por consistencia) — título + buscador de cada tabla quedan fijos al hacer scroll (con un ajuste de offset para que no tapen el header de columnas, que es un sticky aparte); "Demorados ahora" se limita a ~10 filas visibles con scroll propio; y la celda "Faltan: N" de cada chofer ahora es clickeable y abre el detalle de esos envíos puntuales pendientes, mismo patrón que "Detalle de envíos" de la sección 11. |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
