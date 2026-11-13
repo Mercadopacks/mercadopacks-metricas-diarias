@@ -340,20 +340,23 @@
 
   /* ---------- table ---------- */
   .table-card{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:18px; }
-  /* sticky (2026-11-12, pedido explícito): el título + buscador de cada
-     tabla quedan pegados arriba del viewport al hacer scroll, para no
-     tener que volver arriba para buscar/filtrar en una tabla larga. El
-     margen negativo + padding "estira" el sticky al ancho completo de la
-     tarjeta (si no, quedaría con el padding de .table-card sin cubrir a
-     los costados al pegarse). */
-  /* Centinela de altura 0 para detectar (vía IntersectionObserver, en JS)
-     el momento real en que .table-head queda pegado arriba del viewport —
-     ver configurarStickySentinels(). No debe ocupar espacio ni ser visible. */
-  .sticky-sentinel{ height:0; margin:0; padding:0; border:0; }
+  /* Encabezado fijo de tabla (rediseñado 2026-11-13, sección 20.9).
+     El título + buscador vive DENTRO de .table-wrap, el mismo contenedor
+     de scroll que la tabla — no pegado a la página. Es lo que lo convierte
+     en "una cabecera de tabla" de verdad: las tres capas fijas (título +
+     buscador, nombres de columna, fila de filtros) se pegan al MISMO borde
+     y se apilan una debajo de la otra, así que no pueden separarse ni
+     dejar pasar una fila por el medio, venga el scroll de donde venga.
+     Antes el título se pegaba a la página y el thead al scroll interno de
+     la tabla: dos sistemas de coordenadas distintos, imposibles de
+     coordinar con un offset fijo — tres bugs seguidos salieron de ahí. */
   .table-head{
     display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
-    position:sticky; top:0; z-index:30; background:var(--panel); will-change:transform;
-    margin:-16px -16px 12px; padding:16px 16px 10px;
+    position:sticky; top:0; left:0; z-index:30; background:var(--panel); will-change:transform;
+    /* margin-bottom 0 a propósito: cualquier separación entre esta capa y la
+       de nombres de columna es una rendija por donde se ve pasar una fila al
+       scrollear. Las tres capas fijas tienen que quedar pegadas sin aire. */
+    margin:0; padding:2px 0 10px;
   }
   .table-head h3{ margin:0; font-size:14px; font-weight:600; }
   .tabla-nota{ color:var(--text-muted); font-size:12px; margin:-4px 0 10px; }
@@ -416,7 +419,11 @@
   .col-filtro-combo-lista li:focus-visible{ outline:2px solid var(--gold); outline-offset:-2px; background:var(--panel-2); }
   .col-filtro-combo-lista li[aria-selected="true"]{ background:var(--gold); font-weight:600; }
 
-  .table-wrap{ overflow-x:auto; max-height:520px; overflow-y:auto; }
+  /* Único contenedor de scroll de la tarjeta: adentro viven el título +
+     buscador, el header de columnas y las filas, los tres en el mismo
+     sistema de coordenadas (ver .table-head y sección 20.9). El alto
+     incluye ahora al encabezado fijo, por eso 600 y no los 520 de antes. */
+  .table-wrap{ overflow-x:auto; max-height:600px; overflow-y:auto; }
   /* border-collapse:collapse + celdas position:sticky es un bug de pintado
      conocido de Chrome: el modelo de bordes colapsados pinta por fuera del
      compositado normal de la celda, y al scrollear deja ver una fila
@@ -426,12 +433,10 @@
      verticales entre columnas que dependieran del colapsado) y saca a la
      tabla de ese camino de pintado roto. */
   table{ width:100%; border-collapse:separate; border-spacing:0; font-size:14px; }
-  /* --table-head-h: alto real del .table-head sticky de esa tarjeta (lo
-     calcula ajustarOffsetTheadSticky() en JS) — el thead de la tabla se
-     pega justo DEBAJO en vez de top:0 a secas, si no el título+buscador
-     sticky de arriba (agregado 2026-11-12) lo tapa por completo al
-     scrollear, porque son dos stickies en contextos de scroll distintos
-     (uno pegado a la página, el otro a .table-wrap). */
+  /* --table-head-h: alto del bloque título + buscador, y --thead-row1-h:
+     alto de la fila de nombres de columna (los mide
+     ajustarOffsetTheadSticky() en JS). Con eso cada capa fija se pega
+     justo debajo de la anterior dentro de .table-wrap. */
   .table-card{ --table-head-h: 0px; --thead-row1-h: 0px; }
   thead th{
     position:sticky; top:var(--table-head-h, 0px); background:var(--panel); z-index:20; will-change:transform;
@@ -652,12 +657,12 @@
   </div>
 
   <div class="table-card" id="tableCard" hidden>
-    <div class="table-head">
-      <h3>Ranking de choferes</h3>
-      <input id="buscarChofer" class="buscador" placeholder="Buscar chofer…" />
-    </div>
-    <p class="tabla-nota" id="tablaNota" hidden></p>
     <div class="table-wrap">
+      <div class="table-head">
+        <h3>Ranking de choferes</h3>
+        <input id="buscarChofer" class="buscador" placeholder="Buscar chofer…" />
+      </div>
+      <p class="tabla-nota" id="tablaNota" hidden></p>
       <table>
         <thead id="theadChoferes">
           <tr>
@@ -680,12 +685,12 @@
   </div>
 
   <div class="table-card" id="detalleChoferCard" hidden>
-    <div class="table-head">
-      <h3>Detalle de envíos — <span id="detalleChoferNombre"></span></h3>
-      <input id="buscarDetalle" class="buscador" placeholder="Buscar tracking o cliente…" />
-    </div>
-    <p class="tabla-nota">Localidad en vez de dirección exacta, a propósito — ver <em>reglas_de_negocio.md</em>, sección 11.</p>
     <div class="table-wrap">
+      <div class="table-head">
+        <h3>Detalle de envíos — <span id="detalleChoferNombre"></span></h3>
+        <input id="buscarDetalle" class="buscador" placeholder="Buscar tracking o cliente…" />
+      </div>
+      <p class="tabla-nota">Localidad en vez de dirección exacta, a propósito — ver <em>reglas_de_negocio.md</em>, sección 11.</p>
       <table>
         <thead>
           <tr>
@@ -757,11 +762,11 @@
         </div>
 
         <div class="table-card" id="repaZonaDetalleCard" style="margin-top:14px;" hidden>
-          <div class="table-head">
-            <h3 id="repaZonaDetalleTitulo">Detalle de zona</h3>
-            <button class="btn" id="repaZonaDetalleCerrar" type="button">Cerrar</button>
-          </div>
           <div class="table-wrap">
+            <div class="table-head">
+              <h3 id="repaZonaDetalleTitulo">Detalle de zona</h3>
+              <button class="btn" id="repaZonaDetalleCerrar" type="button">Cerrar</button>
+            </div>
             <table>
               <thead><tr>
                 <th scope="col">Repartidor</th>
@@ -829,11 +834,11 @@
         </div>
 
         <div class="table-card" style="margin-top:18px;">
-          <div class="table-head">
-            <h3>Choferes en ruta — <span id="rutaFechaTitulo"></span></h3>
-            <input id="buscarChoferRuta" class="buscador" placeholder="Buscar chofer…" />
-          </div>
           <div class="table-wrap">
+            <div class="table-head">
+              <h3>Choferes en ruta — <span id="rutaFechaTitulo"></span></h3>
+              <input id="buscarChoferRuta" class="buscador" placeholder="Buscar chofer…" />
+            </div>
             <table>
               <thead id="theadChoferesRuta">
                 <tr>
@@ -853,12 +858,12 @@
         </div>
 
         <div class="table-card" id="rutaDetalleCard" style="margin-top:18px;" hidden>
-          <div class="table-head">
-            <h3>Pendientes — <span id="rutaDetalleNombre"></span></h3>
-            <input id="buscarRutaDetalle" class="buscador" placeholder="Buscar tracking o cliente…" />
-            <button class="btn" id="rutaDetalleCerrar" type="button">Cerrar</button>
-          </div>
           <div class="table-wrap">
+            <div class="table-head">
+              <h3>Pendientes — <span id="rutaDetalleNombre"></span></h3>
+              <input id="buscarRutaDetalle" class="buscador" placeholder="Buscar tracking o cliente…" />
+              <button class="btn" id="rutaDetalleCerrar" type="button">Cerrar</button>
+            </div>
             <table>
               <thead>
                 <tr>
@@ -920,11 +925,11 @@
         </div>
 
         <div class="table-card" style="margin-top:18px;">
-          <div class="table-head">
-            <h3>Todos los repartidores</h3>
-            <input id="buscarRepartidor" class="buscador" placeholder="Buscar repartidor…" />
-          </div>
           <div class="table-wrap">
+            <div class="table-head">
+              <h3>Todos los repartidores</h3>
+              <input id="buscarRepartidor" class="buscador" placeholder="Buscar repartidor…" />
+            </div>
             <table>
               <thead id="theadRepartidoresHist">
                 <tr>
@@ -2236,21 +2241,30 @@
     return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // Mide la fila de encabezados (labels ordenables) de cada tabla y la
-  // guarda en --thead-row1-h de su .table-card, para que la fila de
-  // filtros por columna (también sticky, cuando existe) se pegue DEBAJO de
-  // esa fila en vez de en el mismo top — si no, ambas quedaban "pegadas" en
-  // el mismo lugar y el texto de una se mezclaba con el de la otra (bug
-  // real reportado por captura el 2026-11-12). Se vuelve a correr cada vez
-  // que algo con `hidden` cambia en la página (una tarjeta oculta mide 0 —
-  // hay que remedirla recién cuando se muestra) y justo después de armar la
-  // fila de filtros de cada tabla (crearFilaFiltros), porque recién ahí
-  // existen las dos filas del thead para medir. Esta parte NO depende del
-  // scroll (el alto de la fila es siempre el mismo), a diferencia de
-  // --table-head-h — ver configurarStickySentinels() más abajo.
+  // Mide las dos piezas fijas del encabezado de cada tabla y las guarda como
+  // variables CSS de su .table-card:
+  //   --table-head-h : alto del bloque título + buscador
+  //   --thead-row1-h : alto de la fila de nombres de columna
+  // Las tres capas fijas (título+buscador, nombres de columna, fila de
+  // filtros) viven DENTRO del mismo contenedor de scroll (.table-wrap), así
+  // que alcanza con apilarlas: cada una se pega debajo de la anterior y los
+  // offsets son siempre correctos, sin importar cómo se llegó a ese punto
+  // del scroll (ver reglas_de_negocio.md sección 20.9 para el porqué de este
+  // diseño y los tres bugs que causó tenerlas en contextos separados).
+  // Se vuelve a medir cuando cambia algo con `hidden` (una tarjeta oculta
+  // mide 0), cuando cambia el tamaño del encabezado (el buscador se reacomoda
+  // a dos líneas en pantallas angostas) y justo después de armar la fila de
+  // filtros de cada tabla (crearFilaFiltros).
+  const _roEncabezados = new ResizeObserver(() => ajustarOffsetTheadSticky());
   function ajustarOffsetTheadSticky(){
     document.querySelectorAll('.table-card').forEach(card => {
       if(card.hidden) return;
+      const head = card.querySelector('.table-head');
+      if(head){
+        const h = head.offsetHeight;
+        if(h > 0) card.style.setProperty('--table-head-h', h + 'px');
+        if(!head.dataset.roListo){ head.dataset.roListo = '1'; _roEncabezados.observe(head); }
+      }
       const filaRotulos = card.querySelector('thead tr:first-child');
       if(filaRotulos){
         const h1 = filaRotulos.offsetHeight;
@@ -2261,44 +2275,6 @@
   window.addEventListener('load', ajustarOffsetTheadSticky);
   window.addEventListener('resize', ajustarOffsetTheadSticky);
   new MutationObserver(ajustarOffsetTheadSticky)
-    .observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
-
-  // --table-head-h (el alto que el thead de la tabla tiene que "regalarle"
-  // al título+buscador para no quedar tapado) solo tiene sentido MIENTRAS
-  // el título+buscador esté realmente pegado arriba del viewport (scroll de
-  // PÁGINA). Si en cambio el usuario scrollea la tabla en sí (la rueda del
-  // mouse sobre la tabla dispara el scroll INTERNO de `.table-wrap` antes
-  // de que la página haya scrolleado lo suficiente como para pegar el
-  // título), el título sigue viéndose en su lugar normal, más abajo — y
-  // reservarle espacio igual dejaba un hueco donde se veía (mal) una fila
-  // de datos de la tabla por encima del header de columnas (bug real
-  // reportado por captura el 2026-11-12, con scroll real de mouse wheel
-  // sobre la tabla). Un `IntersectionObserver` con un "centinela" de alto 0
-  // justo antes del título detecta el momento exacto en que pasa a estar
-  // realmente pegado (el centinela sale del viewport por arriba) y recién
-  // ahí activa el offset — se autoactualiza solo con cualquier scroll o
-  // cambio de layout, sin necesidad de medir en load/resize aparte.
-  function configurarStickySentinels(){
-    document.querySelectorAll('.table-card').forEach(card => {
-      if(card.dataset.stickySentinelListo) return;
-      const head = card.querySelector(':scope > .table-head');
-      if(!head) return;
-      card.dataset.stickySentinelListo = '1';
-      const sentinel = document.createElement('div');
-      sentinel.className = 'sticky-sentinel';
-      sentinel.setAttribute('aria-hidden', 'true');
-      head.before(sentinel);
-      new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          const pegado = !entry.isIntersecting && entry.boundingClientRect.top < 0;
-          const h = head.offsetHeight;
-          card.style.setProperty('--table-head-h', (pegado && h > 0) ? h + 'px' : '0px');
-        });
-      }, { threshold: 0 }).observe(sentinel);
-    });
-  }
-  window.addEventListener('load', configurarStickySentinels);
-  new MutationObserver(configurarStickySentinels)
     .observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
 
   function setStatus(fresh){

@@ -1349,6 +1349,77 @@ choferes), comprobando en cada ronda que ninguna fila visible quedara por
 encima del header (`row.top < header.top`) — ninguna lo hizo. Smoke test
 completo sin errores.
 
+### 20.9 Rediseño: un solo contexto de scroll para el encabezado de tabla (2026-11-13)
+
+Cuarto reporte del mismo síntoma, y el que dio con la causa de fondo. El
+usuario aportó el dato que faltaba: **el error pasa scrolleando con la barra
+de AFUERA (la de la página), no con la interna de la tabla**, y propuso la
+solución correcta — poner la barra de columnas en el mismo bloque que el
+buscador.
+
+**Por qué 20.6, 20.7 y 20.8 no alcanzaron.** El diseño tenía las capas
+fijas repartidas en **dos contenedores de scroll distintos**:
+
+- `.table-head` (título + buscador): `sticky` respecto de la **página**.
+- `thead th` + `tr.fila-filtros th`: `sticky` respecto del **scroll interno
+  de `.table-wrap`** (su ancestro con `overflow`).
+
+Son dos sistemas de coordenadas independientes. Para que el `thead` no
+quedara tapado por el título, se le daba un offset (`--table-head-h`) igual
+al alto del título. Pero ese offset solo es correcto cuando el borde
+superior de `.table-wrap` coincide con el del viewport. Scrolleando la
+página, ese borde se mueve: si `.table-wrap` arranca en y=100 y el título
+está pegado ocupando y=0..62, el `thead` se posiciona en 100+62=162 y queda
+una **franja de 62px entre y=100 e y=162 por donde se ven pasar las filas**
+— la "fila fantasma" de todas las capturas. El offset correcto sería
+`max(0, bordeInferiorDelTítulo − bordeSuperiorDelWrap)`, que cambia en cada
+frame del scroll: imposible de sostener con una variable CSS estática, y con
+un listener de scroll quedaría siempre un frame atrasado. Los tres intentos
+anteriores corrigieron casos particulares de ese cálculo sin tocar el
+problema estructural: **mientras haya dos contextos de scroll, siempre va a
+existir una posición donde se separan.**
+
+**Fix (estructural):** se eliminó el segundo contexto. El bloque título +
+buscador (`.table-head`) pasó a vivir **dentro de `.table-wrap`**, el mismo
+contenedor de scroll que la tabla, en las 6 tarjetas del dashboard. Ahora
+las tres capas fijas se pegan al mismo borde y se apilan:
+
+```
+.table-wrap  (único contenedor de scroll: overflow x/y, max-height 600px)
+  └─ .table-head      sticky top:0                                   z-30
+  └─ thead tr         sticky top:var(--table-head-h)                 z-20
+  └─ tr.fila-filtros  sticky top:calc(--table-head-h + --thead-row1-h) z-15
+  └─ tbody            filas normales, pasan por detrás
+```
+
+Los offsets son simples sumas de altos medidos una vez, y son correctos
+pase lo que pase con el scroll de la página, porque la página ya no
+participa: scrollearla mueve la tarjeta entera, encabezado incluido, como
+un bloque. `margin-bottom:0` en `.table-head` a propósito — cualquier
+separación entre capas es una rendija por donde se ve pasar una fila.
+
+Efecto secundario aceptado: el título ya no queda pegado al viewport al
+scrollear la página (lo que se había pedido en 20.5). No se pierde nada
+práctico, porque la tabla tiene scroll interno propio (`max-height`), así
+que nunca hace falta scrollear la página para ver más filas — el buscador
+queda fijo justo donde importa, mientras se recorre la tabla.
+
+Se borraron el centinela, el `IntersectionObserver` y toda la lógica de
+`configurarStickySentinels()` de 20.7: con un solo contexto quedaron de
+más. `ajustarOffsetTheadSticky()` ahora solo mide los dos altos, y se le
+agregó un `ResizeObserver` sobre el encabezado (en pantallas angostas el
+buscador se reacomoda a dos líneas y cambia el alto).
+
+**Verificado:** 111 mediciones automáticas sobre 3 tablas distintas
+("Choferes en ruta" con 135 choferes reales, "Todos los repartidores",
+"Ranking de choferes"), con scroll real de rueda — interno, de página, y
+alternando entre los dos — en ventana de 900px y de 700px de alto.
+Desalineación máxima entre las tres capas: **0px** en todos los casos
+(antes el hueco llegaba al alto completo del título). También verificado a
+390px de ancho (mobile), incluyendo scroll horizontal: el encabezado queda
+pegado a la izquierda y cubre todo el ancho visible. Smoke test completo
+sin errores de consola.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1387,4 +1458,5 @@ completo sin errores.
 | 2026-11-12 | Sección 20.6: bug real reportado por el usuario con capturas — el header de columnas de toda tabla ordenable nunca quedaba sticky de verdad (`thead th[data-key]{position:relative}` pisaba el `sticky`, sección 13.5), mientras la fila de filtros sí lo estaba; al scrollear se cruzaban y el texto se veía superpuesto. Se sacó ese `relative` innecesario y se agregó `--thead-row1-h` para que la fila de filtros se pegue debajo de la de nombres de columna (no en el mismo `top`). De paso, `tbody td:first-child{white-space:nowrap}` para evitar filas más altas de lo normal (nombre + tag "muestra chica" a 2 líneas) que hacían más visible el recorte normal de una fila a mitad de scroll. Verificado con scroll real de mouse wheel (no solo geometría) — la sesión anterior había descartado por error esta misma superposición como "artefacto de Playwright"; no lo era. |
 | 2026-11-12 | Sección 20.7: segundo bug real reportado por el usuario el mismo día, también con captura — el header de columnas seguía viéndose "separado" del header de título en "Choferes en ruta" (una fila de datos asomaba por encima). Causa: `--table-head-h` se calculaba una sola vez asumiendo que el título siempre está pegado arriba cuando el `thead` lo necesita, cierto solo si se scrollea la página, no si se scrollea la tabla directamente (el gesto real del usuario). Se reemplazó por un `IntersectionObserver` con un centinela que detecta el momento real en que el título queda pegado, y solo ahí activa el offset. Verificado con scroll real de mouse wheel sobre datos reales (127 choferes). |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
+| 2026-11-13 | Sección 20.9: rediseño del encabezado fijo de tabla, que resuelve de raíz los cuatro reportes seguidos (20.6 a 20.8 fueron parches a casos particulares). El dato clave lo aportó el usuario: el error aparecía scrolleando con la barra de la PÁGINA. Causa de fondo: el título+buscador estaba fijado respecto de la página y la cabecera de columnas respecto del scroll interno de la tabla — dos sistemas de coordenadas independientes, imposibles de mantener pegados con un offset fijo. Fix: el título+buscador pasó a vivir dentro del mismo contenedor de scroll que la tabla, así las tres capas fijas se apilan contra el mismo borde. Se borró el centinela/IntersectionObserver de 20.7, que quedó de más. Verificado con 111 mediciones automáticas sobre 3 tablas, dos alturas de ventana y mobile: 0px de desalineación. |
 | 2026-11-13 | Sección 20.8: tercer bug real reportado por el usuario sobre el mismo header sticky, también con captura — una fila de datos se pintaba por encima del header de columnas al scrollear rápido la tabla. Causa, distinta de 20.6/20.7: `border-collapse:collapse` + celdas `position:sticky` es un bug de pintado conocido de Chrome. Se cambió a `border-collapse:separate; border-spacing:0` (visualmente idéntico, sin bordes verticales que dependieran del colapsado), se subieron los z-index de las tres capas sticky y se les agregó `will-change:transform`. Verificado con 25 rondas de scroll real a velocidad variable sobre datos reales (135 choferes), comprobando programáticamente que ninguna fila quedara por encima del header. |
