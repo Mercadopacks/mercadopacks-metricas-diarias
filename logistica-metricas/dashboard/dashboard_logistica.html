@@ -352,7 +352,7 @@
   .sticky-sentinel{ height:0; margin:0; padding:0; border:0; }
   .table-head{
     display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
-    position:sticky; top:0; z-index:15; background:var(--panel);
+    position:sticky; top:0; z-index:30; background:var(--panel); will-change:transform;
     margin:-16px -16px 12px; padding:16px 16px 10px;
   }
   .table-head h3{ margin:0; font-size:14px; font-weight:600; }
@@ -374,7 +374,7 @@
      el header de arriba lo es) para no competir por el mismo top:0. */
   tr.fila-filtros th{
     position:sticky; top:calc(var(--table-head-h, 0px) + var(--thead-row1-h, 0px));
-    z-index:9; cursor:default; background:var(--panel-2);
+    z-index:15; cursor:default; background:var(--panel-2); will-change:transform;
     padding:6px 8px 10px; border-bottom:1px solid var(--border);
   }
   input.col-filtro{
@@ -417,7 +417,15 @@
   .col-filtro-combo-lista li[aria-selected="true"]{ background:var(--gold); font-weight:600; }
 
   .table-wrap{ overflow-x:auto; max-height:520px; overflow-y:auto; }
-  table{ width:100%; border-collapse:collapse; font-size:14px; }
+  /* border-collapse:collapse + celdas position:sticky es un bug de pintado
+     conocido de Chrome: el modelo de bordes colapsados pinta por fuera del
+     compositado normal de la celda, y al scrollear deja ver una fila
+     "fantasma" superpuesta sobre el header (bug real reportado por captura
+     el 2026-11-13, reproducible arrastrando el scroll interno de la tabla).
+     border-separate + spacing:0 es visualmente idéntico acá (no hay bordes
+     verticales entre columnas que dependieran del colapsado) y saca a la
+     tabla de ese camino de pintado roto. */
+  table{ width:100%; border-collapse:separate; border-spacing:0; font-size:14px; }
   /* --table-head-h: alto real del .table-head sticky de esa tarjeta (lo
      calcula ajustarOffsetTheadSticky() en JS) — el thead de la tabla se
      pega justo DEBAJO en vez de top:0 a secas, si no el título+buscador
@@ -426,7 +434,7 @@
      (uno pegado a la página, el otro a .table-wrap). */
   .table-card{ --table-head-h: 0px; --thead-row1-h: 0px; }
   thead th{
-    position:sticky; top:var(--table-head-h, 0px); background:var(--panel); z-index:10;
+    position:sticky; top:var(--table-head-h, 0px); background:var(--panel); z-index:20; will-change:transform;
     text-align:left; color:var(--text-muted); font-weight:600; font-size:12.5px; letter-spacing:0.02em;
     padding:10px 12px; border-bottom:2px solid var(--border); cursor:pointer; white-space:nowrap;
     transition:color .15s, background .15s;

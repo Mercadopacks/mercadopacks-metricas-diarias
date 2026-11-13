@@ -1313,6 +1313,42 @@ sobre la tabla, `page.mouse.wheel` real, no `scrollTop` por JS) sobre
 mockeados) — el header ahora queda pegado directo contra el título sin
 hueco visible en ningún punto del scroll. Smoke test completo sin errores.
 
+### 20.8 Bug real (tercera vuelta, 2026-11-13): fila "fantasma" encima del header por `border-collapse` + sticky
+
+El usuario volvió a reportar con captura real (de nuevo "Choferes en ruta",
+scrolleando la tabla) una fila de datos completa pintada por ENCIMA del
+header de columnas, con texto de otra fila fantaseándose detrás de la fila
+de filtros — distinto de 20.6 y 20.7: la geometría (`getBoundingClientRect`)
+de esos elementos ya daba bien (sin huecos, sin offsets mal calculados); el
+problema era puramente de **pintado**, no de posición.
+
+**Causa real:** `table{ border-collapse:collapse; }` combinado con celdas
+`position:sticky` es un bug de renderizado conocido de Chrome — el modelo
+de bordes colapsados pinta los bordes compartidos entre celdas por un
+camino de compositing distinto al de una celda sticky normal, y durante un
+scroll rápido (rueda del mouse o arrastre de la scrollbar interna de
+`.table-wrap`) puede quedar una fila ya scrolleada pintada en una capa
+vieja por encima del header, en vez de detrás — exactamente el síntoma
+reportado. No se veía con scroll lento ni con `scrollTop` seteado por JS
+(por eso las dos rondas anteriores no lo habían atrapado), solo con scroll
+real a velocidad variable.
+
+**Fix:** se cambió `border-collapse:collapse` por `border-collapse:separate;
+border-spacing:0` en la tabla — visualmente idéntico acá porque ninguna
+columna depende de bordes verticales compartidos (todos los bordes son
+`border-bottom` por celda), pero saca a la tabla del camino de pintado roto.
+De paso se subieron los `z-index` de las tres capas sticky (título 15→30,
+header de columnas 10→20, fila de filtros 9→15) para darles más margen
+contra cualquier otro elemento superpuesto, y se agregó `will-change:
+transform` a las tres para que el navegador las mantenga en su propia capa
+de composición (evita además el salto de un frame en scrolls muy rápidos).
+
+**Verificado:** 25 rondas de scroll real (`page.mouse.wheel`) a velocidades
+variables sobre "Choferes en ruta" con datos reales de Firestore (135
+choferes), comprobando en cada ronda que ninguna fila visible quedara por
+encima del header (`row.top < header.top`) — ninguna lo hizo. Smoke test
+completo sin errores.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1351,3 +1387,4 @@ hueco visible en ningún punto del scroll. Smoke test completo sin errores.
 | 2026-11-12 | Sección 20.6: bug real reportado por el usuario con capturas — el header de columnas de toda tabla ordenable nunca quedaba sticky de verdad (`thead th[data-key]{position:relative}` pisaba el `sticky`, sección 13.5), mientras la fila de filtros sí lo estaba; al scrollear se cruzaban y el texto se veía superpuesto. Se sacó ese `relative` innecesario y se agregó `--thead-row1-h` para que la fila de filtros se pegue debajo de la de nombres de columna (no en el mismo `top`). De paso, `tbody td:first-child{white-space:nowrap}` para evitar filas más altas de lo normal (nombre + tag "muestra chica" a 2 líneas) que hacían más visible el recorte normal de una fila a mitad de scroll. Verificado con scroll real de mouse wheel (no solo geometría) — la sesión anterior había descartado por error esta misma superposición como "artefacto de Playwright"; no lo era. |
 | 2026-11-12 | Sección 20.7: segundo bug real reportado por el usuario el mismo día, también con captura — el header de columnas seguía viéndose "separado" del header de título en "Choferes en ruta" (una fila de datos asomaba por encima). Causa: `--table-head-h` se calculaba una sola vez asumiendo que el título siempre está pegado arriba cuando el `thead` lo necesita, cierto solo si se scrollea la página, no si se scrollea la tabla directamente (el gesto real del usuario). Se reemplazó por un `IntersectionObserver` con un centinela que detecta el momento real en que el título queda pegado, y solo ahí activa el offset. Verificado con scroll real de mouse wheel sobre datos reales (127 choferes). |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
+| 2026-11-13 | Sección 20.8: tercer bug real reportado por el usuario sobre el mismo header sticky, también con captura — una fila de datos se pintaba por encima del header de columnas al scrollear rápido la tabla. Causa, distinta de 20.6/20.7: `border-collapse:collapse` + celdas `position:sticky` es un bug de pintado conocido de Chrome. Se cambió a `border-collapse:separate; border-spacing:0` (visualmente idéntico, sin bordes verticales que dependieran del colapsado), se subieron los z-index de las tres capas sticky y se les agregó `will-change:transform`. Verificado con 25 rondas de scroll real a velocidad variable sobre datos reales (135 choferes), comprobando programáticamente que ninguna fila quedara por encima del header. |
