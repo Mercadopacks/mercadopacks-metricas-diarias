@@ -54,7 +54,12 @@
   }
   .num{ font-family:'Space Grotesk', 'Inter', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 
-  .app{ max-width: 1180px; margin: 0 auto; padding: 20px 20px 48px; }
+  /* 1180px dejaba franjas enormes de fondo vacío en pantallas anchas (y
+     encima las tablas con más columnas igual necesitaban scroll horizontal
+     adentro de ese espacio angosto — pedido explícito 2026-11-13: usar el
+     ancho de pantalla disponible, con un margen prudente, para que el
+     scroll horizontal de los listados deje de hacer falta). */
+  .app{ max-width: 1600px; margin: 0 auto; padding: 20px 32px 48px; }
 
   /* ---------- topbar ---------- */
   .topbar{
@@ -560,6 +565,10 @@
     .charts{ grid-template-columns:1fr; }
     .hide-mobile{ display:none; }
     .show-mobile{ display:table-cell; }
+    /* el margen de 32px de .app es para aprovechar pantallas anchas — en
+       mobile ese mismo margen fijo se come una porción grande del ancho
+       disponible, así que vuelve a los 20px de antes acá. */
+    .app{ padding-left:20px; padding-right:20px; }
   }
     .controls{ flex-direction:column; align-items:stretch; }
     .upload-zone{ justify-content:space-between; }
