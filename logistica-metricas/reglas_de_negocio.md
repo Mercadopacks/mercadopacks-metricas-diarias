@@ -1455,6 +1455,59 @@ esperable dada la cantidad de columnas que muestra a la vez. Se re-verificó
 que el fix de 20.9 (header sticky sin desalineación) sigue intacto después
 de este cambio, y smoke test completo sin errores.
 
+### 20.11 "Pendientes" en Seguimiento en ruta: distinguir gestionado de sin resolver (2026-11-13)
+
+Pedido explícito del usuario sobre el significado de negocio de
+"Pendientes" (asignados − entregados) en "Choferes en ruta": no todos los
+paquetes sin entregar son iguales. Si un chofer tiene 20 asignados, entregó
+18, y los otros 2 quedaron en un estado como `Reprogramado por comprador`
+o `Cancelado`, ese chofer **sí hizo su trabajo** — fue, gestionó el
+paquete, y cerró el estado, simplemente no terminó en una entrega. El caso
+que necesita seguimiento es el chofer que tiene paquetes pendientes en
+**cualquier otro estado** (en camino, en planta, o cualquier cosa que no
+sea un cierre real) — a ese hay que preguntarle qué pasó.
+
+**Estados que cuentan como "gestionado"** (confirmados por el usuario):
+`Nadie`, `Nadie 2DA visita`, `Reprogramado por comprador`, `Rechazado por
+el comprador`, `Reprogramado por MELI`, `Cancelado`. Cualquier otro estado
+que no sea `Entregado`/`Entregado 2DA visita` (ya contado como entrega
+efectiva) ni uno de estos seis cuenta como **sin resolver**.
+
+**Detalle importante encontrado al implementarlo:** los nombres de estado
+de LightData no son 100% consistentes en mayúsculas — `renderIndicadoresMeli`
+ya tenía la nota de que `reprogramado por meli` y `reprogramado por
+comprador` vienen en minúsculas en los datos reales, a diferencia de
+`Entregado`/`Cancelado`. Comparar tal cual (como primer intento) hubiera
+clasificado esos dos estados reales como "sin resolver" por error — el
+mismo tipo de bug silencioso de mayúsculas que ya pasó antes con otros
+campos de LightData (secciones 19.x). Se agregó `normalizarEstado()`
+(minúsculas + espacios colapsados) antes de comparar, igual que ya existe
+`normalizarLocalidad()` para el mapa de zonas.
+
+**Fix:**
+- `construirFilaRutaDesdeItems()` separa `itemsPendientes` en
+  `itemsSinResolver` (estado no gestionado) y guarda el conteo en
+  `pendientesSinResolver`.
+- El botón "Faltan: N" de cada chofer pasa a ser "Sin resolver: K" (rojo,
+  con tooltip) cuando `K > 0`, o "Gestionados: N" (gris, sin alarma) cuando
+  todos los pendientes de ese chofer ya están cerrados — "Faltan: 0" se
+  mantiene igual cuando no hay ningún pendiente.
+- El detalle que abre ese botón (misma tabla de siempre) marca cada fila
+  con un punto rojo/verde según esté sin resolver o gestionado, y ordena
+  los sin resolver primero.
+- Nuevo KPI "Sin resolver" en la fila de indicadores de "Seguimiento en
+  ruta", al lado de "Paquetes pendientes" (que se mantiene con el total
+  sin entregar, sin cambios).
+
+**Verificado contra datos reales** (135 choferes, 2026-11-12): de 398
+pendientes totales, 186 clasificaron como sin resolver. Revisando el
+detalle de un chofer con estados mixtos se confirmó que `reprogramado por
+comprador` y `reprogramado por meli` (minúsculas, reales) clasifican
+correctamente como gestionado, y un estado real no previsto (`En planta de
+procesamiento`) clasifica correctamente como sin resolver — exactamente el
+caso que la normalización de mayúsculas estaba previniendo. Smoke test
+completo sin errores.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1493,6 +1546,7 @@ de este cambio, y smoke test completo sin errores.
 | 2026-11-12 | Sección 20.6: bug real reportado por el usuario con capturas — el header de columnas de toda tabla ordenable nunca quedaba sticky de verdad (`thead th[data-key]{position:relative}` pisaba el `sticky`, sección 13.5), mientras la fila de filtros sí lo estaba; al scrollear se cruzaban y el texto se veía superpuesto. Se sacó ese `relative` innecesario y se agregó `--thead-row1-h` para que la fila de filtros se pegue debajo de la de nombres de columna (no en el mismo `top`). De paso, `tbody td:first-child{white-space:nowrap}` para evitar filas más altas de lo normal (nombre + tag "muestra chica" a 2 líneas) que hacían más visible el recorte normal de una fila a mitad de scroll. Verificado con scroll real de mouse wheel (no solo geometría) — la sesión anterior había descartado por error esta misma superposición como "artefacto de Playwright"; no lo era. |
 | 2026-11-12 | Sección 20.7: segundo bug real reportado por el usuario el mismo día, también con captura — el header de columnas seguía viéndose "separado" del header de título en "Choferes en ruta" (una fila de datos asomaba por encima). Causa: `--table-head-h` se calculaba una sola vez asumiendo que el título siempre está pegado arriba cuando el `thead` lo necesita, cierto solo si se scrollea la página, no si se scrollea la tabla directamente (el gesto real del usuario). Se reemplazó por un `IntersectionObserver` con un centinela que detecta el momento real en que el título queda pegado, y solo ahí activa el offset. Verificado con scroll real de mouse wheel sobre datos reales (127 choferes). |
 | 2026-11-11 | Sección 16: bug real corregido antes de extender el horario de corridas intradía — todo el cálculo de "hoy"/"ayer" usaba la fecha UTC cruda asumiendo que coincidía con la de Argentina, cierto solo entre las 14:00 y 21:00 UTC. Se corrigió restando 3 horas (ART=UTC-3) antes de calcular fecha/día de semana, tanto en `descarga_diaria.yml` como en `fecha_descarga.calcular_fecha_objetivo()`. Con el fix, se extendieron las corridas intradía hasta las 23:40 ART (antes 18:00) para seguimiento en vivo de repartidores, con 2 jobs de cron-job.org en vez de 1 (ver sección 16 para por qué). |
+| 2026-11-13 | Sección 20.11: "Pendientes" de un chofer en "Seguimiento en ruta" ahora distingue gestionado (el chofer fue y cerró el paquete en un estado terminal — Nadie, Nadie 2DA visita, Reprogramado por comprador, Rechazado por el comprador, Reprogramado por MELI, Cancelado — aunque no haya sido una entrega) de sin resolver (cualquier otro estado, que sí necesita preguntarle al chofer qué pasó). Botón "Faltan: N" pasó a "Sin resolver: K" (rojo) o "Gestionados: N" (gris) según corresponda, nuevo KPI "Sin resolver" en los indicadores, y el detalle marca cada fila con un punto de color. Los estados de LightData no son consistentes en mayúsculas (`reprogramado por meli`/`reprogramado por comprador` vienen en minúsculas en los datos reales) — se normaliza antes de comparar para no clasificarlos mal. |
 | 2026-11-13 | Sección 20.10: el contenedor principal del dashboard pasó de 1180px a 1600px de ancho máximo (con 32px de margen lateral en vez de 20px, 20px de nuevo en mobile) — pedido explícito del usuario para aprovechar el ancho real de pantallas anchas y, de paso, sacar el scroll horizontal que varios listados todavía necesitaban adentro del espacio angosto de antes. "Choferes en ruta" y "Todos los repartidores" dejan de necesitar scroll horizontal en cualquier ancho de escritorio común; "Ranking de choferes" (11 columnas, la tabla más ancha) lo dejó de necesitar desde 1440px hacia arriba, y por debajo mantiene su scroll horizontal interno como respaldo. |
 | 2026-11-13 | Sección 20.9: rediseño del encabezado fijo de tabla, que resuelve de raíz los cuatro reportes seguidos (20.6 a 20.8 fueron parches a casos particulares). El dato clave lo aportó el usuario: el error aparecía scrolleando con la barra de la PÁGINA. Causa de fondo: el título+buscador estaba fijado respecto de la página y la cabecera de columnas respecto del scroll interno de la tabla — dos sistemas de coordenadas independientes, imposibles de mantener pegados con un offset fijo. Fix: el título+buscador pasó a vivir dentro del mismo contenedor de scroll que la tabla, así las tres capas fijas se apilan contra el mismo borde. Se borró el centinela/IntersectionObserver de 20.7, que quedó de más. Verificado con 111 mediciones automáticas sobre 3 tablas, dos alturas de ventana y mobile: 0px de desalineación. |
 | 2026-11-13 | Sección 20.8: tercer bug real reportado por el usuario sobre el mismo header sticky, también con captura — una fila de datos se pintaba por encima del header de columnas al scrollear rápido la tabla. Causa, distinta de 20.6/20.7: `border-collapse:collapse` + celdas `position:sticky` es un bug de pintado conocido de Chrome. Se cambió a `border-collapse:separate; border-spacing:0` (visualmente idéntico, sin bordes verticales que dependieran del colapsado), se subieron los z-index de las tres capas sticky y se les agregó `will-change:transform`. Verificado con 25 rondas de scroll real a velocidad variable sobre datos reales (135 choferes), comprobando programáticamente que ninguna fila quedara por encima del header. |

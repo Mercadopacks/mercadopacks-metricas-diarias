@@ -148,7 +148,7 @@
     border:5px solid transparent; border-top-color:var(--border);
   }
   .mini-kpi .mini-value-row{ display:flex; align-items:baseline; gap:7px; }
-  .mini-dot{ width:9px; height:9px; border-radius:50%; flex:none; position:relative; top:-1px; }
+  .mini-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; flex:none; position:relative; top:-1px; }
   .mini-dot.verde{ background:var(--verde); }
   .mini-dot.amarillo{ background:var(--amarillo); }
   .mini-dot.rojo{ background:var(--rojo-oscuro); }
@@ -236,6 +236,13 @@
   }
   .ruta-pendientes-btn:hover, .ruta-pendientes-btn:focus-visible{ color:var(--gold-ink); background:var(--gold-soft); }
   .ruta-pendientes-btn:focus-visible{ outline:2px solid var(--gold); outline-offset:1px; }
+  /* Distinción pedida 2026-11-13 (sección 20.11): un pendiente en un
+     estado de gestión cerrada (chofer fue, cerró el paquete, no quedó
+     "en el aire") no es lo mismo que uno sin resolver — solo el segundo
+     necesita seguimiento. */
+  .ruta-pendientes-btn.sin-resolver{ color:var(--rojo-oscuro); }
+  .ruta-pendientes-btn.sin-resolver:hover, .ruta-pendientes-btn.sin-resolver:focus-visible{ background:var(--rojo-soft); color:var(--rojo-oscuro); }
+  .ruta-pendientes-btn.gestionado{ color:var(--text-muted); }
   tr.fila-demorado td:first-child{ border-left:3px solid var(--amarillo); }
   tr.fila-muy-demorado td:first-child{ border-left:3px solid var(--rojo-oscuro); }
 
@@ -873,6 +880,7 @@
               <input id="buscarRutaDetalle" class="buscador" placeholder="Buscar tracking o cliente…" />
               <button class="btn" id="rutaDetalleCerrar" type="button">Cerrar</button>
             </div>
+            <p class="tabla-nota"><span class="mini-dot rojo" style="margin-right:5px;" aria-hidden="true"></span>Sin resolver (el chofer no fue o no cerró el estado) primero, <span class="mini-dot verde" style="margin:0 5px;" aria-hidden="true"></span>gestionados (Nadie, Reprogramado, Rechazado, Cancelado — ruta terminada igual) después.</p>
             <table>
               <thead>
                 <tr>
@@ -2504,6 +2512,37 @@
   const ESTADOS_ENTREGA_RUTA = ['Entregado', 'Entregado 2DA visita']; // = ESTADOS_ENTREGA_EFECTIVA de generar_reporte.py
   const ESTADO_A_RETIRAR_RUTA = 'A retirar'; // = ESTADO_A_RETIRAR de generar_reporte.py — aún no llegó al depósito, no cuenta como "en ruta"
 
+  // Pasa cualquier estado de LightData a minúsculas/sin espacios de más
+  // antes de comparar — los nombres de estado NO son 100% consistentes en
+  // mayúsculas (ej. "reprogramado por meli" viene en minúsculas en los
+  // datos reales, a diferencia de "Entregado"/"Cancelado"; ver nota en
+  // renderIndicadoresMeli), así que comparar tal cual rompería en
+  // silencio para ese caso puntual.
+  function normalizarEstado(str){
+    return (str || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  }
+
+  // Pendiente (asignado, no entregado) en el que el chofer SÍ hizo una
+  // gestión real — fue a la dirección e intentó/resolvió la entrega, y
+  // cerró el paquete en alguno de estos estados — contra uno que quedó sin
+  // tocar o en cualquier otro estado abierto (pedido explícito del usuario
+  // 2026-11-13, ver reglas_de_negocio.md sección 20.11): un chofer con
+  // paquetes asignados, algunos entregados y el resto en estos estados
+  // terminó bien su hoja de ruta; a los que les queda algo en OTRO estado
+  // (sin gestionar) hay que preguntarles qué pasó.
+  const ESTADOS_PENDIENTE_GESTIONADO = [
+    'Nadie',
+    'Nadie 2DA visita',
+    'Reprogramado por comprador',
+    'Rechazado por el comprador',
+    'Reprogramado por MELI',
+    'Cancelado',
+  ].map(normalizarEstado);
+
+  function esPendienteGestionado(estado){
+    return ESTADOS_PENDIENTE_GESTIONADO.includes(normalizarEstado(estado));
+  }
+
   // Quita acentos, pasa a minúsculas y normaliza espacios/comas — para que
   // "José C. Paz", "jose clemente paz" y "JOSE C PAZ" calcen contra la
   // misma clave del mapa de abajo sin tener que listar cada variante.
@@ -2741,6 +2780,10 @@
     // el detalle de esos envíos puntuales al hacer click (pedido
     // 2026-11-12), igual que "Detalle de envíos" en Seguimiento de Envíos.
     const itemsPendientes = asignados.filter(it => !ESTADOS_ENTREGA_RUTA.includes(it.estado));
+    // De esos pendientes, los que NO están en un estado de gestión cerrada
+    // (ver ESTADOS_PENDIENTE_GESTIONADO) — son los que de verdad quedaron
+    // sin resolver y hay que preguntarle al chofer qué pasó.
+    const itemsSinResolver = itemsPendientes.filter(it => !esPendienteGestionado(it.estado));
 
     const horasEntregas = entregados
       .map(it => horaHHMMaMinutos(it.horaEntrega))
@@ -2792,7 +2835,8 @@
     return {
       nombre, zona,
       asignados: asignados.length, entregados: entregados.length, pendientes,
-      itemsPendientes,
+      pendientesSinResolver: itemsSinResolver.length,
+      itemsPendientes, itemsSinResolver,
       minEntreEntregas, velocidad, horaPrimeraEntregaMin, entregadosPre21,
       pctProgreso: asignados.length ? (entregados.length / asignados.length) * 100 : 0,
       estadoColor: estado.color, estadoLabel: estado.label, estadoOrden: estado.orden,
@@ -2836,6 +2880,7 @@
     const conVelocidad = filas.filter(f => f.velocidad !== null);
     const velocidadProm = conVelocidad.length ? conVelocidad.reduce((s,f) => s + f.velocidad, 0) / conVelocidad.length : null;
     const pendientesTotal = filas.reduce((s,f) => s + f.pendientes, 0);
+    const sinResolverTotal = filas.reduce((s,f) => s + f.pendientesSinResolver, 0);
     const colorPct = pctDentroRitmo === null ? 'gris' : pctDentroRitmo >= 80 ? 'verde' : pctDentroRitmo >= 60 ? 'amarillo' : 'rojo';
     const tarjetas = [
       { label: 'Choferes en ruta', valor: fmtNum(total),
@@ -2848,6 +2893,8 @@
         info: 'Paquetes por hora promedio de los choferes con al menos 2 entregas hoy (60 ÷ minutos entre entregas de cada chofer).' },
       { label: 'Paquetes pendientes', valor: fmtNum(pendientesTotal),
         info: 'Suma de paquetes sin entregar de todas las hojas de ruta de este filtro (asignados − entregados).' },
+      { label: 'Sin resolver', valor: fmtNum(sinResolverTotal), dot: sinResolverTotal > 0 ? 'rojo' : 'verde',
+        info: 'De los pendientes, los que NO quedaron en un estado de gestión cerrada (Nadie, Nadie 2DA visita, Reprogramado por comprador, Rechazado por el comprador, Reprogramado por MELI, Cancelado) — el chofer no fue a la dirección o no cerró el estado. Son los que hay que preguntarle qué pasó; el resto de los pendientes ya están gestionados aunque no se hayan entregado.' },
     ];
     cont.innerHTML = tarjetas.map(t => `
       <div class="mini-kpi">
@@ -2912,9 +2959,11 @@
           </td>
           <td class="num-col">
             <div class="ruta-progreso-txt">Pre 21: ${fmtNum(f.entregadosPre21)}</div>
-            ${f.pendientes > 0
-              ? `<button type="button" class="ruta-pendientes-btn" data-chofer="${escapeHtml(f.nombre)}">Faltan: ${fmtNum(f.pendientes)}</button>`
-              : `<div class="ruta-progreso-txt">Faltan: 0</div>`}
+            ${f.pendientes === 0
+              ? `<div class="ruta-progreso-txt">Faltan: 0</div>`
+              : f.pendientesSinResolver > 0
+                ? `<button type="button" class="ruta-pendientes-btn sin-resolver" data-chofer="${escapeHtml(f.nombre)}" title="De ${fmtNum(f.pendientes)} pendientes, ${fmtNum(f.pendientesSinResolver)} sin gestión cerrada — preguntarle al chofer qué pasó">Sin resolver: ${fmtNum(f.pendientesSinResolver)}</button>`
+                : `<button type="button" class="ruta-pendientes-btn gestionado" data-chofer="${escapeHtml(f.nombre)}" title="${fmtNum(f.pendientes)} pendientes, todos en un estado de gestión cerrada (ruta terminada correctamente)">Gestionados: ${fmtNum(f.pendientes)}</button>`}
           </td>
         </tr>
       `; }).join('');
@@ -2952,15 +3001,27 @@
       tbody.innerHTML = '<tr><td colspan="6" class="empty-note">Sin resultados.</td></tr>';
       return;
     }
-    tbody.innerHTML = items.map(it => `
+    // Sin resolver primero — son los que hay que revisar, no hace falta
+    // scrollear pasando los ya gestionados para encontrarlos.
+    const ordenados = items.slice().sort((a, b) => {
+      const ga = esPendienteGestionado(a.estado) ? 1 : 0;
+      const gb = esPendienteGestionado(b.estado) ? 1 : 0;
+      return ga - gb;
+    });
+    tbody.innerHTML = ordenados.map(it => {
+      const gestionado = esPendienteGestionado(it.estado);
+      return `
       <tr>
         <td>${escapeHtml(it.tracking || '—')}</td>
         <td>${escapeHtml(it.cliente || '—')}</td>
         <td>${escapeHtml(it.localidad || '—')}</td>
         <td class="hide-mobile">${escapeHtml(it.zona || '—')}</td>
-        <td>${escapeHtml(it.estado || '—')}</td>
+        <td>
+          <span class="mini-dot ${gestionado ? 'verde' : 'rojo'}" style="margin-right:6px;" aria-hidden="true"></span>${escapeHtml(it.estado || '—')}
+        </td>
         <td class="num-col hide-mobile">${escapeHtml(it.horaEntrega || '—')}</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   }
 
   function cerrarDetalleRutaChofer(){
