@@ -901,8 +901,8 @@
         <div class="mini-kpis-linea" id="rutaMiniKpis" aria-label="Indicadores de la ruta en curso"></div>
 
         <div class="card" id="rutaAlertasCard" style="margin-top:4px;">
-          <h3>Demorados ahora</h3>
-          <div class="card-sub">Choferes con demora sobre su hoja de ruta — para accionar primero</div>
+          <h3>Demorados / sin actividad ahora</h3>
+          <div class="card-sub">Choferes con demora sobre su hoja de ruta, o sin ningún movimiento hace rato — para accionar primero</div>
           <div id="rutaAlertasLista"></div>
         </div>
 
@@ -921,7 +921,10 @@
                     <span class="th-info" tabindex="0" role="img" aria-label="Qué tan rápido entrega, medido entre una entrega y la siguiente: Óptimo hasta 5 min, A tiempo de 6 a 20, Demorado más de 20. Pasá el mouse sobre el valor de cada fila para ver el detalle (minutos entre entregas, hora de la primera entrega y paquetes por hora)." data-tip="Óptimo: hasta 5 min entre entregas&#10;A tiempo: de 6 a 20 min&#10;Demorado: más de 20 min&#10;&#10;Pasá el mouse sobre el valor de cada chofer para ver el detalle.">i</span>
                   </th>
                   <th data-key="estadoRutaOrden" class="celda-centrada" scope="col">Estado
-                    <span class="th-info" tabindex="0" role="img" aria-label="Avance del recorrido contra lo asignado: Sin iniciar (nada entregado ni gestionado), En ruta (ya entregó o gestionó algo, le quedan pendientes sin resolver), Terminó sin pendientes (entregó el 100%) o Terminó con pendientes (no le queda ningún pendiente sin resolver, aunque no haya entregado todo)." data-tip="Sin iniciar: 0 entregas y 0 gestionados&#10;En ruta: ya avanzó, le quedan pendientes sin resolver&#10;Terminó sin pendientes: entregó el 100%&#10;Terminó con pendientes: sin pendientes sin resolver, aunque no haya entregado todo">i</span>
+                    <span class="th-info" tabindex="0" role="img" aria-label="Avance del recorrido contra lo asignado: Sin iniciar (nada entregado ni gestionado), En ruta (ya entregó o gestionó algo, le quedan pendientes sin resolver), Sin terminar (pasadas las 23:30, o una fecha ya cerrada, y todavía le quedan pendientes sin resolver), Terminó sin pendientes (entregó el 100%) o Terminó con pendientes (no le queda ningún pendiente sin resolver, aunque no haya entregado todo)." data-tip="Sin iniciar: 0 entregas y 0 gestionados&#10;En ruta: ya avanzó, le quedan pendientes sin resolver&#10;Sin terminar: cerró el día (23:30 o fecha pasada) con pendientes sin resolver&#10;Terminó sin pendientes: entregó el 100%&#10;Terminó con pendientes: sin pendientes sin resolver, aunque no haya entregado todo">i</span>
+                  </th>
+                  <th data-key="horaFinMin" class="celda-centrada" scope="col">Hora fin.
+                    <span class="th-info" tabindex="0" role="img" aria-label="Hora del último movimiento registrado (última entrega o última gestión de un pendiente). Solo se muestra cuando el recorrido terminó." data-tip="Hora del último movimiento (entrega o gestión de un pendiente).&#10;Se muestra solo cuando el recorrido ya terminó.">i</span>
                   </th>
                   <th data-key="pctProgreso" scope="col">Progreso</th>
                   <th data-key="pendientes" class="num-col" scope="col">Pre 21 / Pendientes</th>
@@ -2855,8 +2858,9 @@
   const COLUMNAS_FILTRO_RUTA = [
     null,
     { tipo:'select', campo:'zona', opciones:() => ['CABA','Norte','Sur','Oeste','Sin zona'], todasLabel:'Todas' },
-    { tipo:'select', campo:'estadoLabel', opciones:() => ['Óptimo','A tiempo','Demorado','Sin datos'], todasLabel:'Todos' },
-    { tipo:'select', campo:'estadoRutaLabel', opciones:() => ['Sin iniciar','En ruta','Terminó sin pendientes','Terminó con pendientes'], todasLabel:'Todos' },
+    { tipo:'select', campo:'estadoLabel', opciones:() => ['Óptimo','A tiempo','Demorado','Sin actividad','Sin datos'], todasLabel:'Todos' },
+    { tipo:'select', campo:'estadoRutaLabel', opciones:() => ['Sin iniciar','En ruta','Sin terminar','Terminó sin pendientes','Terminó con pendientes'], todasLabel:'Todos' },
+    { tipo:'texto', campo:'horaFinTxt', placeholder:'ej. 22:1' },
     { tipo:'texto', campo:'progresoTxt', placeholder:'ej. 15 de' },
     { tipo:'texto', campo:'pendientes', placeholder:'ej. 0' },
   ];
@@ -2892,7 +2896,21 @@
   // ruta" (que ahora vive en la columna "Estado") a propósito: un chofer
   // puede tener exactamente 1 entrega (ritmo aún no medible) y no por eso
   // estar "sin iniciar".
-  function calcularEstadoRuta(minEntreEntregas){
+  // Umbral de "sin actividad" (pedido 2026-11-14): un chofer puede tener
+  // un ritmo histórico "A tiempo" u "Óptimo" calculado sobre las entregas
+  // que YA hizo, y sin embargo haberse quedado parado hace rato (ej.
+  // entregó 5 de 30 y no se mueve más — accidente, vehículo roto, etc.).
+  // minEntreEntregas no detecta esto porque es un promedio sobre el
+  // pasado, no mide el presente. Por eso, además del ritmo, se mide hace
+  // cuánto no hay NINGÚN movimiento nuevo (entrega o gestión de un
+  // pendiente) — si pasa este umbral y la ruta no terminó, se alerta,
+  // sin importar lo bien que venía el promedio.
+  const UMBRAL_SIN_ACTIVIDAD_MIN = 45;
+
+  function calcularEstadoRuta(minEntreEntregas, minutosSinActividad){
+    if(minutosSinActividad !== null && minutosSinActividad > UMBRAL_SIN_ACTIVIDAD_MIN){
+      return { color: 'rojo', label: 'Sin actividad', orden: -1 };
+    }
     if(minEntreEntregas === null) return { color: 'gris', label: 'Sin datos', orden: 3 };
     if(minEntreEntregas <= 5) return { color: 'verde', label: 'Óptimo', orden: 0 };
     if(minEntreEntregas <= 20) return { color: 'azul', label: 'A tiempo', orden: 1 };
@@ -2914,22 +2932,44 @@
   //                           entregó quedaron en un estado de gestión
   //                           cerrada (ver ESTADOS_PENDIENTE_GESTIONADO),
   //                           así que el recorrido está cerrado igual.
-  function calcularEstadoRutaChofer(asignados, entregados, pendientes, pendientesSinResolver){
+  //   Sin terminar:           el día ya cerró (pasaron las 23:30 de hoy,
+  //                           o es una fecha anterior a hoy — pedido
+  //                           2026-11-14) y todavía quedan pendientes SIN
+  //                           resolver. Antes del cierre esto se veía
+  //                           igual que "Sin iniciar"/"En ruta", lo cual
+  //                           escondía que ese chofer ya no va a resolver
+  //                           nada más — reemplaza a ambos una vez
+  //                           cerrado el día, para que no quede
+  //                           disfrazado de "todavía en curso".
+  function calcularEstadoRutaChofer(asignados, entregados, pendientes, pendientesSinResolver, diaCerrado){
     if(pendientesSinResolver === 0){
       return pendientes === 0
         ? { color: 'verde', label: 'Terminó sin pendientes', orden: 0 }
         : { color: 'azul', label: 'Terminó con pendientes', orden: 1 };
     }
-    if(entregados === 0 && pendientesSinResolver === asignados){
-      return { color: 'gris', label: 'Sin iniciar', orden: 3 };
+    if(diaCerrado){
+      return { color: 'rojo', label: 'Sin terminar', orden: 2 };
     }
-    return { color: 'amarillo', label: 'En ruta', orden: 2 };
+    if(entregados === 0 && pendientesSinResolver === asignados){
+      return { color: 'gris', label: 'Sin iniciar', orden: 4 };
+    }
+    return { color: 'amarillo', label: 'En ruta', orden: 3 };
   }
+
+  // Corte de cierre del día operativo (pedido 2026-11-14): pasadas las
+  // 23:30 ya no se espera que un chofer siga resolviendo pendientes — si
+  // todavía le quedan sin resolver a esa hora, es un "Sin terminar" real,
+  // no un "En ruta" que todavía puede cerrarse solo.
+  const HORA_CIERRE_DIA_MIN = 23 * 60 + 30;
 
   // Arma la fila de un chofer a partir de los items de
   // envios_detalle/<hoy>/choferes/<id> (mismo "item" que ya usa el detalle
   // de Envíos: tracking/cliente/localidad/zona/estado/horaEntrega).
-  function construirFilaRutaDesdeItems(nombre, items){
+  // `fecha` (la del detalle que se está leyendo, "YYYY-MM-DD") hace falta
+  // para saber si el día ya cerró (ver HORA_CIERRE_DIA_MIN) y para no
+  // calcular "sin actividad" (ver UMBRAL_SIN_ACTIVIDAD_MIN) sobre una
+  // fecha pasada, donde "ahora" no tiene ningún sentido.
+  function construirFilaRutaDesdeItems(nombre, items, fecha){
     // "A retirar" = todavía no llegó al depósito, no es parte de la ruta de
     // hoy de este chofer (mismo criterio que el resto del dashboard,
     // regla de negocio #1).
@@ -2967,6 +3007,37 @@
     const velocidad = minEntreEntregas ? Math.round((60 / minEntreEntregas) * 10) / 10 : null;
     const entregadosPre21 = horasEntregas.filter(m => m < CORTE_21HS_MIN).length;
 
+    // Hora del último movimiento del chofer, sea entrega o gestión de un
+    // pendiente (Nadie/Reprogramado/Rechazado/Cancelado también guardan
+    // horaEntrega al cambiar de estado) — "hora de finalización" cuando el
+    // recorrido terminó, y base para detectar "sin actividad" cuando no.
+    const horasTodoMovimiento = asignados
+      .map(it => horaHHMMaMinutos(it.horaEntrega))
+      .filter(m => m !== null);
+    const horaUltimaActividadMin = horasTodoMovimiento.length ? Math.max(...horasTodoMovimiento) : null;
+
+    // "Ahora" solo tiene sentido para la fecha de hoy — en una fecha
+    // pasada no hay "minutos desde la última actividad" que medir, y el
+    // día ya está cerrado de por sí.
+    const esHoy = fecha === todayISO();
+    const ahora = new Date();
+    const ahoraMin = esHoy ? (ahora.getHours() * 60 + ahora.getMinutes()) : null;
+    const diaCerrado = !esHoy || ahoraMin >= HORA_CIERRE_DIA_MIN;
+    // Solo alerta "sin actividad" cuando hay un ritmo (minEntreEntregas)
+    // calculado que podría estar mintiendo — ese es justo el caso que
+    // reportó el usuario: el promedio sobre lo YA entregado da "Óptimo"/
+    // "A tiempo", pero el chofer se detuvo hace rato y le quedan
+    // pendientes sin resolver. Si nunca entregó al menos 2 veces
+    // (minEntreEntregas === null) no hay ritmo que pueda estar
+    // mintiendo — ese chofer ya se ve como "Sin iniciar"/"Sin terminar"
+    // en la columna Estado, no hace falta una segunda alerta redundante
+    // sobre el mismo hecho (bug real encontrado probando esto con datos
+    // de producción: un chofer con 0 entregas pero una sola gestión
+    // vieja disparaba "Sin actividad" aunque Estado ya decía todo).
+    const minutosSinActividad = (esHoy && !diaCerrado && itemsSinResolver.length > 0 && minEntreEntregas !== null && horaUltimaActividadMin !== null)
+      ? (ahoraMin - horaUltimaActividadMin)
+      : null;
+
     // Zona del chofer hoy = la más frecuente entre sus paquetes asignados
     // (un chofer puede tener paquetes de más de una zona en el día),
     // clasificando cada paquete por su LOCALIDAD (no por el campo "Zona"
@@ -2991,20 +3062,28 @@
       ? zonasReconocidas.sort((a, b) => conteoZonas[b] - conteoZonas[a])[0]
       : 'Sin zona';
 
-    const estado = calcularEstadoRuta(minEntreEntregas);
-    const estadoRuta = calcularEstadoRutaChofer(asignados.length, entregados.length, pendientes, itemsSinResolver.length);
+    const estado = calcularEstadoRuta(minEntreEntregas, minutosSinActividad);
+    const estadoRuta = calcularEstadoRutaChofer(asignados.length, entregados.length, pendientes, itemsSinResolver.length, diaCerrado);
+    // "Hora de finalización" solo tiene sentido una vez que el recorrido
+    // terminó (ver estadoRuta) — mientras sigue "En ruta"/"Sin iniciar"/
+    // "Sin terminar" todavía puede haber más movimiento, así que se
+    // muestra "—" para no insinuar un cierre que no pasó.
+    const terminoElRecorrido = itemsSinResolver.length === 0;
+    const horaFinMin = terminoElRecorrido ? horaUltimaActividadMin : null;
     return {
       nombre, zona,
       asignados: asignados.length, entregados: entregados.length, pendientes,
       pendientesSinResolver: itemsSinResolver.length,
       itemsPendientes, itemsSinResolver,
       minEntreEntregas, velocidad, horaPrimeraEntregaMin, entregadosPre21,
+      horaFinMin, minutosSinActividad,
       pctProgreso: asignados.length ? (entregados.length / asignados.length) * 100 : 0,
       estadoColor: estado.color, estadoLabel: estado.label, estadoOrden: estado.orden,
       estadoRutaColor: estadoRuta.color, estadoRutaLabel: estadoRuta.label, estadoRutaOrden: estadoRuta.orden,
       // Versiones en texto de columnas que se muestran formateadas, para
       // poder filtrarlas por substring igual que cualquier otra columna.
       horaPrimeraEntregaTxt: horaPrimeraEntregaMin === null ? '—' : fmtHoraDelDia(horaPrimeraEntregaMin),
+      horaFinTxt: horaFinMin === null ? '—' : fmtHoraDelDia(horaFinMin),
       progresoTxt: `${entregados.length} de ${asignados.length}`,
     };
   }
@@ -3023,7 +3102,7 @@
     const filas = [];
     snap.forEach(doc => {
       const data = doc.data() || {};
-      filas.push(construirFilaRutaDesdeItems(data.chofer || doc.id, data.items || []));
+      filas.push(construirFilaRutaDesdeItems(data.chofer || doc.id, data.items || [], fecha));
     });
     stateRuta.cachePorFecha[fecha] = filas;
     return filas;
@@ -3077,10 +3156,15 @@
 
   function renderRutaAlertas(filas){
     const cont = document.getElementById('rutaAlertasLista');
+    // "Sin actividad" entra en esta misma lista (comparte color rojo con
+    // "Demorado") — pero puede tener minEntreEntregas en null (si llegó a
+    // detenerse después de una sola entrega, todavía sin ritmo medible),
+    // así que el orden y el texto no pueden asumir que siempre hay un
+    // número ahí (bug real: .toFixed sobre null tira TypeError).
     const demorados = filas.filter(f => f.estadoColor === 'rojo')
-      .slice().sort((a,b) => b.minEntreEntregas - a.minEntreEntregas);
+      .slice().sort((a,b) => (b.minEntreEntregas ?? -1) - (a.minEntreEntregas ?? -1));
     if(demorados.length === 0){
-      cont.innerHTML = '<p class="empty-note">Ningún chofer está demorado en este filtro.</p>';
+      cont.innerHTML = '<p class="empty-note">Ningún chofer está demorado ni sin actividad en este filtro.</p>';
       return;
     }
     cont.innerHTML = demorados.map(f => `
@@ -3088,7 +3172,7 @@
         <span>${escapeHtml(f.nombre)}<span class="repa-alerta-chip-zona">${escapeHtml(f.zona)}</span></span>
         <span style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
           <span style="color:var(--text-muted); font-size:12px;">${fmtNum(f.entregados)}/${fmtNum(f.asignados)} entregados · faltan ${fmtNum(f.pendientes)}</span>
-          <span class="repa-rag ${f.estadoColor}" style="margin-top:0;"><span class="repa-rag-dot"></span>${escapeHtml(f.estadoLabel)} · ${f.minEntreEntregas.toFixed(1)} min/entrega</span>
+          <span class="repa-rag ${f.estadoColor}" style="margin-top:0;"><span class="repa-rag-dot"></span>${escapeHtml(f.estadoLabel)} · ${f.estadoLabel === 'Sin actividad' ? `hace ${Math.round(f.minutosSinActividad)} min` : (f.minEntreEntregas === null ? 'sin datos' : f.minEntreEntregas.toFixed(1) + ' min/entrega')}</span>
         </span>
       </div>
     `).join('');
@@ -3101,15 +3185,22 @@
     const ordenadas = ordenarPorClave(filtradas, stateRuta.sort);
     const tbody = document.getElementById('tbodyChoferesRuta');
     if(ordenadas.length === 0){
-      tbody.innerHTML = '<tr><td colspan="6" class="empty-note">Sin resultados.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-note">Sin resultados.</td></tr>';
     } else {
       tbody.innerHTML = ordenadas.map(f => {
-        const filaClase = f.estadoColor === 'rojo' ? 'fila-muy-demorado' : '';
+        // "Sin actividad" (ver UMBRAL_SIN_ACTIVIDAD_MIN) resalta la fila
+        // igual que "Demorado" — en ambos casos hay que mirar al chofer,
+        // aunque la causa sea distinta (ritmo bajo vs. posible accidente
+        // o corte de actividad).
+        const filaClase = (f.estadoColor === 'rojo') ? 'fila-muy-demorado' : '';
         // Min. entre entregas / Hora 1ª entrega / Paq./hora ya no son
         // columnas propias (pedido 2026-11-14, para hacer lugar a la
         // columna "Estado") — se muestran en el tooltip del badge de
         // Rendimiento al pasar el mouse o llegar con el teclado.
-        const tipRendimiento = `Min. entre entregas: ${f.minEntreEntregas === null ? '—' : f.minEntreEntregas.toFixed(1) + ' min'}\n`
+        const tipRendimiento = (f.estadoLabel === 'Sin actividad'
+          ? `⚠ Sin ningún movimiento hace ${Math.round(f.minutosSinActividad)} min — consultar al chofer qué pasó (posible accidente, vehículo roto, etc.)\n\n`
+          : '')
+          + `Min. entre entregas: ${f.minEntreEntregas === null ? '—' : f.minEntreEntregas.toFixed(1) + ' min'}\n`
           + `Hora 1ª entrega: ${f.horaPrimeraEntregaTxt}\n`
           + `Paq./hora: ${f.velocidad === null ? '—' : f.velocidad.toFixed(1)}`;
         return `
@@ -3122,6 +3213,7 @@
             </span>
           </td>
           <td class="celda-centrada"><span class="repa-rag ${f.estadoRutaColor}" style="margin-top:0;"><span class="repa-rag-dot"></span>${escapeHtml(f.estadoRutaLabel)}</span></td>
+          <td class="celda-centrada">${escapeHtml(f.horaFinTxt)}</td>
           <td>
             <div class="ruta-progreso">
               <span class="ruta-progreso-txt">${fmtNum(f.entregados)} de ${fmtNum(f.asignados)}</span>

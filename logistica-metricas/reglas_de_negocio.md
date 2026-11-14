@@ -1723,6 +1723,107 @@ apareció un error real no relacionado (`TypeError` en
 con "Seguimiento en ruta" ni con nada tocado hoy; reportado al usuario para
 decidir por separado si se investiga.
 
+### 20.15 Hora de finalización, alerta de "Sin actividad" y cierre del día a las 23:30 (2026-11-14)
+
+Tres pedidos del usuario sobre "Seguimiento en ruta", seguidos a 20.14:
+
+1. Columna nueva **"Hora fin."** — hora del último movimiento registrado
+   (entrega o gestión de un pendiente). Solo se completa cuando el
+   recorrido ya terminó (`estadoRuta` sin pendientes sin resolver); si
+   todavía está en curso se muestra "—" en vez de insinuar un cierre que
+   no pasó.
+2. Alerta de **"Sin actividad"** en Rendimiento: el ritmo
+   (`minEntreEntregas`) es un promedio sobre entregas YA hechas, así que
+   un chofer que entregó pocos paquetes y se quedó parado (accidente,
+   vehículo roto, etc.) podía seguir mostrando "Óptimo"/"A tiempo" sin que
+   nadie lo notara. Ahora, si pasan más de `UMBRAL_SIN_ACTIVIDAD_MIN`
+   (45 min) sin ningún movimiento nuevo (entrega o gestión), el badge de
+   Rendimiento pasa a "Sin actividad" (rojo), pisando el ritmo calculado,
+   con un tooltip que avisa hace cuántos minutos no hay novedades.
+3. Columna **"Estado"**: a partir de las 23:30 (`HORA_CIERRE_DIA_MIN`) o en
+   cualquier fecha pasada (día ya cerrado), un chofer con pendientes SIN
+   resolver deja de mostrar "Sin iniciar"/"En ruta" (que insinúan que
+   todavía puede resolverse solo) y pasa a **"Sin terminar"** (rojo) — un
+   estado real de cierre fallido, no "en curso".
+
+**`calcularEstadoRuta(minEntreEntregas, minutosSinActividad)`** gana un
+segundo parámetro: si `minutosSinActividad !== null` y supera el umbral,
+devuelve `{color:'rojo', label:'Sin actividad', orden:-1}` sin mirar
+`minEntreEntregas` — la alerta pisa cualquier ritmo, porque un ritmo
+"bueno" calculado sobre entregas viejas no sirve si el chofer dejó de
+moverse. El cálculo de `minutosSinActividad` (en
+`construirFilaRutaDesdeItems`) solo se hace cuando:
+- es la fecha de **hoy** (no tiene sentido medir "ahora" contra una fecha
+  pasada, y esa fecha ya cae en "Sin terminar" por el punto 3);
+- el día **no cerró** todavía (antes de las 23:30 — después, ya manda
+  "Sin terminar" en Estado, no hace falta una alerta más sobre el ritmo);
+- le quedan **pendientes sin resolver** (si ya terminó, no hay nada que
+  esperar);
+- **ya tuvo al menos 2 entregas** (`minEntreEntregas !== null`) — bug real
+  encontrado probando esto contra los 41 choferes reales de hoy: sin este
+  último filtro, un chofer con 0 entregas pero con una sola gestión vieja
+  en algún pendiente (el campo `horaEntrega` se completa también en
+  pendientes gestionados, no solo en entregas) disparaba "Sin actividad"
+  aunque la columna Estado ya decía "Sin iniciar" — alerta redundante
+  sobre el mismo hecho, para un caso que el pedido original no cubría (el
+  escenario reportado es "entregó algunos y se quedó parado", no "nunca
+  arrancó"). Con el filtro, solo se alerta cuando hay un ritmo calculado
+  que podría estar mintiendo.
+
+**`calcularEstadoRutaChofer(asignados, entregados, pendientes, pendientesSinResolver, diaCerrado)`**
+gana `diaCerrado` como quinto parámetro: si hay pendientes sin resolver Y
+el día cerró, devuelve `{color:'rojo', label:'Sin terminar', orden:2}` —
+pisa tanto a "Sin iniciar" como a "En ruta" (ambos casos se consideran
+"Sin terminar" una vez cerrado el día, ya no importa si llegó a arrancar o
+no). `diaCerrado = !esHoy || ahoraMin >= HORA_CIERRE_DIA_MIN` — para una
+fecha que no es hoy, el día está cerrado por definición (ver `ayer`
+siempre marcando "Sin terminar" en vez de "En ruta" en la captura de
+verificación).
+
+**Hora de finalización** (`horaFinMin`/`horaFinTxt`): `Math.max(...)` de
+`horaHHMMaMinutos(it.horaEntrega)` sobre TODOS los items asignados (no
+solo entregados) — un chofer puede "terminar" por haber gestionado el
+último pendiente, no por haber entregado el último paquete. Se muestra
+solo si el recorrido ya terminó (`itemsSinResolver.length === 0`).
+
+**Verificado con Playwright:**
+- 4 funciones puras (`calcularEstadoRuta`/`calcularEstadoRutaChofer`)
+  probadas con casos sintéticos: alerta "Sin actividad" se dispara pasado
+  el umbral y no en el límite exacto (45 min = todavía no alerta, > 45 sí);
+  "Sin terminar" pisa tanto a "Sin iniciar" como a "En ruta" cuando
+  `diaCerrado=true`, y no pisa a los dos "Terminó" (ya resueltos).
+- `construirFilaRutaDesdeItems` con items sintéticos: ruta terminada sin
+  pendientes toma `horaFinMin` de la última entrega; ruta terminada con
+  pendientes gestionados toma `horaFinMin` de la última gestión; ruta en
+  curso con 90 min sin actividad dispara la alerta; una fecha pasada con
+  pendientes sin resolver da "Sin terminar" sin intentar calcular
+  "minutos sin actividad" (no aplica a fechas que no son hoy).
+- Contra los 133 choferes reales de "ayer" (2026-11-13, día ya cerrado por
+  fecha pasada): aparecen los 3 valores esperados de Estado (`Sin
+  terminar`, `Terminó con pendientes`, `Terminó sin pendientes` — nadie
+  quedó en "Sin iniciar"/"En ruta" porque el día ya cerró), 7 columnas por
+  fila (antes 6), y 0 inconsistencias entre Estado y Hora fin. (todo
+  "Terminó..." con hora seteada, todo lo demás con "—").
+- Contra los 41 choferes reales de "hoy": apareció la alerta real "Sin
+  actividad" en producción (confirmando el escenario que reportó el
+  usuario), con el tooltip mostrando los minutos exactos sin movimiento; y
+  tras el fix del filtro de arriba, dejó de aparecer en choferes con 0
+  entregas (ya cubiertos por "Sin iniciar" en Estado).
+- Filtro de columna "Estado" (combo propio, no `<select>` nativo — ver
+  20.11) incluye "Sin terminar" como opción y filtra correctamente; sort
+  por la columna "Hora fin." funciona con el componente genérico existente
+  (`ordenarPorClave` ya maneja `null` sin romperse); tooltip del header
+  "Hora fin." y del badge de Rendimiento con la alerta quedaron dentro del
+  viewport (mismo mecanismo `position:fixed` de 20.14, sin recorte nuevo).
+- La tarjeta "Demorados ahora" pasó a "Demorados / sin actividad ahora" (
+  comparte la lista con "Sin actividad", mismo color rojo) — se corrigió
+  de paso un bug real que hubiera roto esa tarjeta: ordenaba y mostraba
+  `f.minEntreEntregas.toFixed(1)` asumiendo que siempre es un número, pero
+  un chofer "Sin actividad" después de una sola entrega (ritmo aún no
+  medible) tiene `minEntreEntregas === null` — hubiera tirado `TypeError`
+  la primera vez que ese caso ocurriera en producción. Ahora ordena con
+  `?? -1` y muestra "sin datos" o "hace N min" según corresponda.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1768,3 +1869,4 @@ decidir por separado si se investiga.
 | 2026-11-14 | Sección 20.12: bug real reportado por el usuario — con el dashboard ya abierto, las corridas intradía (cada ~20 min) no se veían en pantalla hasta hacer un refresh completo; ni solas ni con el botón "Actualizar". Dos causas de cacheo en el cliente: (1) `refreshIndex()` solo vaciaba `state.cache` cuando cambiaba la lista de fechas del índice, no cuando se sobreescribía el documento de "hoy" — ahora borra siempre las entradas de "hoy" y los 2 días anteriores (ventana de repaso). (2) el poll automático de "Seguimiento en ruta" no tenía rama propia y caía en la de "histórico" — ahora llama a `renderRepartidoresRuta(true)`. El poll de "Envíos" pasó a renderizar siempre, no solo cuando aparece una fecha nueva. Verificado con Playwright contra datos reales, incluyendo los 45s reales de espera del poll automático. |
 | 2026-11-14 | Sección 20.13: pedido del usuario sobre el estado de cada chofer en "Seguimiento en ruta" — "Sin entregas aún" pasó a llamarse "Sin Iniciar" (mismo criterio: menos de 2 entregas), y se agregó el estado "Terminó" (azul), que pisa al semáforo de ritmo cuando al chofer no le quedan pendientes sin resolver — no exige haber entregado el 100%, un recorrido con pendientes pero todos gestionados (Nadie, Reprogramado, Cancelado, etc.) también cuenta como terminado. Se excluyó a "Terminó" (junto con "Sin Iniciar") del cálculo de "% dentro de ritmo", porque una vez cerrado el recorrido el ritmo con el que venía entregando deja de ser relevante. Verificado contra 133 choferes reales del 2026-11-13: 92 clasificaron como "Terminó" (todos con "Faltan: 0" o "Gestionados: N", nunca con pendientes sin resolver) y los que sí tenían pendientes sin resolver quedaron correctamente fuera de "Terminó". |
 | 2026-11-14 | Sección 20.14: a pedido del usuario, 20.13 se separó en dos columnas — "Rendimiento" (solo ritmo: Demorado/A tiempo/Óptimo, "A tiempo" pasó de amarillo a azul) y "Estado" (solo avance: Sin iniciar/En ruta/Terminó sin pendientes/Terminó con pendientes). Para hacer lugar a la columna nueva, "Min. entre entregas"/"Hora 1ª entrega"/"Paq./hora" se sacaron de la grilla y pasaron a un tooltip al pasar el mouse sobre el badge de Rendimiento; se agregaron íconos de ayuda "ⓘ" en los encabezados; y se centraron las columnas de badge. De paso se corrigió un bug visual real con captura: el anillo dorado de foco del buscador se veía cortado en las esquinas de arriba (`.table-wrap` lo recortaba por falta de padding en `.table-head`). Los tooltips nuevos usan `position:fixed` posicionado por JS (no CSS `:hover`) para no toparse con el mismo recorte. |
+| 2026-11-14 | Sección 20.15: tres pedidos más del usuario sobre "Seguimiento en ruta". (1) Columna nueva "Hora fin." con el último movimiento registrado, solo si el recorrido ya terminó. (2) Alerta "Sin actividad" (rojo) en Rendimiento cuando pasan más de 45 min sin ningún movimiento nuevo y todavía quedan pendientes sin resolver — pisa al ritmo calculado, que podía seguir mostrando "Óptimo"/"A tiempo" aunque el chofer se hubiera quedado parado (ej. accidente) después de entregar pocos paquetes. (3) Estado "Sin terminar" (rojo), nuevo: a partir de las 23:30 o en cualquier fecha pasada, un chofer con pendientes sin resolver deja de verse como "En ruta"/"Sin iniciar" (que insinúan que todavía puede cerrar solo) y pasa a este estado de cierre fallido. De paso se corrigió un bug real que hubiera roto la tarjeta "Demorados ahora" (ahora "Demorados / sin actividad ahora") la primera vez que un chofer quedara "Sin actividad" con ritmo aún no medible — `.toFixed()` sobre `minEntreEntregas === null` tira `TypeError`. |
