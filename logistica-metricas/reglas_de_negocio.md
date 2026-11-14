@@ -1565,6 +1565,55 @@ ruta", esperando los 45s reales del poll automático — el centinela
 desapareció, confirmando que el poll ahora fuerza una relectura real de
 Firestore para esa pestaña.
 
+### 20.13 "Sin entregas aún" → "Sin Iniciar", y nuevo estado "Terminó" (2026-11-14)
+
+Pedido explícito del usuario sobre los estados de ritmo de cada chofer en
+"Seguimiento en ruta" (`calcularEstadoRuta()`, ver sección 18 y el
+comentario junto a la función):
+
+1. Renombrar la etiqueta "Sin entregas aún" a **"Sin Iniciar"** — mismo
+   criterio de siempre (menos de 2 entregas registradas, todavía no hay
+   ritmo que medir), solo cambia el texto.
+2. Agregar un estado **"Terminó"** que evalúe si el recorrido ya se
+   cerró, comparando la cantidad asignada contra la entregada — pero sin
+   exigir el 100%: si al chofer le quedan pendientes pero ya los
+   **gestionó** (ver `ESTADOS_PENDIENTE_GESTIONADO` / sección 20.11 —
+   Nadie, Nadie 2DA visita, Reprogramado por comprador, Rechazado por el
+   comprador, Reprogramado por MELI, Cancelado), el recorrido se considera
+   terminado igual.
+
+**Fix:** `calcularEstadoRuta(minEntreEntregas, asignados, pendientesSinResolver)`
+ahora chequea primero si `asignados > 0 && pendientesSinResolver === 0` y,
+si es así, devuelve `{ color: 'azul', label: 'Terminó' }` — esta condición
+se evalúa **antes** que el ritmo y lo pisa, porque una vez cerrado el
+recorrido, la velocidad con la que venía entregando ya no es relevante
+(no tiene sentido mostrar "Demorado" a un chofer que ya terminó). El nuevo
+color `azul` (`--azul: #2f80ed`) es intencionalmente distinto del semáforo
+verde/amarillo/rojo de ritmo — "Terminó" no es parte de ese semáforo, es
+un estado de cierre aparte, igual que "Sin Iniciar" (gris) ya lo era.
+
+Efectos en cascada, para que "Terminó" no se mezcle con las métricas de
+ritmo en curso:
+- El KPI "% dentro de ritmo" (`renderRutaMiniKpis`) ahora excluye tanto
+  "Sin Iniciar" como "Terminó" del denominador — antes solo excluía
+  "Sin Iniciar" (gris).
+- El filtro de columna "Estado" de la tabla pasó a listar
+  `['Terminó','Óptimo','A tiempo','Demorado','Sin Iniciar']`.
+- "Demorados ahora" y la lista de alertas siguen basados en
+  `estadoColor === 'rojo'`, que un chofer "Terminó" nunca puede tener (la
+  condición de "Terminó" se evalúa primero), así que no hizo falta
+  tocarlos.
+
+**Verificado con Playwright** contra los 133 choferes reales del
+2026-11-13 ("Seguimiento en ruta" → Ayer): aparecen los 4 estados
+`Demorado`, `Terminó`, `A tiempo`, `Sin Iniciar` (ningún chofer real cayó
+en "Óptimo" ese día). De 133 choferes, 92 clasificaron "Terminó" — se
+inspeccionó el detalle de 5 de ellos y los 5 muestran "Faltan: 0" o
+"Gestionados: N" en la columna de pendientes, nunca "Sin resolver". Los
+que sí tenían pendientes sin resolver (ej. las filas de depósito/REPRO*
+que no son choferes reales, con 0 entregas y pendientes abiertos)
+clasificaron correctamente como "Sin Iniciar" y no como "Terminó".
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1608,3 +1657,4 @@ Firestore para esa pestaña.
 | 2026-11-13 | Sección 20.9: rediseño del encabezado fijo de tabla, que resuelve de raíz los cuatro reportes seguidos (20.6 a 20.8 fueron parches a casos particulares). El dato clave lo aportó el usuario: el error aparecía scrolleando con la barra de la PÁGINA. Causa de fondo: el título+buscador estaba fijado respecto de la página y la cabecera de columnas respecto del scroll interno de la tabla — dos sistemas de coordenadas independientes, imposibles de mantener pegados con un offset fijo. Fix: el título+buscador pasó a vivir dentro del mismo contenedor de scroll que la tabla, así las tres capas fijas se apilan contra el mismo borde. Se borró el centinela/IntersectionObserver de 20.7, que quedó de más. Verificado con 111 mediciones automáticas sobre 3 tablas, dos alturas de ventana y mobile: 0px de desalineación. |
 | 2026-11-13 | Sección 20.8: tercer bug real reportado por el usuario sobre el mismo header sticky, también con captura — una fila de datos se pintaba por encima del header de columnas al scrollear rápido la tabla. Causa, distinta de 20.6/20.7: `border-collapse:collapse` + celdas `position:sticky` es un bug de pintado conocido de Chrome. Se cambió a `border-collapse:separate; border-spacing:0` (visualmente idéntico, sin bordes verticales que dependieran del colapsado), se subieron los z-index de las tres capas sticky y se les agregó `will-change:transform`. Verificado con 25 rondas de scroll real a velocidad variable sobre datos reales (135 choferes), comprobando programáticamente que ninguna fila quedara por encima del header. |
 | 2026-11-14 | Sección 20.12: bug real reportado por el usuario — con el dashboard ya abierto, las corridas intradía (cada ~20 min) no se veían en pantalla hasta hacer un refresh completo; ni solas ni con el botón "Actualizar". Dos causas de cacheo en el cliente: (1) `refreshIndex()` solo vaciaba `state.cache` cuando cambiaba la lista de fechas del índice, no cuando se sobreescribía el documento de "hoy" — ahora borra siempre las entradas de "hoy" y los 2 días anteriores (ventana de repaso). (2) el poll automático de "Seguimiento en ruta" no tenía rama propia y caía en la de "histórico" — ahora llama a `renderRepartidoresRuta(true)`. El poll de "Envíos" pasó a renderizar siempre, no solo cuando aparece una fecha nueva. Verificado con Playwright contra datos reales, incluyendo los 45s reales de espera del poll automático. |
+| 2026-11-14 | Sección 20.13: pedido del usuario sobre el estado de cada chofer en "Seguimiento en ruta" — "Sin entregas aún" pasó a llamarse "Sin Iniciar" (mismo criterio: menos de 2 entregas), y se agregó el estado "Terminó" (azul), que pisa al semáforo de ritmo cuando al chofer no le quedan pendientes sin resolver — no exige haber entregado el 100%, un recorrido con pendientes pero todos gestionados (Nadie, Reprogramado, Cancelado, etc.) también cuenta como terminado. Se excluyó a "Terminó" (junto con "Sin Iniciar") del cálculo de "% dentro de ritmo", porque una vez cerrado el recorrido el ritmo con el que venía entregando deja de ser relevante. Verificado contra 133 choferes reales del 2026-11-13: 92 clasificaron como "Terminó" (todos con "Faltan: 0" o "Gestionados: N", nunca con pendientes sin resolver) y los que sí tenían pendientes sin resolver quedaron correctamente fuera de "Terminó". |

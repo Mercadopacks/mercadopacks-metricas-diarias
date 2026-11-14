@@ -39,6 +39,11 @@
     --rojo-soft: rgba(239,91,91,.14);
     --rojo-oscuro: #b3261e;
     --slate: #55555c;
+    /* "Terminó" (recorrido completo) no es parte del semaforo de ritmo
+       (verde/amarillo/rojo miden que tan rapido entrega MIENTRAS reparte) —
+       es un estado aparte, por eso un color distinto en vez de reusar verde. */
+    --azul: #2f80ed;
+    --azul-soft: rgba(47,128,237,.14);
     --radius: 10px;
   }
 
@@ -153,6 +158,7 @@
   .mini-dot.amarillo{ background:var(--amarillo); }
   .mini-dot.rojo{ background:var(--rojo-oscuro); }
   .mini-dot.gris{ background:var(--slate); }
+  .mini-dot.azul{ background:var(--azul); }
   .mini-kpi .mini-value{ font-size:21px; font-weight:700; line-height:1.15; }
   .mini-kpi .mini-sub{ color:var(--text-muted); font-size:11px; margin-top:5px; }
 
@@ -190,11 +196,13 @@
   .repa-rag.amarillo{ background:var(--amarillo-soft); color:#8a4d0f; }
   .repa-rag.rojo{ background:var(--rojo-soft); color:#8a1f1f; }
   .repa-rag.gris{ background:var(--panel-2); color:var(--text-muted); }
+  .repa-rag.azul{ background:var(--azul-soft); color:#1a4f8a; }
   .repa-rag .repa-rag-dot{ width:7px; height:7px; border-radius:50%; flex:none; }
   .repa-rag.verde .repa-rag-dot{ background:var(--verde); }
   .repa-rag.amarillo .repa-rag-dot{ background:var(--amarillo); }
   .repa-rag.rojo .repa-rag-dot{ background:var(--rojo-oscuro); }
   .repa-rag.gris .repa-rag-dot{ background:var(--slate); }
+  .repa-rag.azul .repa-rag-dot{ background:var(--azul); }
 
   /* ---------- modo vivo / historico ---------- */
   .chips#repaModoSwitcher .chip{ font-weight:700; }
@@ -2739,7 +2747,7 @@
   const COLUMNAS_FILTRO_RUTA = [
     null,
     { tipo:'select', campo:'zona', opciones:() => ['CABA','Norte','Sur','Oeste','Sin zona'], todasLabel:'Todas' },
-    { tipo:'select', campo:'estadoLabel', opciones:() => ['Óptimo','A tiempo','Demorado','Sin entregas aún'], todasLabel:'Todos' },
+    { tipo:'select', campo:'estadoLabel', opciones:() => ['Terminó','Óptimo','A tiempo','Demorado','Sin Iniciar'], todasLabel:'Todos' },
     { tipo:'texto', campo:'minEntreEntregas', placeholder:'ej. 21' },
     { tipo:'texto', campo:'horaPrimeraEntregaTxt', placeholder:'ej. 09:2' },
     { tipo:'texto', campo:'velocidad', placeholder:'ej. 10' },
@@ -2771,10 +2779,18 @@
   //   A tiempo:  entre 6 y 20 min
   //   Demorado:  más de 20 min
   // Con menos de 2 entregas todavía no hay ritmo que medir (recién salió,
-  // o no entregó nada en el día) — estado neutro "Sin entregas aún", no un
+  // o no entregó nada en el día) — estado neutro "Sin Iniciar", no un
   // falso "Óptimo" por falta de datos.
-  function calcularEstadoRuta(minEntreEntregas){
-    if(minEntreEntregas === null) return { color: 'gris', label: 'Sin entregas aún', orden: 3 };
+  //
+  // "Terminó" (pedido 2026-11-14) se evalúa ANTES que el ritmo y lo pisa:
+  // una vez que no le quedan pendientes sin resolver, el recorrido está
+  // cerrado y el ritmo con el que venía entregando ya no es relevante.
+  // No exige haber entregado todo — si tiene pendientes pero todos quedaron
+  // en un estado de gestión cerrada (ver ESTADOS_PENDIENTE_GESTIONADO),
+  // también cuenta como recorrido terminado.
+  function calcularEstadoRuta(minEntreEntregas, asignados, pendientesSinResolver){
+    if(asignados > 0 && pendientesSinResolver === 0) return { color: 'azul', label: 'Terminó', orden: -1 };
+    if(minEntreEntregas === null) return { color: 'gris', label: 'Sin Iniciar', orden: 3 };
     if(minEntreEntregas <= 5) return { color: 'verde', label: 'Óptimo', orden: 0 };
     if(minEntreEntregas <= 20) return { color: 'amarillo', label: 'A tiempo', orden: 1 };
     return { color: 'rojo', label: 'Demorado', orden: 2 };
@@ -2845,7 +2861,7 @@
       ? zonasReconocidas.sort((a, b) => conteoZonas[b] - conteoZonas[a])[0]
       : 'Sin zona';
 
-    const estado = calcularEstadoRuta(minEntreEntregas);
+    const estado = calcularEstadoRuta(minEntreEntregas, asignados.length, itemsSinResolver.length);
     return {
       nombre, zona,
       asignados: asignados.length, entregados: entregados.length, pendientes,
@@ -2885,10 +2901,11 @@
     const cont = document.getElementById('rutaMiniKpis');
     if(filas.length === 0){ cont.innerHTML = '<p class="empty-note">Sin choferes en ruta para este filtro.</p>'; return; }
     const total = filas.length;
-    // "Sin entregas aún" (gris) se saca del % dentro de ritmo y del promedio
-    // de velocidad — todavía no hay ritmo que medir, y contarlos como
-    // "dentro de ritmo" por defecto inflaría el %.
-    const conRitmo = filas.filter(f => f.estadoColor !== 'gris');
+    // "Sin Iniciar" (gris) se saca del % dentro de ritmo — todavía no hay
+    // ritmo que medir, y contarlos como "dentro de ritmo" por defecto
+    // inflaría el %. "Terminó" (azul) también se saca: el recorrido ya
+    // cerró, el ritmo con el que venía entregando deja de ser relevante.
+    const conRitmo = filas.filter(f => f.estadoColor !== 'gris' && f.estadoColor !== 'azul');
     const demorados = conRitmo.filter(f => f.estadoColor === 'rojo').length;
     const pctDentroRitmo = conRitmo.length ? ((conRitmo.length - demorados) / conRitmo.length) * 100 : null;
     const conVelocidad = filas.filter(f => f.velocidad !== null);
@@ -2900,7 +2917,7 @@
       { label: 'Choferes en ruta', valor: fmtNum(total),
         info: 'Cantidad de choferes que entran en el filtro de zona y búsqueda actual (no el total de la operación).' },
       { label: '% dentro de ritmo', valor: pctDentroRitmo === null ? '—' : fmtPct(pctDentroRitmo), dot: colorPct,
-        info: 'Porcentaje con estado "Óptimo" o "A tiempo" (hasta 20 min entre una entrega y la siguiente), sobre los choferes que ya tienen al menos 2 entregas (sin contar "Sin entregas aún").' },
+        info: 'Porcentaje con estado "Óptimo" o "A tiempo" (hasta 20 min entre una entrega y la siguiente), sobre los choferes que ya tienen al menos 2 entregas (sin contar "Sin Iniciar" ni "Terminó").' },
       { label: 'Demorados ahora', valor: fmtNum(demorados), dot: demorados > 0 ? 'rojo' : 'verde',
         info: 'Choferes en estado "Demorado": más de 20 minutos entre una entrega y la siguiente.' },
       { label: 'Velocidad promedio', valor: velocidadProm === null ? '—' : velocidadProm.toFixed(1),
