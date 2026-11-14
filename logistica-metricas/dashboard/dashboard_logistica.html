@@ -39,9 +39,10 @@
     --rojo-soft: rgba(239,91,91,.14);
     --rojo-oscuro: #b3261e;
     --slate: #55555c;
-    /* "Terminó" (recorrido completo) no es parte del semaforo de ritmo
-       (verde/amarillo/rojo miden que tan rapido entrega MIENTRAS reparte) —
-       es un estado aparte, por eso un color distinto en vez de reusar verde. */
+    /* Usado para "A tiempo" en Rendimiento y para "Terminó con pendientes"
+       en Estado (columnas separadas, ver calcularEstadoRuta() y
+       calcularEstadoRutaChofer()) — un color más en la paleta chica de
+       badges, sin significado único propio entre columnas distintas. */
     --azul: #2f80ed;
     --azul-soft: rgba(47,128,237,.14);
     --radius: 10px;
@@ -172,11 +173,13 @@
   .repa-meter.amarillo{ background:var(--amarillo-soft); }
   .repa-meter.rojo{ background:var(--rojo-soft); }
   .repa-meter.gris{ background:var(--panel-2); }
+  .repa-meter.azul{ background:var(--azul-soft); }
   .repa-meter > div{ height:100%; border-radius:999px; transition:width .25s ease-out; }
   .repa-meter.verde > div{ background:var(--verde); }
   .repa-meter.amarillo > div{ background:var(--amarillo); }
   .repa-meter.rojo > div{ background:var(--rojo-oscuro); }
   .repa-meter.gris > div{ background:var(--slate); }
+  .repa-meter.azul > div{ background:var(--azul); }
 
   /* ---------- grafico de barras apiladas (por zona / por turno) ---------- */
   .repa-chart-wrap{ margin-bottom:16px; }
@@ -203,6 +206,11 @@
   .repa-rag.rojo .repa-rag-dot{ background:var(--rojo-oscuro); }
   .repa-rag.gris .repa-rag-dot{ background:var(--slate); }
   .repa-rag.azul .repa-rag-dot{ background:var(--azul); }
+  /* El badge de "Rendimiento" muestra Min. entre entregas / Hora 1ª
+     entrega / Paq./hora en un tooltip al pasar el mouse (pedido
+     2026-11-14, para liberar esas 3 columnas de la grilla) — ver
+     #tooltipFlotante y mostrarTooltipFlotante() en el JS. */
+  .repa-rag-hover{ cursor:help; }
 
   /* ---------- modo vivo / historico ---------- */
   .chips#repaModoSwitcher .chip{ font-weight:700; }
@@ -251,7 +259,6 @@
   .ruta-pendientes-btn.sin-resolver{ color:var(--rojo-oscuro); }
   .ruta-pendientes-btn.sin-resolver:hover, .ruta-pendientes-btn.sin-resolver:focus-visible{ background:var(--rojo-soft); color:var(--rojo-oscuro); }
   .ruta-pendientes-btn.gestionado{ color:var(--text-muted); }
-  tr.fila-demorado td:first-child{ border-left:3px solid var(--amarillo); }
   tr.fila-muy-demorado td:first-child{ border-left:3px solid var(--rojo-oscuro); }
 
   /* ---------- grilla de tarjetas por zona ---------- */
@@ -375,8 +382,15 @@
     position:sticky; top:0; left:0; z-index:30; background:var(--panel); will-change:transform;
     /* margin-bottom 0 a propósito: cualquier separación entre esta capa y la
        de nombres de columna es una rendija por donde se ve pasar una fila al
-       scrollear. Las tres capas fijas tienen que quedar pegadas sin aire. */
-    margin:0; padding:2px 0 10px;
+       scrollear. Las tres capas fijas tienen que quedar pegadas sin aire.
+       padding 8px arriba/costados (bug real reportado por captura el
+       2026-11-14): .table-wrap recorta con overflow:auto, y con padding:0
+       a los costados y 2px arriba el anillo de foco del buscador (2px de
+       outline + 2px de outline-offset = ~4px por fuera del input) no
+       entraba y se veía cortado en las tres esquinas de arriba. El alto
+       real de .table-head se mide dinámicamente (ajustarOffsetTheadSticky),
+       así que el padding de más no desalinea el resto de capas sticky. */
+    margin:0; padding:8px 8px 10px;
   }
   .table-head h3{ margin:0; font-size:14px; font-weight:600; }
   .tabla-nota{ color:var(--text-muted); font-size:12px; margin:-4px 0 10px; }
@@ -466,6 +480,11 @@
   }
   thead th:hover, thead th:focus-visible{ color:var(--text); background:var(--panel-2); }
   thead th.num-col, td.num-col{ text-align:right; }
+  /* Columnas de badge (Rendimiento/Estado/Zona en "Choferes en ruta",
+     pedido 2026-11-14) — centradas en vez de alineadas a la izquierda,
+     que quedaba desprolijo para un valor corto tipo badge en una columna
+     angosta. */
+  thead th.celda-centrada, td.celda-centrada{ text-align:center; }
   /* ::after (flechita de orden) solo necesita que el th NO sea
      position:static para posicionarse — "sticky" ya cumple eso, así que no
      hace falta forzar "relative" acá. Antes SÍ se forzaba a "relative" y
@@ -563,6 +582,36 @@
     to{ transform:translateX(-50%) translateY(0); opacity:1; }
   }
   .toast.err{ border-color:var(--rojo); background:rgba(239,91,91,.12); color:var(--rojo-oscuro); font-weight:600; }
+
+  /* ---------- tooltip flotante (2026-11-14) ----------
+     Un solo elemento reusado, con position:fixed y posicionado por JS
+     (getBoundingClientRect del disparador) en vez de position:absolute
+     dentro de la celda. A propósito: .table-wrap recorta con
+     overflow:auto, y thead/tr.fila-filtros/.table-head tienen
+     will-change:transform — eso vuelve a esos elementos "contenedor de
+     posicionamiento" también para los descendientes position:fixed, así
+     que un tooltip metido ADENTRO de la tabla se recortaría igual que el
+     buscador (ver el comentario de .table-head más arriba). Viviendo como
+     hijo directo de <body> (ver el final del archivo, junto a #toast) no
+     tiene ningún ancestro con overflow ni transform de por medio. */
+  .tooltip-flotante{
+    position:fixed; z-index:60; background:var(--panel-2); border:1px solid var(--border);
+    color:var(--text); font-size:11.5px; font-weight:400; text-align:left; line-height:1.6;
+    padding:9px 11px; border-radius:8px; box-shadow:0 10px 24px rgba(26,23,16,.16);
+    max-width:260px; pointer-events:none; white-space:pre-line;
+  }
+
+  /* ---------- ícono de ayuda en encabezado de columna (2026-11-14) ----------
+     Mismo look que .mini-info de los indicadores, reusado dentro de un
+     <th> ordenable — con stopPropagation en el click para no disparar el
+     sort al tocar el ícono (ver wireSortableTable). */
+  .th-info{
+    position:relative; display:inline-flex; align-items:center; justify-content:center;
+    width:13px; height:13px; border-radius:50%; background:var(--panel-2); border:1px solid var(--border);
+    color:var(--text-muted); font-size:9.5px; font-style:italic; font-weight:400; font-family:Georgia, serif; line-height:1;
+    cursor:help; flex:none; margin-left:4px; vertical-align:middle;
+  }
+  .th-info:hover, .th-info:focus-visible{ border-color:var(--gold); color:var(--gold); outline:none; }
 
   .sr-only{
     position:absolute; width:1px; height:1px; overflow:hidden;
@@ -867,11 +916,13 @@
               <thead id="theadChoferesRuta">
                 <tr>
                   <th data-key="nombre" scope="col">Chofer</th>
-                  <th data-key="zona" scope="col">Zona</th>
-                  <th data-key="estadoOrden" scope="col">Estado</th>
-                  <th data-key="minEntreEntregas" class="num-col" scope="col">Min. entre entregas</th>
-                  <th data-key="horaPrimeraEntregaMin" class="num-col hide-mobile" scope="col">Hora 1ª entrega</th>
-                  <th data-key="velocidad" class="num-col" scope="col">Paq./hora</th>
+                  <th data-key="zona" class="celda-centrada" scope="col">Zona</th>
+                  <th data-key="estadoOrden" class="celda-centrada" scope="col">Rendimiento
+                    <span class="th-info" tabindex="0" role="img" aria-label="Qué tan rápido entrega, medido entre una entrega y la siguiente: Óptimo hasta 5 min, A tiempo de 6 a 20, Demorado más de 20. Pasá el mouse sobre el valor de cada fila para ver el detalle (minutos entre entregas, hora de la primera entrega y paquetes por hora)." data-tip="Óptimo: hasta 5 min entre entregas&#10;A tiempo: de 6 a 20 min&#10;Demorado: más de 20 min&#10;&#10;Pasá el mouse sobre el valor de cada chofer para ver el detalle.">i</span>
+                  </th>
+                  <th data-key="estadoRutaOrden" class="celda-centrada" scope="col">Estado
+                    <span class="th-info" tabindex="0" role="img" aria-label="Avance del recorrido contra lo asignado: Sin iniciar (nada entregado ni gestionado), En ruta (ya entregó o gestionó algo, le quedan pendientes sin resolver), Terminó sin pendientes (entregó el 100%) o Terminó con pendientes (no le queda ningún pendiente sin resolver, aunque no haya entregado todo)." data-tip="Sin iniciar: 0 entregas y 0 gestionados&#10;En ruta: ya avanzó, le quedan pendientes sin resolver&#10;Terminó sin pendientes: entregó el 100%&#10;Terminó con pendientes: sin pendientes sin resolver, aunque no haya entregado todo">i</span>
+                  </th>
                   <th data-key="pctProgreso" scope="col">Progreso</th>
                   <th data-key="pendientes" class="num-col" scope="col">Pre 21 / Pendientes</th>
                 </tr>
@@ -888,7 +939,7 @@
               <input id="buscarRutaDetalle" class="buscador" placeholder="Buscar tracking o cliente…" />
               <button class="btn" id="rutaDetalleCerrar" type="button">Cerrar</button>
             </div>
-            <p class="tabla-nota"><span class="mini-dot rojo" style="margin-right:5px;" aria-hidden="true"></span>Sin resolver (el chofer no fue o no cerró el estado) primero, <span class="mini-dot verde" style="margin:0 5px;" aria-hidden="true"></span>gestionados (Nadie, Reprogramado, Rechazado, Cancelado — ruta terminada igual) después.</p>
+            <p class="tabla-nota"><span class="mini-dot rojo" style="margin-right:5px;" aria-hidden="true"></span>Sin resolver (el chofer no fue o no cerró el estado) primero, <span class="mini-dot verde" style="margin:0 5px;" aria-hidden="true"></span>gestionados (Nadie, Reprogramado, Rechazado, Cancelado — cuenta como "Terminó con pendientes", ver columna Estado) después.</p>
             <table>
               <thead>
                 <tr>
@@ -980,6 +1031,7 @@
 </div>
 
 <div class="toast" id="toast" hidden></div>
+<div class="tooltip-flotante" id="tooltipFlotante" role="tooltip" hidden></div>
 
 <script>
 (function(){
@@ -1040,6 +1092,7 @@
       th.setAttribute('role', 'button');
     });
     thead.addEventListener('click', (e)=>{
+      if(e.target.closest('.th-info')) return; // el ícono de ayuda no ordena
       const th = e.target.closest('th[data-key]'); if(!th) return;
       const key = th.dataset.key;
       if(sortState.key === key){ sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc'; }
@@ -1048,6 +1101,7 @@
     });
     thead.addEventListener('keydown', (e)=>{
       if(e.key !== 'Enter' && e.key !== ' ') return;
+      if(e.target.closest('.th-info')) return; // el ícono de ayuda no ordena
       const th = e.target.closest('th[data-key]'); if(!th) return;
       e.preventDefault();
       th.click();
@@ -1703,6 +1757,56 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(()=>{ t.hidden = true; }, 4200);
   }
+
+  // ======================================================================
+  // Tooltip flotante genérico (2026-11-14) — un solo elemento al final del
+  // <body> (ver #tooltipFlotante), posicionado por JS con
+  // getBoundingClientRect() del disparador. A propósito NO usa
+  // position:absolute dentro de la tabla: .table-wrap recorta con
+  // overflow:auto y varias capas (.table-head, thead, fila de filtros)
+  // tienen will-change:transform, que también vuelve "contenedor de
+  // posicionamiento" a los descendientes position:fixed — un tooltip
+  // metido adentro de la tabla se recortaría en los bordes igual que pasó
+  // con el buscador (ver el comentario de .table-head más arriba). Como
+  // hijo directo de <body>, position:fixed queda relativo al viewport.
+  // Cualquier elemento con [data-tip] dispara esto al pasar el mouse o
+  // llegar el foco por teclado (ver el wiring más abajo).
+  function mostrarTooltipFlotante(el){
+    const texto = el.dataset.tip;
+    if(!texto) return;
+    const tip = document.getElementById('tooltipFlotante');
+    tip.textContent = texto;
+    tip.hidden = false;
+    const r = el.getBoundingClientRect();
+    const margen = 8;
+    let top = r.bottom + margen;
+    let left = r.left;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+    // Recién con hidden=false el tooltip tiene tamaño real para medir — si
+    // se va de la pantalla, se corrige la posición.
+    const tr = tip.getBoundingClientRect();
+    if(tr.right > window.innerWidth - margen) left -= (tr.right - (window.innerWidth - margen));
+    if(left < margen) left = margen;
+    if(tr.bottom > window.innerHeight - margen) top = r.top - tr.height - margen;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  function ocultarTooltipFlotante(){
+    document.getElementById('tooltipFlotante').hidden = true;
+  }
+  document.addEventListener('mouseover', (e)=>{
+    const el = e.target.closest('[data-tip]'); if(el) mostrarTooltipFlotante(el);
+  });
+  document.addEventListener('mouseout', (e)=>{
+    if(e.target.closest('[data-tip]')) ocultarTooltipFlotante();
+  });
+  document.addEventListener('focusin', (e)=>{
+    const el = e.target.closest('[data-tip]'); if(el) mostrarTooltipFlotante(el);
+  });
+  document.addEventListener('focusout', (e)=>{
+    if(e.target.closest('[data-tip]')) ocultarTooltipFlotante();
+  });
 
   function renderFiltrosActivos(){
     const cont = document.getElementById('filtrosActivos');
@@ -2741,16 +2845,18 @@
   // Columnas filtrables de "Choferes en ruta" (alineadas con los <th> de
   // #theadChoferesRuta). "Chofer" queda en null — ya tiene el buscador de
   // texto libre de arriba (#buscarChoferRuta), duplicar el filtro ahí no
-  // suma. Zona/Estado son <select> — zona con el set fijo del criterio ML
-  // Flex (no dinámico: son siempre las mismas 5 opciones, haya o no
-  // choferes hoy en alguna); el resto son <input> de texto.
+  // suma. Zona/Rendimiento/Estado son <select> — zona con el set fijo del
+  // criterio ML Flex (no dinámico: son siempre las mismas 5 opciones, haya
+  // o no choferes hoy en alguna); el resto son <input> de texto.
+  //
+  // "Rendimiento" (ritmo, calcularEstadoRuta) y "Estado" (avance del
+  // recorrido, calcularEstadoRutaChofer) son dos cosas separadas desde el
+  // 2026-11-14 — ver esas funciones para el porqué.
   const COLUMNAS_FILTRO_RUTA = [
     null,
     { tipo:'select', campo:'zona', opciones:() => ['CABA','Norte','Sur','Oeste','Sin zona'], todasLabel:'Todas' },
-    { tipo:'select', campo:'estadoLabel', opciones:() => ['Terminó','Óptimo','A tiempo','Demorado','Sin Iniciar'], todasLabel:'Todos' },
-    { tipo:'texto', campo:'minEntreEntregas', placeholder:'ej. 21' },
-    { tipo:'texto', campo:'horaPrimeraEntregaTxt', placeholder:'ej. 09:2' },
-    { tipo:'texto', campo:'velocidad', placeholder:'ej. 10' },
+    { tipo:'select', campo:'estadoLabel', opciones:() => ['Óptimo','A tiempo','Demorado','Sin datos'], todasLabel:'Todos' },
+    { tipo:'select', campo:'estadoRutaLabel', opciones:() => ['Sin iniciar','En ruta','Terminó sin pendientes','Terminó con pendientes'], todasLabel:'Todos' },
     { tipo:'texto', campo:'progresoTxt', placeholder:'ej. 15 de' },
     { tipo:'texto', campo:'pendientes', placeholder:'ej. 0' },
   ];
@@ -2770,30 +2876,54 @@
     return Number(m[1]) * 60 + Number(m[2]);
   }
 
-  // Criterio confirmado con soporte (2026-11-11): la demora NO se mide
-  // contra un horario planificado (no existe esa hoja), sino contra el
-  // tiempo que el chofer está tardando ENTRE una entrega y la siguiente —
-  // si se achica el ritmo, está "cayéndose" del horario sin importar
-  // cuántos paquetes tenga asignados.
-  //   Óptimo:    hasta 5 min entre entregas
-  //   A tiempo:  entre 6 y 20 min
-  //   Demorado:  más de 20 min
+  // "Rendimiento" (pedido 2026-11-14: vuelve a ser SOLO esto, separado del
+  // estado de avance del recorrido — ver calcularEstadoRutaChofer() más
+  // abajo). Criterio confirmado con soporte (2026-11-11): la demora NO se
+  // mide contra un horario planificado (no existe esa hoja), sino contra
+  // el tiempo que el chofer está tardando ENTRE una entrega y la
+  // siguiente — si se achica el ritmo, está "cayéndose" del horario sin
+  // importar cuántos paquetes tenga asignados.
+  //   Óptimo:    hasta 5 min entre entregas  (verde)
+  //   A tiempo:  entre 6 y 20 min            (azul)
+  //   Demorado:  más de 20 min               (rojo)
   // Con menos de 2 entregas todavía no hay ritmo que medir (recién salió,
-  // o no entregó nada en el día) — estado neutro "Sin Iniciar", no un
-  // falso "Óptimo" por falta de datos.
-  //
-  // "Terminó" (pedido 2026-11-14) se evalúa ANTES que el ritmo y lo pisa:
-  // una vez que no le quedan pendientes sin resolver, el recorrido está
-  // cerrado y el ritmo con el que venía entregando ya no es relevante.
-  // No exige haber entregado todo — si tiene pendientes pero todos quedaron
-  // en un estado de gestión cerrada (ver ESTADOS_PENDIENTE_GESTIONADO),
-  // también cuenta como recorrido terminado.
-  function calcularEstadoRuta(minEntreEntregas, asignados, pendientesSinResolver){
-    if(asignados > 0 && pendientesSinResolver === 0) return { color: 'azul', label: 'Terminó', orden: -1 };
-    if(minEntreEntregas === null) return { color: 'gris', label: 'Sin Iniciar', orden: 3 };
+  // o no entregó nada en el día) — "Sin datos" neutro (gris), no un falso
+  // "Óptimo" por falta de datos. Ese caso se distingue de "sin empezar la
+  // ruta" (que ahora vive en la columna "Estado") a propósito: un chofer
+  // puede tener exactamente 1 entrega (ritmo aún no medible) y no por eso
+  // estar "sin iniciar".
+  function calcularEstadoRuta(minEntreEntregas){
+    if(minEntreEntregas === null) return { color: 'gris', label: 'Sin datos', orden: 3 };
     if(minEntreEntregas <= 5) return { color: 'verde', label: 'Óptimo', orden: 0 };
-    if(minEntreEntregas <= 20) return { color: 'amarillo', label: 'A tiempo', orden: 1 };
+    if(minEntreEntregas <= 20) return { color: 'azul', label: 'A tiempo', orden: 1 };
     return { color: 'rojo', label: 'Demorado', orden: 2 };
+  }
+
+  // "Estado" (columna nueva, pedido 2026-11-14) — a diferencia de
+  // "Rendimiento" de arriba, esto no mide velocidad sino avance del
+  // recorrido contra lo asignado:
+  //   Sin iniciar:            0 entregas Y 0 pendientes gestionados —
+  //                           no hizo nada todavía con ninguno de sus
+  //                           paquetes asignados.
+  //   En ruta:                está en el medio: entregó algo y/o gestionó
+  //                           algún pendiente, pero todavía le quedan
+  //                           pendientes SIN resolver.
+  //   Terminó sin pendientes: entregó el 100% de lo asignado.
+  //   Terminó con pendientes: no le queda ningún pendiente SIN resolver,
+  //                           pero no entregó el 100% — los que no
+  //                           entregó quedaron en un estado de gestión
+  //                           cerrada (ver ESTADOS_PENDIENTE_GESTIONADO),
+  //                           así que el recorrido está cerrado igual.
+  function calcularEstadoRutaChofer(asignados, entregados, pendientes, pendientesSinResolver){
+    if(pendientesSinResolver === 0){
+      return pendientes === 0
+        ? { color: 'verde', label: 'Terminó sin pendientes', orden: 0 }
+        : { color: 'azul', label: 'Terminó con pendientes', orden: 1 };
+    }
+    if(entregados === 0 && pendientesSinResolver === asignados){
+      return { color: 'gris', label: 'Sin iniciar', orden: 3 };
+    }
+    return { color: 'amarillo', label: 'En ruta', orden: 2 };
   }
 
   // Arma la fila de un chofer a partir de los items de
@@ -2861,7 +2991,8 @@
       ? zonasReconocidas.sort((a, b) => conteoZonas[b] - conteoZonas[a])[0]
       : 'Sin zona';
 
-    const estado = calcularEstadoRuta(minEntreEntregas, asignados.length, itemsSinResolver.length);
+    const estado = calcularEstadoRuta(minEntreEntregas);
+    const estadoRuta = calcularEstadoRutaChofer(asignados.length, entregados.length, pendientes, itemsSinResolver.length);
     return {
       nombre, zona,
       asignados: asignados.length, entregados: entregados.length, pendientes,
@@ -2870,6 +3001,7 @@
       minEntreEntregas, velocidad, horaPrimeraEntregaMin, entregadosPre21,
       pctProgreso: asignados.length ? (entregados.length / asignados.length) * 100 : 0,
       estadoColor: estado.color, estadoLabel: estado.label, estadoOrden: estado.orden,
+      estadoRutaColor: estadoRuta.color, estadoRutaLabel: estadoRuta.label, estadoRutaOrden: estadoRuta.orden,
       // Versiones en texto de columnas que se muestran formateadas, para
       // poder filtrarlas por substring igual que cualquier otra columna.
       horaPrimeraEntregaTxt: horaPrimeraEntregaMin === null ? '—' : fmtHoraDelDia(horaPrimeraEntregaMin),
@@ -2901,11 +3033,10 @@
     const cont = document.getElementById('rutaMiniKpis');
     if(filas.length === 0){ cont.innerHTML = '<p class="empty-note">Sin choferes en ruta para este filtro.</p>'; return; }
     const total = filas.length;
-    // "Sin Iniciar" (gris) se saca del % dentro de ritmo — todavía no hay
-    // ritmo que medir, y contarlos como "dentro de ritmo" por defecto
-    // inflaría el %. "Terminó" (azul) también se saca: el recorrido ya
-    // cerró, el ritmo con el que venía entregando deja de ser relevante.
-    const conRitmo = filas.filter(f => f.estadoColor !== 'gris' && f.estadoColor !== 'azul');
+    // "Sin datos" (gris, menos de 2 entregas) se saca del % dentro de
+    // ritmo — todavía no hay ritmo que medir, y contarlos como "dentro de
+    // ritmo" por defecto inflaría el %.
+    const conRitmo = filas.filter(f => f.estadoColor !== 'gris');
     const demorados = conRitmo.filter(f => f.estadoColor === 'rojo').length;
     const pctDentroRitmo = conRitmo.length ? ((conRitmo.length - demorados) / conRitmo.length) * 100 : null;
     const conVelocidad = filas.filter(f => f.velocidad !== null);
@@ -2917,7 +3048,7 @@
       { label: 'Choferes en ruta', valor: fmtNum(total),
         info: 'Cantidad de choferes que entran en el filtro de zona y búsqueda actual (no el total de la operación).' },
       { label: '% dentro de ritmo', valor: pctDentroRitmo === null ? '—' : fmtPct(pctDentroRitmo), dot: colorPct,
-        info: 'Porcentaje con estado "Óptimo" o "A tiempo" (hasta 20 min entre una entrega y la siguiente), sobre los choferes que ya tienen al menos 2 entregas (sin contar "Sin Iniciar" ni "Terminó").' },
+        info: 'Porcentaje con rendimiento "Óptimo" o "A tiempo" (hasta 20 min entre una entrega y la siguiente), sobre los choferes que ya tienen al menos 2 entregas (el resto todavía no tiene ritmo medible).' },
       { label: 'Demorados ahora', valor: fmtNum(demorados), dot: demorados > 0 ? 'rojo' : 'verde',
         info: 'Choferes en estado "Demorado": más de 20 minutos entre una entrega y la siguiente.' },
       { label: 'Velocidad promedio', valor: velocidadProm === null ? '—' : velocidadProm.toFixed(1),
@@ -2970,22 +3101,31 @@
     const ordenadas = ordenarPorClave(filtradas, stateRuta.sort);
     const tbody = document.getElementById('tbodyChoferesRuta');
     if(ordenadas.length === 0){
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-note">Sin resultados.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-note">Sin resultados.</td></tr>';
     } else {
       tbody.innerHTML = ordenadas.map(f => {
-        const filaClase = f.estadoColor === 'rojo' ? 'fila-muy-demorado' : f.estadoColor === 'amarillo' ? 'fila-demorado' : '';
+        const filaClase = f.estadoColor === 'rojo' ? 'fila-muy-demorado' : '';
+        // Min. entre entregas / Hora 1ª entrega / Paq./hora ya no son
+        // columnas propias (pedido 2026-11-14, para hacer lugar a la
+        // columna "Estado") — se muestran en el tooltip del badge de
+        // Rendimiento al pasar el mouse o llegar con el teclado.
+        const tipRendimiento = `Min. entre entregas: ${f.minEntreEntregas === null ? '—' : f.minEntreEntregas.toFixed(1) + ' min'}\n`
+          + `Hora 1ª entrega: ${f.horaPrimeraEntregaTxt}\n`
+          + `Paq./hora: ${f.velocidad === null ? '—' : f.velocidad.toFixed(1)}`;
         return `
         <tr class="${filaClase}">
           <td>${escapeHtml(f.nombre)}</td>
-          <td>${escapeHtml(f.zona)}</td>
-          <td><span class="repa-rag ${f.estadoColor}" style="margin-top:0;"><span class="repa-rag-dot"></span>${escapeHtml(f.estadoLabel)}</span></td>
-          <td class="num-col">${f.minEntreEntregas === null ? '—' : f.minEntreEntregas.toFixed(1) + ' min'}</td>
-          <td class="num-col hide-mobile">${f.horaPrimeraEntregaTxt}</td>
-          <td class="num-col">${f.velocidad === null ? '—' : f.velocidad.toFixed(1)}</td>
+          <td class="celda-centrada">${escapeHtml(f.zona)}</td>
+          <td class="celda-centrada">
+            <span class="repa-rag ${f.estadoColor} repa-rag-hover" tabindex="0" style="margin-top:0;" data-tip="${escapeHtml(tipRendimiento)}">
+              <span class="repa-rag-dot"></span>${escapeHtml(f.estadoLabel)}
+            </span>
+          </td>
+          <td class="celda-centrada"><span class="repa-rag ${f.estadoRutaColor}" style="margin-top:0;"><span class="repa-rag-dot"></span>${escapeHtml(f.estadoRutaLabel)}</span></td>
           <td>
             <div class="ruta-progreso">
               <span class="ruta-progreso-txt">${fmtNum(f.entregados)} de ${fmtNum(f.asignados)}</span>
-              <div class="repa-meter ${f.estadoColor}"><div style="width:${f.pctProgreso.toFixed(0)}%;"></div></div>
+              <div class="repa-meter ${f.estadoRutaColor}"><div style="width:${f.pctProgreso.toFixed(0)}%;"></div></div>
             </div>
           </td>
           <td class="num-col">

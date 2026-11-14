@@ -1614,6 +1614,115 @@ que sí tenían pendientes sin resolver (ej. las filas de depósito/REPRO*
 que no son choferes reales, con 0 entregas y pendientes abiertos)
 clasificaron correctamente como "Sin Iniciar" y no como "Terminó".
 
+### 20.14 20.13 se separa en dos columnas: "Rendimiento" y "Estado" — y se corrige un recorte visual (2026-11-14)
+
+El usuario, al ver 20.13 funcionando, pidió un rediseño: mezclar ritmo
+(qué tan rápido entrega) y avance del recorrido (cuánto le falta) en una
+sola columna "Estado" quedaba confuso. Pedido explícito:
+
+1. La columna "Estado" vuelve a ser solo ritmo, con el nombre
+   **"Rendimiento"** y 3 estados: `Demorado` (rojo), `A tiempo` (azul —
+   antes amarillo), `Óptimo` (verde).
+2. Columna nueva **"Estado"**, separada, con 4 valores sobre avance del
+   recorrido: `Sin iniciar`, `En ruta`, `Termino sin pendientes`,
+   `Termino con pendientes`.
+3. Para hacer lugar a la columna nueva sin agrandar más la tabla (ver
+   20.10), las columnas "Min. entre entregas", "Hora 1ª entrega" y
+   "Paq./hora" se sacan de la grilla y pasan a un tooltip al pasar el
+   mouse (o el foco de teclado) sobre el badge de "Rendimiento".
+4. Ayudas tipo "ⓘ" en los encabezados de "Rendimiento" y "Estado"
+   explicando qué significa cada valor.
+5. Centrar las columnas de badge (Zona/Rendimiento/Estado) y corregir un
+   recorte visual real, reportado con captura: el anillo dorado de foco
+   del buscador "Buscar chofer…" se veía cortado en las tres esquinas de
+   arriba.
+
+**`calcularEstadoRuta()` vuelve a ser SOLO ritmo** (revierte el pisado de
+20.13 — "Terminó" ya no vive acá):
+```
+Óptimo:   ≤ 5 min entre entregas   → verde
+A tiempo: 6 a 20 min               → azul  (antes amarillo)
+Demorado: > 20 min                 → rojo
+sin datos (< 2 entregas)           → gris, label "Sin datos"
+```
+
+**`calcularEstadoRutaChofer(asignados, entregados, pendientes, pendientesSinResolver)`**
+(nueva), evalúa avance contra lo asignado, sin mirar ritmo:
+```
+pendientesSinResolver === 0 →  pendientes === 0 ? "Terminó sin pendientes" (verde)
+                                                  : "Terminó con pendientes" (azul)
+si no: entregados === 0 && pendientesSinResolver === asignados → "Sin iniciar" (gris)
+si no:                                                           "En ruta" (amarillo)
+```
+"Terminó con pendientes" es el mismo caso de negocio de 20.11/20.13 (el
+chofer gestionó todo lo que le quedó, aunque no haya entregado el 100%) —
+solo que ahora vive en su propia columna en vez de pisar el ritmo.
+
+**Causa del recorte del buscador:** `.table-wrap` recorta con
+`overflow:auto` (necesario para el scroll de la tabla, sección 20.9/20.10)
+y `.table-head` tenía `padding:2px 0 10px` — 0px a los costados y solo 2px
+arriba. El anillo de foco (`outline:2px` + `outline-offset:2px` ≈ 4px por
+fuera del input) no entraba en ese margen y quedaba tapado por el recorte
+de `.table-wrap`. Fix: `.table-head` pasó a `padding:8px 8px 10px` — el
+alto real se sigue midiendo dinámicamente
+(`ajustarOffsetTheadSticky`/`ResizeObserver`, sección 20.9), así que el
+padding de más no desalinea las otras capas sticky (header de columnas,
+fila de filtros).
+
+**Tooltips sin recorte, a propósito con `position:fixed` + JS en vez de
+`position:absolute` + CSS `:hover`:** `.table-wrap` recorta, y
+`.table-head`/`thead th`/`tr.fila-filtros th` tienen `will-change:transform`
+— eso también vuelve "contenedor de posicionamiento" a los descendientes
+`position:fixed` (mismo efecto que un `transform`), así que un tooltip
+metido ADENTRO de la tabla se recortaría en los bordes igual que pasó con
+el buscador. Se agregó un único elemento `#tooltipFlotante`, hijo directo
+de `<body>` (sin ningún ancestro con overflow ni transform de por medio,
+igual que `#toast`), posicionado por JS (`mostrarTooltipFlotante()`) con
+`getBoundingClientRect()` del disparador + corrección si se sale del
+viewport. Cualquier elemento con `[data-tip="..."]` lo dispara al pasar el
+mouse o llegar el foco (delegado sobre `document`, `mouseover`/`mouseout`/
+`focusin`/`focusout`) — usado tanto por el badge de Rendimiento como por
+los íconos "ⓘ" de los encabezados.
+
+**El ícono "ⓘ" no dispara el ordenamiento del header:** `wireSortableTable`
+delega el click/Enter/Espacio sobre `th[data-key]`; se agregó un guard
+(`e.target.closest('.th-info')`) al principio de ambos handlers para que
+tocar el ícono de ayuda (o llegar a él con Tab + Enter) no ordene la
+columna por accidente.
+
+**Otros ajustes en cascada:**
+- El KPI "% dentro de ritmo" ahora excluye solo "Sin datos" (gris) del
+  denominador — "Terminó" ya no es un valor de `estadoColor` (Rendimiento),
+  así que no hace falta excluirlo ahí.
+- La barra de "Progreso" (`repa-meter`) pasó a colorearse por
+  `estadoRutaColor` (avance) en vez de `estadoColor` (ritmo) — tiene más
+  sentido que el color de "cuánto llevo entregado" dependa de cuánto falta,
+  no de qué tan rápido entrega.
+- `COLUMNAS_FILTRO_RUTA` bajó de 8 a 6 entradas (se sacaron los 3 filtros
+  de texto de las columnas que ya no están, se agregó un `select` nuevo
+  para "Estado").
+- Se sacó `tr.fila-demorado` (CSS muerto: dependía de `estadoColor ===
+  'amarillo'`, que ya no existe en Rendimiento).
+
+**Verificado con Playwright** contra los 133 choferes reales del
+2026-11-13: aparecen los 4 valores de Rendimiento (`Demorado`, `A tiempo`,
+`Óptimo`, `Sin datos`) y los 4 de Estado (`Sin iniciar`, `En ruta`,
+`Terminó sin pendientes`, `Terminó con pendientes`); se confirmó
+programáticamente que ningún chofer "Terminó sin pendientes" tiene otra
+cosa que "Faltan: 0" y que todo "Terminó con pendientes" tiene
+"Gestionados: N" (nunca "Sin resolver"); el tooltip del badge de
+Rendimiento (hover real, no `title` nativo) quedó 100% dentro del viewport
+al medir su `getBoundingClientRect()`; el click en el ícono "ⓘ" del header
+"Estado" no cambió `aria-sort`, y un click real en el resto del header sí
+lo cambió; y una captura de la zona del buscador confirma el anillo de
+foco completo, sin cortes en ninguna esquina.
+
+**Nota aparte, fuera del alcance de este cambio:** durante esta verificación
+apareció un error real no relacionado (`TypeError` en
+`renderAlertasListaRepa`, al abrir "Operación en vivo") — no tiene que ver
+con "Seguimiento en ruta" ni con nada tocado hoy; reportado al usuario para
+decidir por separado si se investiga.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1658,3 +1767,4 @@ clasificaron correctamente como "Sin Iniciar" y no como "Terminó".
 | 2026-11-13 | Sección 20.8: tercer bug real reportado por el usuario sobre el mismo header sticky, también con captura — una fila de datos se pintaba por encima del header de columnas al scrollear rápido la tabla. Causa, distinta de 20.6/20.7: `border-collapse:collapse` + celdas `position:sticky` es un bug de pintado conocido de Chrome. Se cambió a `border-collapse:separate; border-spacing:0` (visualmente idéntico, sin bordes verticales que dependieran del colapsado), se subieron los z-index de las tres capas sticky y se les agregó `will-change:transform`. Verificado con 25 rondas de scroll real a velocidad variable sobre datos reales (135 choferes), comprobando programáticamente que ninguna fila quedara por encima del header. |
 | 2026-11-14 | Sección 20.12: bug real reportado por el usuario — con el dashboard ya abierto, las corridas intradía (cada ~20 min) no se veían en pantalla hasta hacer un refresh completo; ni solas ni con el botón "Actualizar". Dos causas de cacheo en el cliente: (1) `refreshIndex()` solo vaciaba `state.cache` cuando cambiaba la lista de fechas del índice, no cuando se sobreescribía el documento de "hoy" — ahora borra siempre las entradas de "hoy" y los 2 días anteriores (ventana de repaso). (2) el poll automático de "Seguimiento en ruta" no tenía rama propia y caía en la de "histórico" — ahora llama a `renderRepartidoresRuta(true)`. El poll de "Envíos" pasó a renderizar siempre, no solo cuando aparece una fecha nueva. Verificado con Playwright contra datos reales, incluyendo los 45s reales de espera del poll automático. |
 | 2026-11-14 | Sección 20.13: pedido del usuario sobre el estado de cada chofer en "Seguimiento en ruta" — "Sin entregas aún" pasó a llamarse "Sin Iniciar" (mismo criterio: menos de 2 entregas), y se agregó el estado "Terminó" (azul), que pisa al semáforo de ritmo cuando al chofer no le quedan pendientes sin resolver — no exige haber entregado el 100%, un recorrido con pendientes pero todos gestionados (Nadie, Reprogramado, Cancelado, etc.) también cuenta como terminado. Se excluyó a "Terminó" (junto con "Sin Iniciar") del cálculo de "% dentro de ritmo", porque una vez cerrado el recorrido el ritmo con el que venía entregando deja de ser relevante. Verificado contra 133 choferes reales del 2026-11-13: 92 clasificaron como "Terminó" (todos con "Faltan: 0" o "Gestionados: N", nunca con pendientes sin resolver) y los que sí tenían pendientes sin resolver quedaron correctamente fuera de "Terminó". |
+| 2026-11-14 | Sección 20.14: a pedido del usuario, 20.13 se separó en dos columnas — "Rendimiento" (solo ritmo: Demorado/A tiempo/Óptimo, "A tiempo" pasó de amarillo a azul) y "Estado" (solo avance: Sin iniciar/En ruta/Terminó sin pendientes/Terminó con pendientes). Para hacer lugar a la columna nueva, "Min. entre entregas"/"Hora 1ª entrega"/"Paq./hora" se sacaron de la grilla y pasaron a un tooltip al pasar el mouse sobre el badge de Rendimiento; se agregaron íconos de ayuda "ⓘ" en los encabezados; y se centraron las columnas de badge. De paso se corrigió un bug visual real con captura: el anillo dorado de foco del buscador se veía cortado en las esquinas de arriba (`.table-wrap` lo recortaba por falta de padding en `.table-head`). Los tooltips nuevos usan `position:fixed` posicionado por JS (no CSS `:hover`) para no toparse con el mismo recorte. |
