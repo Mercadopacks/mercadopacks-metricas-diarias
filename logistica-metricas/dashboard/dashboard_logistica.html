@@ -938,11 +938,12 @@
         <div class="table-card" id="rutaDetalleCard" style="margin-top:18px;" hidden>
           <div class="table-wrap">
             <div class="table-head">
-              <h3>Pendientes — <span id="rutaDetalleNombre"></span></h3>
+              <h3>Pendientes — <span id="rutaDetalleNombre"></span>
+                <span class="th-info" tabindex="0" role="img" aria-label="El orden de la lista: primero los pendientes sin resolver (el chofer no fue o no cerró el estado), después los gestionados (Nadie, Reprogramado, Rechazado, Cancelado — cuentan como Terminó con pendientes en la columna Estado)." data-tip="Sin resolver primero: el chofer no fue o no cerró el estado — hay que preguntarle qué pasó.&#10;&#10;Gestionados después: Nadie, Reprogramado, Rechazado, Cancelado — cuenta como &quot;Terminó con pendientes&quot; en la columna Estado.">i</span>
+              </h3>
               <input id="buscarRutaDetalle" class="buscador" placeholder="Buscar tracking o cliente…" />
               <button class="btn" id="rutaDetalleCerrar" type="button">Cerrar</button>
             </div>
-            <p class="tabla-nota"><span class="mini-dot rojo" style="margin-right:5px;" aria-hidden="true"></span>Sin resolver (el chofer no fue o no cerró el estado) primero, <span class="mini-dot verde" style="margin:0 5px;" aria-hidden="true"></span>gestionados (Nadie, Reprogramado, Rechazado, Cancelado — cuenta como "Terminó con pendientes", ver columna Estado) después.</p>
             <table>
               <thead>
                 <tr>
@@ -2788,6 +2789,9 @@
     'presidente peron':'Sur', 'guernica':'Sur',
     // San Vicente
     'san vicente':'Sur', 'alejandro korn':'Sur',
+    // Cañuelas (bug real reportado 2026-11-14: faltaba todo el partido,
+    // caía en "Sin zona" — confirmado por el usuario con Claudia Ovando)
+    'canuelas':'Sur', 'maximo paz':'Sur',
 
     // --- Zona Oeste ---
     // Tres de Febrero
@@ -2834,6 +2838,7 @@
     cachePorFecha: {},      // ISO -> filas ya calculadas, para no releer Firestore al volver a una fecha ya vista
     detalleChofer: null,    // nombre del chofer con el panel de "Pendientes" abierto, o null si está cerrado
     detalleSearch: '',
+    fechaMostrada: null,    // última fecha (ISO) renderizada — para saber si un refresco (poll automático o "Actualizar") es de la MISMA fecha que ya se estaba viendo, y no cerrar el detalle abierto solo porque se releyeron los datos (ver renderRepartidoresRuta)
   };
 
   // Resuelve qué fecha (ISO) mostrar según los chips de arriba de
@@ -2920,11 +2925,18 @@
   // "Estado" (columna nueva, pedido 2026-11-14) — a diferencia de
   // "Rendimiento" de arriba, esto no mide velocidad sino avance del
   // recorrido contra lo asignado:
-  //   Sin iniciar:            0 entregas Y 0 pendientes gestionados —
-  //                           no hizo nada todavía con ninguno de sus
-  //                           paquetes asignados.
-  //   En ruta:                está en el medio: entregó algo y/o gestionó
-  //                           algún pendiente, pero todavía le quedan
+  //   Sin iniciar:            0 entregas — no entregó nada todavía (sin
+  //                           importar si algún pendiente suyo ya está
+  //                           gestionado: un paquete puede llegar
+  //                           cancelado/reprogramado desde antes de que el
+  //                           chofer arranque su recorrido, eso no cuenta
+  //                           como que "ya empezó"; bug real reportado
+  //                           2026-11-14 — antes exigía ADEMÁS que
+  //                           pendientesSinResolver === asignados, y un
+  //                           chofer con 0 entregas pero 1 solo pendiente
+  //                           ya gestionado por fuera de su control
+  //                           aparecía como "En ruta").
+  //   En ruta:                ya entregó algo, pero todavía le quedan
   //                           pendientes SIN resolver.
   //   Terminó sin pendientes: entregó el 100% de lo asignado.
   //   Terminó con pendientes: no le queda ningún pendiente SIN resolver,
@@ -2941,7 +2953,7 @@
   //                           nada más — reemplaza a ambos una vez
   //                           cerrado el día, para que no quede
   //                           disfrazado de "todavía en curso".
-  function calcularEstadoRutaChofer(asignados, entregados, pendientes, pendientesSinResolver, diaCerrado){
+  function calcularEstadoRutaChofer(entregados, pendientes, pendientesSinResolver, diaCerrado){
     if(pendientesSinResolver === 0){
       return pendientes === 0
         ? { color: 'verde', label: 'Terminó sin pendientes', orden: 0 }
@@ -2950,7 +2962,7 @@
     if(diaCerrado){
       return { color: 'rojo', label: 'Sin terminar', orden: 2 };
     }
-    if(entregados === 0 && pendientesSinResolver === asignados){
+    if(entregados === 0){
       return { color: 'gris', label: 'Sin iniciar', orden: 4 };
     }
     return { color: 'amarillo', label: 'En ruta', orden: 3 };
@@ -3063,7 +3075,7 @@
       : 'Sin zona';
 
     const estado = calcularEstadoRuta(minEntreEntregas, minutosSinActividad);
-    const estadoRuta = calcularEstadoRutaChofer(asignados.length, entregados.length, pendientes, itemsSinResolver.length, diaCerrado);
+    const estadoRuta = calcularEstadoRutaChofer(entregados.length, pendientes, itemsSinResolver.length, diaCerrado);
     // "Hora de finalización" solo tiene sentido una vez que el recorrido
     // terminó (ver estadoRuta) — mientras sigue "En ruta"/"Sin iniciar"/
     // "Sin terminar" todavía puede haber más movimiento, así que se
@@ -3311,8 +3323,15 @@
     const cont = document.getElementById('rutaContent');
     const vacio = document.getElementById('rutaEmpty');
     const fecha = fechaRutaActual();
+    const fechaCambio = stateRuta.fechaMostrada !== fecha;
     document.getElementById('rutaFechaTitulo').textContent = fmtCorto(fecha);
-    cerrarDetalleRutaChofer(); // la fecha cambió (o se forzó un refresco) — el detalle que estaba abierto ya no corresponde
+    // Solo se cierra el detalle si cambió la fecha que se está mirando —
+    // antes se cerraba en CUALQUIER refresco, incluido el poll automático
+    // cada 45s (bug real reportado 2026-11-14: el panel de "Pendientes" se
+    // cerraba solo mientras el usuario lo estaba mirando). Un refresco de
+    // la MISMA fecha (poll o botón "Actualizar") no debería tocarlo.
+    if(fechaCambio) cerrarDetalleRutaChofer();
+    stateRuta.fechaMostrada = fecha;
     let todasFilas;
     try{
       todasFilas = await cargarChoferesEnRutaHoy(forzar);
@@ -3325,10 +3344,18 @@
       document.getElementById('rutaEmptyTexto').textContent = fecha === todayISO()
         ? 'La corrida intradía recién va a publicar el primer detalle del día a las 11hs ART — si ya pasó esa hora, puede ser un día no operativo (domingo) o que la corrida de las 00hs todavía no cerró "ayer".'
         : 'Puede ser un día no operativo (domingo), o una fecha anterior al 2026-09-17 (desde cuando se guarda el detalle por chofer).';
+      cerrarDetalleRutaChofer();
       return;
     }
     cont.hidden = false; vacio.hidden = true;
     stateRuta.todasFilas = todasFilas;
+    // El chofer del detalle abierto puede haber desaparecido de los datos
+    // nuevos (cambió de fecha, o — más raro — se reasignó su reparto); si
+    // sigue existiendo, se refresca su contenido en vez de cerrarlo.
+    if(stateRuta.detalleChofer){
+      if(todasFilas.some(f => f.nombre === stateRuta.detalleChofer)) renderRutaDetalleTabla();
+      else cerrarDetalleRutaChofer();
+    }
     aplicarFiltroZonaYRenderRuta();
   }
 

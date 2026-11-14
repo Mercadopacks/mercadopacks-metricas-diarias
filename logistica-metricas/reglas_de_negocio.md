@@ -1824,6 +1824,56 @@ solo si el recorrido ya terminó (`itemsSinResolver.length === 0`).
   la primera vez que ese caso ocurriera en producción. Ahora ordena con
   `?? -1` y muestra "sin datos" o "hace N min" según corresponda.
 
+### 20.16 Cuatro correcciones sobre 20.11/20.15, reportadas con captura (2026-11-14)
+
+1. **Leyenda de "Sin resolver"/"Gestionados" deja de ser texto fijo
+   visible** — vivía como un `<p class="tabla-nota">` debajo del título del
+   panel "Pendientes — <chofer>" (sección 20.11), ocupando espacio
+   permanente. Pasa a vivir en un ícono "ⓘ" (`.th-info`, mismo componente
+   de 20.14) al lado del título, con el mismo texto en el tooltip al pasar
+   el mouse o el foco.
+2. **Bug real: el panel "Pendientes" se cerraba solo mientras el usuario lo
+   estaba mirando** — reportado por el usuario, sospechaba que era a los
+   45s del poll automático; confirmado. Causa: `renderRepartidoresRuta()`
+   llamaba a `cerrarDetalleRutaChofer()` incondicionalmente al principio,
+   en CUALQUIER refresco — incluido el poll automático cada 45s
+   (`POLL_MS`) y el botón "Actualizar", no solo al cambiar de fecha (que sí
+   amerita cerrarlo). Fix: se guarda `stateRuta.fechaMostrada` (la última
+   fecha renderizada) y el detalle solo se cierra si la fecha realmente
+   cambió; si es un refresco de la MISMA fecha y el chofer con el detalle
+   abierto sigue existiendo en los datos nuevos, se refresca su contenido
+   (`renderRutaDetalleTabla()`) en vez de cerrar el panel. Si el chofer ya
+   no existe en los datos nuevos (caso raro), sí se cierra.
+3. **Bug real: "En ruta" con 0 paquetes entregados** — reportado con
+   captura (nahuel veccino: 0 de 26, "Sin resolver: 25"). Causa:
+   `calcularEstadoRutaChofer()` solo daba "Sin iniciar" si, además de 0
+   entregas, TODOS los pendientes estaban sin gestionar
+   (`pendientesSinResolver === asignados`) — un solo paquete ya
+   cancelado/reprogramado desde antes de que el chofer arrancara su
+   recorrido (algo fuera de su control, no una acción suya en ruta) bastaba
+   para que no cumpliera esa condición y cayera en "En ruta", a pesar de no
+   haber entregado nada. Fix: "Sin iniciar" ahora depende solo de
+   `entregados === 0`, sin mirar los pendientes gestionados. De paso se
+   sacó el parámetro `asignados` de `calcularEstadoRutaChofer()` (ya no se
+   usa en ningún lado de la función).
+4. **Bug real: Cañuelas/Máximo Paz caían en "Sin zona"** — reportado con
+   captura (Claudia Ovando, con paquetes de Cañuelas y Máximo Paz, no
+   mapeaba a Zona Sur). Causa: el partido de Cañuelas directamente no
+   estaba en `ZONA_POR_LOCALIDAD` (a diferencia de Zárate/Campana, que se
+   habían agregado a mano el 2026-11-12 — este faltaba agregarlo de la
+   misma forma). Se agregaron `'canuelas'` y `'maximo paz'` → `'Sur'`.
+
+**Verificado con Playwright** contra datos reales: `zonaPorLocalidad('Cañuelas')`
+y `zonaPorLocalidad('Máximo Paz')` (con mayúsculas/acentos, como vienen de
+LightData) devuelven `'Sur'`; Claudia Ovando en los datos reales del
+2026-11-13 ahora mapea a `'Sur'`. Caso sintético equivalente al de nahuel
+veccino (`entregados=0, pendientes=26, pendientesSinResolver=25`) da "Sin
+iniciar" en vez de "En ruta". El panel de detalle permanece abierto (mismo
+chofer, contenido refrescado) tras simular un refresco de la misma fecha, y
+se cierra correctamente al cambiar de "Ayer" a "Hoy". El ícono "ⓘ" del
+panel de detalle no deja ningún `<p class="tabla-nota">` visible, y su
+tooltip (hover real, `position:fixed`) aparece con el texto completo.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1870,3 +1920,4 @@ solo si el recorrido ya terminó (`itemsSinResolver.length === 0`).
 | 2026-11-14 | Sección 20.13: pedido del usuario sobre el estado de cada chofer en "Seguimiento en ruta" — "Sin entregas aún" pasó a llamarse "Sin Iniciar" (mismo criterio: menos de 2 entregas), y se agregó el estado "Terminó" (azul), que pisa al semáforo de ritmo cuando al chofer no le quedan pendientes sin resolver — no exige haber entregado el 100%, un recorrido con pendientes pero todos gestionados (Nadie, Reprogramado, Cancelado, etc.) también cuenta como terminado. Se excluyó a "Terminó" (junto con "Sin Iniciar") del cálculo de "% dentro de ritmo", porque una vez cerrado el recorrido el ritmo con el que venía entregando deja de ser relevante. Verificado contra 133 choferes reales del 2026-11-13: 92 clasificaron como "Terminó" (todos con "Faltan: 0" o "Gestionados: N", nunca con pendientes sin resolver) y los que sí tenían pendientes sin resolver quedaron correctamente fuera de "Terminó". |
 | 2026-11-14 | Sección 20.14: a pedido del usuario, 20.13 se separó en dos columnas — "Rendimiento" (solo ritmo: Demorado/A tiempo/Óptimo, "A tiempo" pasó de amarillo a azul) y "Estado" (solo avance: Sin iniciar/En ruta/Terminó sin pendientes/Terminó con pendientes). Para hacer lugar a la columna nueva, "Min. entre entregas"/"Hora 1ª entrega"/"Paq./hora" se sacaron de la grilla y pasaron a un tooltip al pasar el mouse sobre el badge de Rendimiento; se agregaron íconos de ayuda "ⓘ" en los encabezados; y se centraron las columnas de badge. De paso se corrigió un bug visual real con captura: el anillo dorado de foco del buscador se veía cortado en las esquinas de arriba (`.table-wrap` lo recortaba por falta de padding en `.table-head`). Los tooltips nuevos usan `position:fixed` posicionado por JS (no CSS `:hover`) para no toparse con el mismo recorte. |
 | 2026-11-14 | Sección 20.15: tres pedidos más del usuario sobre "Seguimiento en ruta". (1) Columna nueva "Hora fin." con el último movimiento registrado, solo si el recorrido ya terminó. (2) Alerta "Sin actividad" (rojo) en Rendimiento cuando pasan más de 45 min sin ningún movimiento nuevo y todavía quedan pendientes sin resolver — pisa al ritmo calculado, que podía seguir mostrando "Óptimo"/"A tiempo" aunque el chofer se hubiera quedado parado (ej. accidente) después de entregar pocos paquetes. (3) Estado "Sin terminar" (rojo), nuevo: a partir de las 23:30 o en cualquier fecha pasada, un chofer con pendientes sin resolver deja de verse como "En ruta"/"Sin iniciar" (que insinúan que todavía puede cerrar solo) y pasa a este estado de cierre fallido. De paso se corrigió un bug real que hubiera roto la tarjeta "Demorados ahora" (ahora "Demorados / sin actividad ahora") la primera vez que un chofer quedara "Sin actividad" con ritmo aún no medible — `.toFixed()` sobre `minEntreEntregas === null` tira `TypeError`. |
+| 2026-11-14 | Sección 20.16: cuatro correcciones más, reportadas con captura. (1) La leyenda de "Sin resolver"/"Gestionados" del panel "Pendientes" dejó de ser un texto fijo siempre visible y pasó a un ícono "ⓘ" junto al título, con el mismo texto en el tooltip. (2) Bug real: el panel "Pendientes" se cerraba solo a los 45s (el poll automático) mientras el usuario lo estaba mirando — ahora solo se cierra si cambia la fecha que se está viendo; un refresco de la misma fecha (poll o "Actualizar") refresca su contenido en vez de cerrarlo. (3) Bug real: un chofer con 0 paquetes entregados podía mostrar "En ruta" en vez de "Sin iniciar" si tenía un solo pendiente ya cancelado/reprogramado desde antes de arrancar su recorrido — ahora "Sin iniciar" depende solo de no haber entregado nada. (4) Bug real: Cañuelas y Máximo Paz caían en "Sin zona" en vez de Zona Sur — faltaba ese partido completo en el mapa de localidades (al igual que pasó con Zárate/Campana el 2026-11-12, se agregó a mano). |
