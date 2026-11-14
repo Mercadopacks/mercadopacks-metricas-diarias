@@ -2325,6 +2325,15 @@
       // invalida cache de fechas que pudieron haberse actualizado
       state.cache = {};
     }
+    // El documento de "hoy" (y los de la ventana de repaso de días
+    // anteriores que reprocesa el cierre ~00:01, ver reglas_de_negocio.md
+    // sección 16) se sobrescribe en Firestore cada ~20 minutos aunque la
+    // lista de fechas del índice no cambie. Si no se invalida acá, una
+    // pestaña abierta se queda mostrando para siempre el snapshot de la
+    // primera lectura del día y nunca refleja las corridas intradía,
+    // ni con el poll automático ni con el botón "Actualizar".
+    const hoy = todayISO();
+    for(let i=0;i<3;i++) delete state.cache[isoMinusDays(hoy,i)];
     state.lastUpdated = new Date();
     setStatus(true);
     return cambio;
@@ -2355,7 +2364,12 @@
 
     setInterval(async ()=>{
       const cambio = await refreshIndex();
-      if(cambio){ await render(); toast('Se detectaron datos nuevos — panel actualizado.'); }
+      // refreshIndex() ya invalida el cache de "hoy" (y la ventana de
+      // repaso) en cada poll, así que hay que re-renderizar siempre para
+      // que esa invalidación se note en pantalla — no solo cuando aparece
+      // una fecha nueva en el índice (eso solo pasa una vez por día).
+      await render();
+      if(cambio){ toast('Se detectaron datos nuevos — panel actualizado.'); }
     }, POLL_MS);
   }
 
@@ -3939,6 +3953,12 @@
   setInterval(()=>{
     if(document.getElementById('vistaRepartidores').hidden) return;
     if(stateRepa.modo === 'vivo') renderRepartidoresVivo();
+    // "ruta" caía antes en el else y refrescaba Repartidores histórico en
+    // vez de releer Firestore para Seguimiento en ruta — por eso esa
+    // pestaña nunca mostraba las corridas intradía sin recargar toda la
+    // página. forzar=true porque es el mismo refresco automático que usa
+    // el botón "Actualizar" (ver su handler, más arriba).
+    else if(stateRepa.modo === 'ruta') renderRepartidoresRuta(true);
     else renderRepartidoresHistorico();
   }, POLL_MS);
 

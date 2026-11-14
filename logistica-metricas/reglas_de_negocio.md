@@ -1508,6 +1508,63 @@ procesamiento`) clasifica correctamente como sin resolver — exactamente el
 caso que la normalización de mayúsculas estaba previniendo. Smoke test
 completo sin errores.
 
+### 20.12 Bug real: la pantalla abierta no mostraba las corridas intradía sin recargar (2026-11-14)
+
+Reporte del usuario: el Action "Descarga de LightData" corre bien cada ~20
+minutos, pero si el dashboard ya estaba abierto en el navegador, los
+cambios no se veían hasta hacer un refresh completo de la página — ni solo
+ni con el botón "Actualizar" (parte superior derecha del título) lograban
+mostrarlos. Dos bugs independientes, ambos de cacheo en el cliente — nada
+del lado de Firestore/descarga estaba mal.
+
+**Causa 1 — vista "Envíos":** `state.cache` guarda, por fecha, el
+snapshot ya leído de `envios_daily/<fecha>` para no releer Firestore en
+cada render. `refreshIndex()` solo vaciaba ese cache cuando la **lista de
+fechas** del índice (`envios_index/index`) cambiaba — es decir, una vez
+por día, cuando aparece una fecha nueva. Pero el documento de "hoy" se
+**sobreescribe** en cada corrida intradía sin que la lista de fechas
+cambie, así que el cache nunca se invalidaba durante el día: la pantalla
+se quedaba mostrando para siempre el snapshot de la primera lectura de la
+mañana. El botón "Actualizar" llamaba a `refreshIndex()` y después a
+`render()`, pero como `refreshIndex()` nunca marcaba `cambio`, el cache
+seguía intacto y `render()` repintaba los mismos datos viejos.
+
+**Causa 2 — pestaña "Seguimiento en ruta":** el `setInterval` que
+refresca solo la vista de "Seguimiento de Repartidores" cada `POLL_MS`
+(45s) solo tenía ramas para los modos `'vivo'` e implícitamente
+"cualquier otro" (que llamaba a `renderRepartidoresHistorico()`). El modo
+`'ruta'` no tenía rama propia y caía en el `else`, refrescando la pestaña
+de histórico en vez de releer Firestore para "Seguimiento en ruta" — esa
+pestaña no se refrescaba nunca sola, ni siquiera cuando sí cambiaban los
+datos.
+
+**Fix:**
+- `refreshIndex()` ahora borra de `state.cache` las entradas de "hoy" y
+  de los 2 días anteriores (la misma ventana de 3 días que reprocesa el
+  cierre de las ~00:01, sección 16) en **cada** llamada, no solo cuando
+  cambia la lista de fechas. Los días fuera de esa ventana son definitivos
+  y no necesitan invalidarse.
+- El poll automático de la vista "Envíos" (`setInterval` de `init()`) pasó
+  de renderizar solo si `cambio` era `true` a renderizar siempre — la
+  invalidación de cache de arriba ya no depende de que aparezca una fecha
+  nueva, así que hay que repintar en cada poll para que se note. El toast
+  "Se detectaron datos nuevos" se sigue mostrando únicamente cuando sí
+  apareció una fecha nueva.
+- El poll de "Seguimiento de Repartidores" ahora tiene una rama explícita
+  para `stateRepa.modo === 'ruta'` que llama a
+  `renderRepartidoresRuta(true)` (forzado, igual que hace el botón
+  "Actualizar" para este modo), en vez de caer en el `else` de histórico.
+
+**Verificado con Playwright** contra el dashboard real (datos de
+producción, servido localmente): se inyectó un valor cacheado "falso" en
+`state.cache[hoy]` y se confirmó que `refreshIndex()` lo borra aunque el
+índice no cambió; se confirmó que un click real en "Actualizar" ya no deja
+ver ese valor falso; y se marcó con un centinela la entrada cacheada de
+"hoy" en `stateRuta.cachePorFecha` estando en la pestaña "Seguimiento en
+ruta", esperando los 45s reales del poll automático — el centinela
+desapareció, confirmando que el poll ahora fuerza una relectura real de
+Firestore para esa pestaña.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1550,3 +1607,4 @@ completo sin errores.
 | 2026-11-13 | Sección 20.10: el contenedor principal del dashboard pasó de 1180px a 1600px de ancho máximo (con 32px de margen lateral en vez de 20px, 20px de nuevo en mobile) — pedido explícito del usuario para aprovechar el ancho real de pantallas anchas y, de paso, sacar el scroll horizontal que varios listados todavía necesitaban adentro del espacio angosto de antes. "Choferes en ruta" y "Todos los repartidores" dejan de necesitar scroll horizontal en cualquier ancho de escritorio común; "Ranking de choferes" (11 columnas, la tabla más ancha) lo dejó de necesitar desde 1440px hacia arriba, y por debajo mantiene su scroll horizontal interno como respaldo. |
 | 2026-11-13 | Sección 20.9: rediseño del encabezado fijo de tabla, que resuelve de raíz los cuatro reportes seguidos (20.6 a 20.8 fueron parches a casos particulares). El dato clave lo aportó el usuario: el error aparecía scrolleando con la barra de la PÁGINA. Causa de fondo: el título+buscador estaba fijado respecto de la página y la cabecera de columnas respecto del scroll interno de la tabla — dos sistemas de coordenadas independientes, imposibles de mantener pegados con un offset fijo. Fix: el título+buscador pasó a vivir dentro del mismo contenedor de scroll que la tabla, así las tres capas fijas se apilan contra el mismo borde. Se borró el centinela/IntersectionObserver de 20.7, que quedó de más. Verificado con 111 mediciones automáticas sobre 3 tablas, dos alturas de ventana y mobile: 0px de desalineación. |
 | 2026-11-13 | Sección 20.8: tercer bug real reportado por el usuario sobre el mismo header sticky, también con captura — una fila de datos se pintaba por encima del header de columnas al scrollear rápido la tabla. Causa, distinta de 20.6/20.7: `border-collapse:collapse` + celdas `position:sticky` es un bug de pintado conocido de Chrome. Se cambió a `border-collapse:separate; border-spacing:0` (visualmente idéntico, sin bordes verticales que dependieran del colapsado), se subieron los z-index de las tres capas sticky y se les agregó `will-change:transform`. Verificado con 25 rondas de scroll real a velocidad variable sobre datos reales (135 choferes), comprobando programáticamente que ninguna fila quedara por encima del header. |
+| 2026-11-14 | Sección 20.12: bug real reportado por el usuario — con el dashboard ya abierto, las corridas intradía (cada ~20 min) no se veían en pantalla hasta hacer un refresh completo; ni solas ni con el botón "Actualizar". Dos causas de cacheo en el cliente: (1) `refreshIndex()` solo vaciaba `state.cache` cuando cambiaba la lista de fechas del índice, no cuando se sobreescribía el documento de "hoy" — ahora borra siempre las entradas de "hoy" y los 2 días anteriores (ventana de repaso). (2) el poll automático de "Seguimiento en ruta" no tenía rama propia y caía en la de "histórico" — ahora llama a `renderRepartidoresRuta(true)`. El poll de "Envíos" pasó a renderizar siempre, no solo cuando aparece una fecha nueva. Verificado con Playwright contra datos reales, incluyendo los 45s reales de espera del poll automático. |
