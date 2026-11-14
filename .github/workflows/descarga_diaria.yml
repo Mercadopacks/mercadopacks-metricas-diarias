@@ -18,26 +18,28 @@ name: Descarga de LightData
 # igual que un disparo manual desde la pestaña Actions, que en las pruebas
 # de este proyecto siempre arrancó a los pocos segundos.
 #
-# Configuración necesaria en cron-job.org (5 jobs, uno por horario):
+# Configuración necesaria en cron-job.org (3 jobs — actualizado 2026-11-14,
+# ver reglas_de_negocio.md sección 16 para el detalle y el porqué de 2 jobs
+# de "hoy" en vez de 1):
 #   URL:     https://api.github.com/repos/Mercadopacks/mercadopacks-metricas-diarias/actions/workflows/descarga_diaria.yml/dispatches
 #   Método:  POST
 #   Headers: Authorization: Bearer <PERSONAL_ACCESS_TOKEN>
 #            Accept: application/vnd.github+json
 #            Content-Type: application/json
-#   Body:    {"ref":"main","inputs":{"modo":"hoy"}}   (4 jobs intradía)
-#            {"ref":"main","inputs":{"modo":"ayer"}}  (1 job de cierre)
-#   Horarios UTC (sin necesidad de offset ":17" — cron-job.org no sufre la
+#   Body:    {"ref":"main","inputs":{"modo":"hoy"}}   (jobs "Hoy — día" y "Hoy — noche")
+#            {"ref":"main","inputs":{"modo":"ayer"}}  (job "Ayer", cierre de las 00hs)
+#   Horarios UTC (sin offset de minutos — cron-job.org no sufre la
 #   congestión de GitHub, así que van justo en punto):
-#     14:00 UTC = 11:00 ART -> modo=hoy   (lunes a sábado)
-#     16:00 UTC = 13:00 ART -> modo=hoy   (lunes a sábado)
-#     18:00 UTC = 15:00 ART -> modo=hoy   (lunes a sábado)
-#     21:00 UTC = 18:00 ART -> modo=hoy   (lunes a sábado)
-#     03:00 UTC = 00:00 ART -> modo=ayer  (todos los días menos lunes —
-#                                          ver chequeo de domingo más abajo,
-#                                          que además protege por las dudas
-#                                          cron-job.org se configure distinto)
+#     "Hoy — día":   minutos 0,20,40 en horas 14-23 UTC, lunes a sábado
+#                    = cada 20 min, 11:00-20:40 ART, lunes a sábado
+#     "Hoy — noche": minutos 0,10,20,30,40,50 en horas 0-2 UTC, martes a domingo
+#                    = cada 10 min, 21:00-23:50 ART, lunes a sábado
+#     "Ayer":        minuto 0 en hora 3 UTC, todos los días menos lunes
+#                    = cierre 00:00 ART (ver chequeo de domingo más abajo,
+#                      que además protege por las dudas cron-job.org se
+#                      configure distinto)
 # Ver README.md, sección "Automatización de la descarga diaria", para la
-# guía completa de cómo generar el token y cargar los 5 jobs.
+# guía completa de cómo generar el token y cargar los 3 jobs.
 on:
   workflow_dispatch:
     inputs:

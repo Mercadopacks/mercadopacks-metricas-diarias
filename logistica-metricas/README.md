@@ -189,10 +189,11 @@ el archivo iniciando sesión manualmente en el navegador. Por eso la
 automatización usa **Playwright** para manejar un navegador real de forma
 desatendida.
 
-**Qué hace, cada 20 minutos de 11:00 a 23:40 ART + el cierre de las 00:00,
-de lunes a sábado** (domingo no es día operativo — ver más abajo; horario
-ampliado el 2026-11-11 para seguimiento en vivo de repartidores, antes
-llegaba solo hasta las 18:00):
+**Qué hace, cada 20 minutos de 11:00 a 20:40 ART, cada 10 minutos de 21:00 a
+23:50 ART, + el cierre de las 00:00, de lunes a sábado** (domingo no es día
+operativo — ver más abajo; horario ampliado el 2026-11-11 para seguimiento en
+vivo de repartidores, antes llegaba solo hasta las 18:00; cadencia nocturna
+subida a cada 10 minutos el 2026-11-14, también para seguimiento en vivo):
 1. `scripts/descargar_lightdata.py` inicia sesión en LightData, filtra el
    listado de envíos SIN filtro de Estado (se necesitan todos los estados) y
    descarga el `.xls`. Las corridas intradía (11:00 a 23:40) piden el día
@@ -251,15 +252,16 @@ horario personalizado ("Custom"). Todos con la misma configuración base:
 
 **Horarios (en UTC, tal como los pide cron-job.org — sin offset de minutos,
 porque cron-job.org no sufre la congestión que tiene GitHub). Actualizado
-el 2026-11-11 a cada 20 minutos hasta las 23:40 ART — ver
-reglas_de_negocio.md sección 16 para por qué son 2 jobs de "hoy" en vez
-de 1 (el campo de día de la semana no puede ser distinto según el tramo
-horario dentro de un mismo job):**
+el 2026-11-11 a cada 20 minutos hasta las 23:40 ART, y el 2026-11-14 a cada
+10 minutos en el tramo nocturno (21:00-23:50 ART) — ver reglas_de_negocio.md
+sección 16 para por qué son 2 jobs de "hoy" en vez de 1 (el campo de día de
+la semana no puede ser distinto según el tramo horario dentro de un mismo
+job):**
 
 | Job | Minutos | Horas UTC | Día semana (UTC) | Representa en ART | `modo` |
 |---|---|---|---|---|---|
 | "Hoy — día" | 0, 20, 40 | 14-23 | Lunes a sábado | 11:00-20:40, lunes a sábado | `hoy` |
-| "Hoy — noche" | 0, 20, 40 | 0-2 | Martes a domingo | 21:00-23:40, lunes a sábado | `hoy` |
+| "Hoy — noche" | 0, 10, 20, 30, 40, 50 | 0-2 | Martes a domingo | 21:00-23:50, lunes a sábado | `hoy` |
 | "Ayer" | 0 | 3 | Todos menos lunes* | Cierre 00:00 | `ayer` |
 
 \* La corrida de las 00hs en realidad ocurre al arrancar el día siguiente y
@@ -460,3 +462,4 @@ Ideas para las próximas iteraciones, en orden sugerido:
 | 2026-11-14 | Se separó en dos columnas lo que antes estaba junto en "Seguimiento en ruta": "Rendimiento" (qué tan rápido entrega: Demorado/A tiempo/Óptimo) y "Estado" (cuánto le falta del recorrido: Sin iniciar/En ruta/Terminó sin pendientes/Terminó con pendientes), cada una con su ayuda "ⓘ" explicando qué significa. Para que entraran sin agrandar la tabla, los datos de minutos entre entregas, hora de la primera entrega y paquetes por hora pasaron a verse en un cartelito al pasar el mouse sobre el valor de Rendimiento. También se corrigió que el recuadro dorado de foco del buscador se viera cortado en las esquinas de arriba. Detalle completo en `reglas_de_negocio.md` sección 20.14. |
 | 2026-11-14 | Tres mejoras más en "Seguimiento en ruta". Se agregó la columna "Hora fin." con la hora del último movimiento del chofer (entrega o gestión de un pendiente), que se completa solo cuando terminó el recorrido. Rendimiento ahora puede mostrar "Sin actividad" (rojo): si pasan más de 45 minutos sin ningún movimiento nuevo y al chofer le quedan pendientes sin resolver, se alerta aunque el promedio de ritmo todavía diga "Óptimo" o "A tiempo" — pensado para el caso de un chofer que entregó pocos paquetes y dejó de moverse (accidente, vehículo roto, etc.), donde antes el promedio sobre lo ya entregado tapaba el problema. Y la columna Estado suma "Sin terminar" (rojo): pasadas las 23:30, o al mirar un día anterior, un chofer que todavía tiene pendientes sin resolver deja de verse como "En ruta" (que da a entender que puede cerrarse solo) y pasa a este estado, que refleja que el día ya cerró sin resolverse. Detalle completo en `reglas_de_negocio.md` sección 20.15. |
 | 2026-11-14 | Cuatro ajustes más en "Seguimiento en ruta", reportados con captura. La explicación de "Sin resolver"/"Gestionados" en el panel de "Pendientes" de un chofer dejó de ocupar espacio fijo abajo del título y pasó a un ícono "ⓘ" al lado, igual que las otras ayudas del dashboard. Se corrigió un bug real: el panel de "Pendientes" se cerraba solo a los 45 segundos (el refresco automático) mientras se lo estaba mirando — ahora solo se cierra si se cambia de fecha, y un refresco de la misma fecha actualiza su contenido sin cerrarlo. Se corrigió otro bug real: un chofer sin ninguna entrega podía aparecer como "En ruta" en vez de "Sin iniciar" si tenía un solo paquete cancelado o reprogramado antes de arrancar su recorrido. Y se agregó Cañuelas/Máximo Paz al mapa de zonas — esos partidos caían en "Sin zona" en vez de Zona Sur. Detalle completo en `reglas_de_negocio.md` sección 20.16. |
+| 2026-11-14 | A pedido del usuario, el job de cron-job.org "Hoy — noche" pasó de disparar la descarga cada 20 minutos a cada 10 minutos en el tramo 21:00-23:50 ART, para un seguimiento más fino de repartidores en esa franja. Es un cambio de configuración en cron-job.org (minutos `0,20,40` → `0,10,20,30,40,50`), no de código — ver sección "Automatización de la descarga diaria" más arriba y `reglas_de_negocio.md` sección 16. |

@@ -714,8 +714,16 @@ resuelven el día ART correcto.
 | Job | Minutos | Horas (UTC) | Días (UTC) | Representa en ART |
 |---|---|---|---|---|
 | "Hoy — día" | 0,20,40 | 14-23 | Lunes-Sábado (1-6) | 11:00-20:40 ART, Lunes-Sábado |
-| "Hoy — noche" | 0,20,40 | 0-2 | Martes-Domingo (2-7) | 21:00-23:40 ART, Lunes-Sábado |
+| "Hoy — noche" | 0,10,20,30,40,50 | 0-2 | Martes-Domingo (2-7) | 21:00-23:50 ART, Lunes-Sábado |
 | "Ayer" (sin cambios) | 0 | 3 | Todos menos Lunes | Cierre 00:00 ART |
+
+**Actualización 2026-11-14:** a pedido del usuario, "Hoy — noche" pasó de
+cada 20 a cada 10 minutos (minutos `0,20,40` → `0,10,20,30,40,50`, mismo
+rango de horas/días) — solo cambia la configuración del job en
+cron-job.org, nada en este workflow ni en el código. El `concurrency`
+(abajo) ya protege contra el caso de que una corrida tarde más de 10
+minutos y se solape con la siguiente: la nueva espera en cola en vez de
+pisarla.
 
 **Por qué son 2 jobs y no 1 con más horas seleccionadas:** cron-job.org sí
 permite seleccionar horas no contiguas (14-23 y 0-2) dentro de un mismo
@@ -1921,3 +1929,4 @@ tooltip (hover real, `position:fixed`) aparece con el texto completo.
 | 2026-11-14 | Sección 20.14: a pedido del usuario, 20.13 se separó en dos columnas — "Rendimiento" (solo ritmo: Demorado/A tiempo/Óptimo, "A tiempo" pasó de amarillo a azul) y "Estado" (solo avance: Sin iniciar/En ruta/Terminó sin pendientes/Terminó con pendientes). Para hacer lugar a la columna nueva, "Min. entre entregas"/"Hora 1ª entrega"/"Paq./hora" se sacaron de la grilla y pasaron a un tooltip al pasar el mouse sobre el badge de Rendimiento; se agregaron íconos de ayuda "ⓘ" en los encabezados; y se centraron las columnas de badge. De paso se corrigió un bug visual real con captura: el anillo dorado de foco del buscador se veía cortado en las esquinas de arriba (`.table-wrap` lo recortaba por falta de padding en `.table-head`). Los tooltips nuevos usan `position:fixed` posicionado por JS (no CSS `:hover`) para no toparse con el mismo recorte. |
 | 2026-11-14 | Sección 20.15: tres pedidos más del usuario sobre "Seguimiento en ruta". (1) Columna nueva "Hora fin." con el último movimiento registrado, solo si el recorrido ya terminó. (2) Alerta "Sin actividad" (rojo) en Rendimiento cuando pasan más de 45 min sin ningún movimiento nuevo y todavía quedan pendientes sin resolver — pisa al ritmo calculado, que podía seguir mostrando "Óptimo"/"A tiempo" aunque el chofer se hubiera quedado parado (ej. accidente) después de entregar pocos paquetes. (3) Estado "Sin terminar" (rojo), nuevo: a partir de las 23:30 o en cualquier fecha pasada, un chofer con pendientes sin resolver deja de verse como "En ruta"/"Sin iniciar" (que insinúan que todavía puede cerrar solo) y pasa a este estado de cierre fallido. De paso se corrigió un bug real que hubiera roto la tarjeta "Demorados ahora" (ahora "Demorados / sin actividad ahora") la primera vez que un chofer quedara "Sin actividad" con ritmo aún no medible — `.toFixed()` sobre `minEntreEntregas === null` tira `TypeError`. |
 | 2026-11-14 | Sección 20.16: cuatro correcciones más, reportadas con captura. (1) La leyenda de "Sin resolver"/"Gestionados" del panel "Pendientes" dejó de ser un texto fijo siempre visible y pasó a un ícono "ⓘ" junto al título, con el mismo texto en el tooltip. (2) Bug real: el panel "Pendientes" se cerraba solo a los 45s (el poll automático) mientras el usuario lo estaba mirando — ahora solo se cierra si cambia la fecha que se está viendo; un refresco de la misma fecha (poll o "Actualizar") refresca su contenido en vez de cerrarlo. (3) Bug real: un chofer con 0 paquetes entregados podía mostrar "En ruta" en vez de "Sin iniciar" si tenía un solo pendiente ya cancelado/reprogramado desde antes de arrancar su recorrido — ahora "Sin iniciar" depende solo de no haber entregado nada. (4) Bug real: Cañuelas y Máximo Paz caían en "Sin zona" en vez de Zona Sur — faltaba ese partido completo en el mapa de localidades (al igual que pasó con Zárate/Campana el 2026-11-12, se agregó a mano). |
+| 2026-11-14 | Sección 16: a pedido del usuario, el job "Hoy — noche" de cron-job.org pasó de cada 20 a cada 10 minutos (21:00-23:50 ART), para seguimiento más fino de repartidores en ese tramo. Cambio puramente de configuración externa (minutos del cronjob), no toca `descarga_diaria.yml` ni ningún script — el `concurrency` del workflow ya cubre el caso de corridas que se superpongan. |
