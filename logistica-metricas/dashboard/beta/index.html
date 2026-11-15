@@ -111,6 +111,14 @@
   th, td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--borde);}
   th{color:#555; font-weight:700;}
   .proximamente{text-align:center; padding:60px 20px; color:#777;}
+  .chips{display:flex; gap:8px; margin-bottom:16px;}
+  .chip{
+    background:#fff; border:1px solid var(--borde); color:#555; padding:8px 16px;
+    border-radius:20px; font-size:13px;
+  }
+  .chip.activo{background:var(--negro); color:#fff; border-color:var(--negro);}
+  .sin-datos{color:#999; font-style:italic;}
+  .tag-chica{color:#c0892b; font-size:11px; margin-left:6px;}
   [hidden]{display:none !important;}
 </style>
 </head>
@@ -160,20 +168,38 @@
 
     <main>
       <div id="vista-envios">
+        <div class="chips" id="periodo-envios">
+          <button class="chip activo" data-periodo="hoy">Hoy</button>
+          <button class="chip" data-periodo="ayer">Ayer</button>
+        </div>
+
         <div class="card">
           <div class="kpis">
-            <div class="kpi"><div class="valor" id="kpi-total">—</div><div class="label">Envíos cargados</div></div>
-            <div class="kpi"><div class="valor" id="kpi-historial">—</div><div class="label">Cambios registrados (historial)</div></div>
-            <div class="kpi"><div class="valor" id="kpi-actualizado">—</div><div class="label">Última actualización</div></div>
+            <div class="kpi"><div class="valor" id="kpi-total">—</div><div class="label">Total de envíos</div></div>
+            <div class="kpi"><div class="valor" id="kpi-efectividad">—</div><div class="label">Entregas efectivas</div></div>
+            <div class="kpi"><div class="valor" id="kpi-antes-corte">—</div><div class="label">Antes de las 21hs (s/ efectivas)</div></div>
+            <div class="kpi"><div class="valor" id="kpi-cancelados">—</div><div class="label">Cancelados / rechazados</div></div>
+            <div class="kpi"><div class="valor" id="kpi-a-retirar">—</div><div class="label">A retirar</div></div>
           </div>
         </div>
+
         <div class="card">
-          <h3 style="margin-top:0;">Últimos envíos actualizados</h3>
+          <h3 style="margin-top:0;">Por zona</h3>
           <table>
             <thead>
-              <tr><th>Estado</th><th>Cadete</th><th>Zona</th><th>Localidad</th><th>Fecha Mercadopacks</th></tr>
+              <tr><th>Zona</th><th>Total</th><th>% Efectividad</th><th>% Antes de 21hs</th><th>% Cancelados</th></tr>
             </thead>
-            <tbody id="tabla-envios"></tbody>
+            <tbody id="tabla-zona"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0;">Ranking de choferes</h3>
+          <table>
+            <thead>
+              <tr><th>Cadete</th><th>Asignados</th><th>% Efectividad</th><th>% Antes de 21hs</th></tr>
+            </thead>
+            <tbody id="tabla-choferes"></tbody>
           </table>
         </div>
       </div>
@@ -230,7 +256,7 @@
   function mostrarApp(){
     loginView.hidden = true;
     appView.hidden = false;
-    cargarDatosEnvios();
+    cargarResumenEnvios();
   }
 
   function mostrarLogin(){
@@ -273,40 +299,103 @@
     });
   });
 
-  async function cargarDatosEnvios(){
-    const [{ count: totalEnvios }, { count: totalHistorial }, { data: ultimos, error }] = await Promise.all([
-      sb.from("envios").select("id_interno", { count: "exact", head: true }),
-      sb.from("envios_historial").select("id", { count: "exact", head: true }),
-      sb.from("envios")
-        .select("estado,cadete,zona,localidad,fecha_mercadopacks,updated_at")
-        .order("updated_at", { ascending: false })
-        .limit(20),
-    ]);
+  // "Hoy"/"ayer" en hora de Argentina (ART = UTC-3 fijo, sin horario de
+  // verano — mismo criterio que el resto del proyecto, ver
+  // reglas_de_negocio.md), no la fecha cruda del navegador.
+  function fechaART(offsetDias){
+    const ms = Date.now() - 3 * 60 * 60 * 1000 + offsetDias * 24 * 60 * 60 * 1000;
+    return new Date(ms).toISOString().slice(0, 10);
+  }
 
-    document.getElementById("kpi-total").textContent = totalEnvios ?? "—";
-    document.getElementById("kpi-historial").textContent = totalHistorial ?? "—";
+  const stateEnvios = { periodo: "hoy" };
+
+  function _pct(parte, total){
+    if(!total) return null;
+    return Math.round((parte / total) * 1000) / 10;
+  }
+
+  function _fmtPct(valor){
+    return valor === null || Number.isNaN(valor) ? "—" : valor.toFixed(1) + "%";
+  }
+
+  document.querySelectorAll("#periodo-envios .chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll("#periodo-envios .chip").forEach(b=>b.classList.toggle("activo", b===btn));
+      stateEnvios.periodo = btn.dataset.periodo;
+      cargarResumenEnvios();
+    });
+  });
+
+  async function cargarResumenEnvios(){
+    const fecha = stateEnvios.periodo === "ayer" ? fechaART(-1) : fechaART(0);
+
+    const { data, error } = await sb.rpc("resumen_envios", {
+      fecha_desde: fecha,
+      fecha_hasta: fecha,
+    });
 
     if(error){
-      console.error("Error cargando envios:", error);
-      document.getElementById("kpi-actualizado").textContent = "Error";
+      console.error("Error cargando resumen_envios:", error);
+      document.getElementById("kpi-total").textContent = "Error";
       return;
     }
 
-    if(ultimos && ultimos.length){
-      document.getElementById("kpi-actualizado").textContent =
-        new Date(ultimos[0].updated_at).toLocaleString("es-AR");
+    const r = data.resumen;
+    const totalParaEfectividad = r.total - r.a_retirar;
+
+    document.getElementById("kpi-total").textContent = r.total;
+    document.getElementById("kpi-efectividad").textContent =
+      `${r.entregas_efectivas} (${_fmtPct(_pct(r.entregas_efectivas, totalParaEfectividad))})`;
+    document.getElementById("kpi-antes-corte").textContent =
+      `${r.antes_de_corte} (${_fmtPct(_pct(r.antes_de_corte, r.entregas_efectivas))})`;
+    document.getElementById("kpi-cancelados").textContent =
+      `${r.cancelados} (${_fmtPct(_pct(r.cancelados, r.total))})`;
+    document.getElementById("kpi-a-retirar").textContent =
+      `${r.a_retirar} (${_fmtPct(_pct(r.a_retirar, r.total))})`;
+
+    const tbodyZona = document.getElementById("tabla-zona");
+    if(!data.por_zona.length){
+      tbodyZona.innerHTML = `<tr><td colspan="5" class="sin-datos">Sin datos para este período.</td></tr>`;
+    } else {
+      tbodyZona.innerHTML = data.por_zona.map(z => `
+        <tr>
+          <td>${z.zona}</td>
+          <td>${z.total}</td>
+          <td>${_fmtPct(_pct(z.entregas_efectivas, z.total - z.a_retirar))}</td>
+          <td>${_fmtPct(_pct(z.antes_de_corte, z.entregas_efectivas))}</td>
+          <td>${_fmtPct(_pct(z.cancelados, z.total))}</td>
+        </tr>
+      `).join("");
     }
 
-    const tbody = document.getElementById("tabla-envios");
-    tbody.innerHTML = (ultimos || []).map(fila => `
-      <tr>
-        <td>${fila.estado ?? "—"}</td>
-        <td>${fila.cadete ?? "—"}</td>
-        <td>${fila.zona ?? "—"}</td>
-        <td>${fila.localidad ?? "—"}</td>
-        <td>${fila.fecha_mercadopacks ?? "—"}</td>
-      </tr>
-    `).join("");
+    const MIN_MUESTRA = 5; // igual que generar_reporte.py
+    const tbodyChoferes = document.getElementById("tabla-choferes");
+    const filasChoferes = [...data.por_chofer].sort((a, b) => {
+      const pa = _pct(a.entregas_efectivas, a.total_asignados - a.a_retirar) ?? -1;
+      const pb = _pct(b.entregas_efectivas, b.total_asignados - b.a_retirar) ?? -1;
+      return pb - pa;
+    });
+    if(!filasChoferes.length){
+      tbodyChoferes.innerHTML = `<tr><td colspan="4" class="sin-datos">Sin datos para este período.</td></tr>`;
+    } else {
+      tbodyChoferes.innerHTML = filasChoferes.map(c => `
+        <tr>
+          <td>${c.cadete}${c.total_asignados < MIN_MUESTRA ? '<span class="tag-chica">muestra chica</span>' : ""}</td>
+          <td>${c.total_asignados}</td>
+          <td>${_fmtPct(_pct(c.entregas_efectivas, c.total_asignados - c.a_retirar))}</td>
+          <td>${_fmtPct(_pct(c.antes_de_corte, c.entregas_efectivas))}</td>
+        </tr>
+      `).join("");
+      if(data.sin_chofer_total){
+        tbodyChoferes.innerHTML += `
+          <tr>
+            <td class="sin-datos">(sin chofer asignado)</td>
+            <td>${data.sin_chofer_total}</td>
+            <td class="sin-datos">—</td>
+            <td class="sin-datos">—</td>
+          </tr>`;
+      }
+    }
   }
 
   // Al cargar la página, y ante cualquier cambio de sesión (login/logout

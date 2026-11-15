@@ -48,7 +48,16 @@ def texto_o_none(valor) -> str | None:
 
 def parsear_fecha(valor) -> str | None:
     """Acepta 'dd/mm/yyyy HH:MM' o 'dd/mm/yyyy' (formato real de LightData,
-    ver diccionario_de_datos.md) y devuelve ISO 8601 o None."""
+    ver diccionario_de_datos.md) y devuelve ISO 8601 con offset -03:00.
+
+    LightData entrega estas fechas en hora de Argentina (ART = UTC-3 fijo,
+    sin horario de verano, mismo criterio que el resto del proyecto — ver
+    reglas_de_negocio.md) pero SIN indicarlo: el valor crudo es un
+    datetime "naive". Si se manda tal cual a una columna timestamptz,
+    Postgres lo toma como UTC y el resultado queda 3 horas adelantado
+    (bug real detectado 2026-11-15 antes de usar estas columnas para el
+    corte de las 21hs) — por eso acá se agrega el offset explícito.
+    """
     if valor is None or (isinstance(valor, float) and pd.isna(valor)):
         return None
     if isinstance(valor, str) and not valor.strip():
@@ -56,7 +65,7 @@ def parsear_fecha(valor) -> str | None:
     dt = pd.to_datetime(valor, dayfirst=True, errors="coerce")
     if pd.isna(dt):
         return None
-    return dt.isoformat()
+    return dt.isoformat() + "-03:00"
 
 
 def valor_json_seguro(valor):
