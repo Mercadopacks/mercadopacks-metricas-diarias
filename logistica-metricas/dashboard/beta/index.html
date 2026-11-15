@@ -117,6 +117,10 @@
     border-radius:20px; font-size:13px;
   }
   .chip.activo{background:var(--negro); color:#fff; border-color:var(--negro);}
+  #fecha-elegida-envios{
+    padding:7px 12px; border:1px solid var(--borde); border-radius:20px;
+    font-family:inherit; font-size:13px;
+  }
   .sin-datos{color:#999; font-style:italic;}
   .tag-chica{color:#c0892b; font-size:11px; margin-left:6px;}
   [hidden]{display:none !important;}
@@ -171,6 +175,8 @@
         <div class="chips" id="periodo-envios">
           <button class="chip activo" data-periodo="hoy">Hoy</button>
           <button class="chip" data-periodo="ayer">Ayer</button>
+          <button class="chip" data-periodo="elegir">Elegir fecha…</button>
+          <input type="date" id="fecha-elegida-envios" hidden />
         </div>
 
         <div class="card">
@@ -318,16 +324,34 @@
     return valor === null || Number.isNaN(valor) ? "—" : valor.toFixed(1) + "%";
   }
 
+  const inputFechaEnvios = document.getElementById("fecha-elegida-envios");
+
   document.querySelectorAll("#periodo-envios .chip").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       document.querySelectorAll("#periodo-envios .chip").forEach(b=>b.classList.toggle("activo", b===btn));
       stateEnvios.periodo = btn.dataset.periodo;
+      if(stateEnvios.periodo === "elegir"){
+        inputFechaEnvios.hidden = false;
+        if(!inputFechaEnvios.value) inputFechaEnvios.value = fechaART(0);
+        stateEnvios.fecha = inputFechaEnvios.value;
+        inputFechaEnvios.focus();
+      } else {
+        inputFechaEnvios.hidden = true;
+      }
       cargarResumenEnvios();
     });
   });
 
+  inputFechaEnvios.addEventListener("change", ()=>{
+    stateEnvios.fecha = inputFechaEnvios.value;
+    cargarResumenEnvios();
+  });
+
   async function cargarResumenEnvios(){
-    const fecha = stateEnvios.periodo === "ayer" ? fechaART(-1) : fechaART(0);
+    let fecha;
+    if(stateEnvios.periodo === "ayer") fecha = fechaART(-1);
+    else if(stateEnvios.periodo === "elegir") fecha = stateEnvios.fecha || fechaART(0);
+    else fecha = fechaART(0);
 
     const { data, error } = await sb.rpc("resumen_envios", {
       fecha_desde: fecha,
