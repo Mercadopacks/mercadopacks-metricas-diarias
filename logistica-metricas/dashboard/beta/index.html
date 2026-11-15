@@ -4,21 +4,25 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Mercado Packs — Beta (Supabase)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.454.0/dist/umd/lucide.min.js"></script>
 <style>
   :root{
     --dorado:#F6BE05; --negro:#111; --fondo:#efeeea; --borde:#ddd9d0;
-    --sidebar-w:240px; --sidebar-w-colapsado:64px;
+    --sidebar-w:264px; --sidebar-w-colapsado:68px;
   }
   *{box-sizing:border-box;}
   body{
-    margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    margin:0; font-family:'Nunito',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     background:var(--fondo); color:var(--negro);
   }
-  button{cursor:pointer; border:none; border-radius:8px; font-size:14px; font-weight:600;}
+  button{cursor:pointer; border:none; border-radius:8px; font-size:14px; font-weight:700; font-family:inherit;}
 
   /* ===================== Marca ===================== */
-  .marca-nombre{font-weight:700;}
+  .marca-nombre{font-weight:800;}
   .marca-nombre .mercado{color:var(--negro);}
   .marca-nombre .packs{color:var(--dorado);}
 
@@ -27,17 +31,26 @@
     min-height:100vh; display:flex; align-items:center; justify-content:center;
   }
   #login-view .caja{
-    display:flex; flex-direction:column; align-items:center; gap:18px; width:300px;
+    display:flex; flex-direction:column; align-items:center; gap:26px; width:320px;
   }
-  #login-view img.logo{width:84px; height:84px;}
-  #login-view h1.marca-nombre{font-size:26px; margin:0;}
+  #login-view .marca-row{display:flex; align-items:center; gap:12px;}
+  #login-view .marca-row img.logo{width:52px; height:52px; flex-shrink:0;}
+  #login-view h1.marca-nombre{font-size:24px; margin:0; line-height:1;}
   #login-view form{display:flex; flex-direction:column; gap:12px; width:100%;}
   #login-view input{
-    padding:10px 12px; border:1px solid var(--borde); border-radius:8px; font-size:14px;
+    padding:11px 13px; border:1px solid var(--borde); border-radius:8px; font-size:14px;
+    font-family:inherit;
   }
   #login-error{color:#c0392b; font-size:13px; min-height:18px; text-align:center;}
-  .btn-primario{background:var(--dorado); color:var(--negro); padding:10px 16px;}
-  .btn-secundario{background:transparent; color:#fff; border:1px solid #555; padding:9px 16px;}
+  .btn-primario{background:var(--dorado); color:var(--negro); padding:11px 16px;}
+
+  /* ===================== Botones de ícono (Lucide) ===================== */
+  .btn-icono{
+    background:var(--negro); color:#fff; border-radius:8px; padding:9px;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .btn-icono:hover{background:#2a2a2a;}
+  .btn-icono svg{width:18px; height:18px;}
 
   /* ===================== App shell: sidebar + contenido ===================== */
   #app-view{display:flex; min-height:100vh;}
@@ -45,38 +58,46 @@
   .sidebar{
     width:var(--sidebar-w); flex-shrink:0; background:var(--negro); color:#fff;
     display:flex; flex-direction:column; transition:width .18s ease;
-    overflow:hidden; white-space:nowrap;
+    overflow:hidden;
   }
   .sidebar.colapsado{width:var(--sidebar-w-colapsado);}
+
   .sidebar-header{
-    display:flex; align-items:center; gap:10px; padding:16px 14px;
-    border-bottom:1px solid #2a2a2a;
+    display:flex; align-items:center; gap:12px; padding:18px 16px;
+    border-bottom:1px solid #2a2a2a; min-height:64px;
   }
   .sidebar-header img{width:28px; height:28px; flex-shrink:0;}
-  .sidebar-header .marca-nombre{font-size:15px;}
+  .sidebar-header .marca-nombre{font-size:16px; white-space:nowrap;}
   .sidebar-header .mercado{color:#fff;}
   .sidebar-toggle{
-    background:transparent; color:#aaa; padding:6px; margin-left:auto;
-    font-size:16px; line-height:1;
+    background:transparent; color:#aaa; padding:8px; margin-left:auto; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
   }
   .sidebar-toggle:hover{color:#fff;}
-  .sidebar nav{display:flex; flex-direction:column; padding:10px;}
+  .sidebar-toggle svg{width:18px; height:18px;}
+  .sidebar.colapsado .sidebar-header{justify-content:center; padding:18px 0;}
+  .sidebar.colapsado .sidebar-header img,
+  .sidebar.colapsado .sidebar-header .marca-nombre{display:none;}
+  .sidebar.colapsado .sidebar-toggle{margin-left:0;}
+
+  .sidebar nav{display:flex; flex-direction:column; gap:4px; padding:12px 10px;}
   .nav-item{
-    display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:8px;
-    color:#ccc; background:transparent; text-align:left; font-weight:500;
+    display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:8px;
+    color:#ccc; background:transparent; text-align:left; font-weight:600; width:100%;
+    white-space:nowrap;
   }
-  .nav-item .icono{font-size:16px; width:20px; text-align:center; flex-shrink:0;}
+  .nav-item svg{width:18px; height:18px; flex-shrink:0;}
   .nav-item:hover{background:#1e1e1e; color:#fff;}
   .nav-item.activo{background:var(--dorado); color:var(--negro);}
-  .sidebar.colapsado .nav-item .texto,
-  .sidebar.colapsado .sidebar-header .marca-nombre{display:none;}
+  .sidebar.colapsado .nav-item{justify-content:center; padding:12px 0;}
+  .sidebar.colapsado .nav-item .texto{display:none;}
 
   #contenido{flex:1; min-width:0;}
   #contenido header{
     background:#fff; border-bottom:1px solid var(--borde); padding:14px 24px;
-    display:flex; align-items:center; justify-content:space-between;
+    display:flex; align-items:center; justify-content:space-between; min-height:64px;
   }
-  #contenido header h2{font-size:16px; margin:0;}
+  #contenido header h2{font-size:16px; margin:0; font-weight:700;}
   main{max-width:1000px; margin:0 auto; padding:24px 20px;}
   .card{
     background:#fff; border:1px solid var(--borde); border-radius:12px;
@@ -84,14 +105,12 @@
   }
   .kpis{display:flex; gap:16px; flex-wrap:wrap;}
   .kpi{flex:1; min-width:160px;}
-  .kpi .valor{font-size:28px; font-weight:700;}
+  .kpi .valor{font-size:28px; font-weight:800;}
   .kpi .label{font-size:13px; color:#555;}
   table{width:100%; border-collapse:collapse; font-size:13px;}
   th, td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--borde);}
-  th{color:#555; font-weight:600;}
-  .proximamente{
-    text-align:center; padding:60px 20px; color:#777;
-  }
+  th{color:#555; font-weight:700;}
+  .proximamente{text-align:center; padding:60px 20px; color:#777;}
   [hidden]{display:none !important;}
 </style>
 </head>
@@ -99,8 +118,10 @@
 
 <div id="login-view">
   <div class="caja">
-    <img class="logo" src="../assets/logo-mp.png" alt="Mercado Packs" />
-    <h1 class="marca-nombre"><span class="mercado">Mercado</span> <span class="packs">Packs</span></h1>
+    <div class="marca-row">
+      <img class="logo" src="../assets/logo-mp.png" alt="Mercado Packs" />
+      <h1 class="marca-nombre"><span class="mercado">Mercado</span> <span class="packs">Packs</span></h1>
+    </div>
     <form id="login-form">
       <input id="login-email" type="email" placeholder="Email" autocomplete="username" required />
       <input id="login-password" type="password" placeholder="Contraseña" autocomplete="current-password" required />
@@ -115,14 +136,16 @@
     <div class="sidebar-header">
       <img src="../assets/logo-mp.png" alt="Mercado Packs" />
       <span class="marca-nombre"><span class="mercado">Mercado</span> <span class="packs">Packs</span></span>
-      <button class="sidebar-toggle" id="sidebar-toggle" title="Desplegar/ocultar menú">☰</button>
+      <button class="sidebar-toggle" id="sidebar-toggle" title="Desplegar/ocultar menú">
+        <i data-lucide="menu"></i>
+      </button>
     </div>
     <nav>
       <button class="nav-item activo" data-vista="envios">
-        <span class="icono">📦</span><span class="texto">Seguimiento de Envíos</span>
+        <i data-lucide="package"></i><span class="texto">Seguimiento de Envíos</span>
       </button>
       <button class="nav-item" data-vista="repartidores">
-        <span class="icono">🚚</span><span class="texto">Seguimiento de Repartidores</span>
+        <i data-lucide="truck"></i><span class="texto">Seguimiento de Repartidores</span>
       </button>
     </nav>
   </div>
@@ -130,7 +153,9 @@
   <div id="contenido">
     <header>
       <h2 id="titulo-vista">Seguimiento de Envíos</h2>
-      <button id="logout-btn" class="btn-secundario" style="background:#111;color:#fff;">Cerrar sesión</button>
+      <button id="logout-btn" class="btn-icono" title="Cerrar sesión">
+        <i data-lucide="log-out"></i>
+      </button>
     </header>
 
     <main>
@@ -175,6 +200,8 @@
 
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+  lucide.createIcons();
+
   const loginView = document.getElementById("login-view");
   const appView = document.getElementById("app-view");
   const loginForm = document.getElementById("login-form");
@@ -185,7 +212,7 @@
   // "no existe el usuario" de "contraseña incorrecta" (evita que alguien
   // use el login para averiguar qué emails están registrados) — acá solo
   // se traduce el mensaje a algo claro, sin inventar una distinción que
-  // el propio Supabase no da.
+  // el propio Supabase tampoco da.
   function mensajeErrorLogin(error){
     const msg = (error && error.message || "").toLowerCase();
     if(msg.includes("invalid login credentials")){

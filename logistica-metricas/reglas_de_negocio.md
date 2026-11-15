@@ -1952,6 +1952,67 @@ como decisión separada y deliberada si en el futuro se necesita de verdad
 push en tiempo real (vía websockets/Realtime de Supabase) en vez de
 polling.
 
+## 21. Nuevo ecosistema sobre Supabase: `dashboard/beta/` (empezado 2026-11-15)
+
+**Qué es y por qué existe:** el usuario quiere migrar gradualmente todo lo
+que hoy vive en `dashboard_logistica.html` (Firestore) a una base nueva en
+Supabase, para poder construir módulos adicionales que comparten los
+mismos datos — primero Fallidos/Cambios (paquetes que el chofer debe
+rendir al día siguiente, con seguimiento de recibidos en planta), después
+Liquidaciones. Corre **en paralelo** al dashboard de producción, en su
+propia URL de GitHub Pages (`logistica-metricas/dashboard/beta/`), sin
+tocar nada de lo que ya funciona, hasta que se decida migrar de verdad.
+
+**Base de datos (Supabase, proyecto separado del de producción):**
+- `envios`: una fila por envío, clave real `id_interno` (columna `ID
+  (Interno)` del export — el `Número Tracking` NO es único, puede
+  repetirse). Columnas tipadas para lo que se usa activamente
+  (`tracking`, `cliente`, `localidad`, `zona`, `estado`, `cadete`,
+  `fecha_mercadopacks`, `fecha_estado`, `fecha_asignacion`,
+  `fecha_a_planta`) + columna `raw jsonb` con las 37 columnas completas
+  del export de LightData tal cual vienen (incluidos datos personales del
+  destinatario — decisión del usuario: se guardan, protegidos por RLS en
+  vez de excluirlos como se hace en Firestore).
+- `envios_historial`: se llena sola via trigger (`envios_log_historial()`)
+  cada vez que cambia `estado` o `cadete` de un envío — no se escribe a
+  mano desde ningún script.
+- RLS activado en ambas tablas desde que se creó el proyecto. Service
+  role (usado por `scripts/publicar_supabase.py`, el script de ingesta)
+  tiene permiso total vía `GRANT`. El rol `authenticated` (usuarios
+  logueados por Supabase Auth) solo tiene `GRANT SELECT` + una policy de
+  lectura — nunca puede escribir. **Ojo:** un `GRANT` de tabla y una
+  policy de RLS son dos cosas separadas — faltó el `GRANT` a
+  `authenticated` la primera vez y tiró "permission denied" aunque la
+  policy ya estaba bien.
+- Auth: registro público desactivado (`Allow new users to sign up` off),
+  cuentas creadas a mano desde el panel de Supabase, login con
+  email+contraseña.
+
+**Reglas de diseño para `dashboard/beta/` y todo lo que se construya
+arriba de este ecosistema nuevo (a diferencia del dashboard de producción,
+que no las usa):**
+- **Fuente: Nunito** (Google Fonts), no la fuente del sistema que usa el
+  dashboard viejo.
+- **Íconos: librería Lucide** (`data-lucide="nombre"` + `lucide.createIcons()`),
+  nunca emojis como ícono — el dashboard de producción sí usa emojis
+  (🚚, 📦, etc.) en chips/encabezados, pero ese es el patrón viejo; acá no.
+- **Navegación: sidebar lateral desplegable/colapsable** (ícono "menu" de
+  Lucide para alternar), reemplaza el patrón de chips arriba de la pantalla
+  que usa el dashboard de producción.
+- **Botones de acción secundaria** (ej. cerrar sesión): ícono solo, sin
+  texto — igual que el resto de los íconos, Lucide.
+- Paleta de marca igual que siempre: dorado `#F6BE05` + negro, fondo
+  `#efeeea`, tarjetas blancas — eso no cambia entre el dashboard viejo y
+  este ecosistema nuevo.
+
+**Estado actual:** `scripts/publicar_supabase.py` (ingesta probada contra
+un export real: 4107 filas, upsert idempotente por `id_interno`, trigger de
+historial verificado) + `dashboard/beta/index.html` con login y una sola
+sección migrada ("Seguimiento de Envíos": KPIs + tabla de últimos
+cambios). "Seguimiento de Repartidores" (el más grande del dashboard
+viejo, con sus 3 modos: vivo/histórico/en ruta) queda como placeholder
+"Próximamente" — migrarlo de verdad es el siguiente paso.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
