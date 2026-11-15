@@ -1046,7 +1046,13 @@
   // ======================================================================
   const HORA_CORTE = 21;
   const MIN_MUESTRA = 5;
-  const POLL_MS = 45000;
+  // Antes 45000 (45s): no tiene sentido relecturar Firestore más seguido de
+  // lo que LightData puede tener datos nuevos — el cron de cron-job.org
+  // dispara como mucho cada 10 min (job "Hoy — noche", 21:00-23:50 ART; de
+  // día es cada 20 min, ver reglas_de_negocio.md sección 16). Un poll cada
+  // 45s multiplicaba por ~13 las lecturas de Firestore sin ganar nada a
+  // cambio (bug reportado 2026-11-15: agotó la cuota diaria de lecturas).
+  const POLL_MS = 10 * 60 * 1000;
 
   // Franjas horarias de entrega (sobre entregas efectivas). El corte
   // principal del negocio sigue siendo las 21:00; a partir de ahi se

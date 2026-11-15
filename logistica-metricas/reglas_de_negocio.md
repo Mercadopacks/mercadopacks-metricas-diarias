@@ -1882,6 +1882,76 @@ se cierra correctamente al cambiar de "Ayer" a "Hoy". El ícono "ⓘ" del
 panel de detalle no deja ningún `<p class="tabla-nota">` visible, y su
 tooltip (hover real, `position:fixed`) aparece con el texto completo.
 
+### 20.17 Incidente real: se agotó la cuota diaria de lecturas de Firestore (2026-11-15)
+
+**Síntoma:** el Action `descarga_diaria.yml` falló con
+`google.api_core.exceptions.ResourceExhausted: 429 Quota exceeded` al hacer
+`index_ref.get()` en `publicar_firestore.py`. No fue un bug de código (el
+commit anterior solo había tocado comentarios/documentación, nada
+ejecutable) — es Firestore rechazando la llamada por haber superado el
+tope de lecturas/escrituras del día.
+
+**Causa real, identificada a pedido del usuario:** el dashboard no usaba
+ningún mecanismo de caché compartida — cada pestaña abierta habla directo
+contra Firestore con el SDK de cliente, y `POLL_MS` (antes 45000 = 45s)
+disparaba un refresco automático a ese ritmo sin relación con la
+frecuencia real a la que llegan datos nuevos (los jobs de cron-job.org
+disparan como mucho cada 10-20 min, sección 16). La vista "Seguimiento en
+ruta" además hace `db.collection('envios_detalle').doc(fecha)
+.collection('choferes').get()`
+(`cargarChoferesEnRutaHoy()`) — una lectura de **colección**, que Firestore
+factura **1 lectura por cada documento devuelto**, no 1 por el pedido. Con
+~130 choferes, cada poll de esa vista costaba ~130 lecturas, repetidas cada
+45s, **por cada pestaña abierta** (no hay límite compartido entre
+usuarios): una sola persona con la pestaña abierta varias horas ya se
+comía el cupo gratis de 50.000 lecturas/día del plan Spark de Firebase.
+
+**Fix aplicado (bajo riesgo, implementado):** `POLL_MS` pasó de 45s a 10
+minutos (`dashboard_logistica.html`) — coincide con la cadencia más fina
+que existe hoy entre los jobs de cron-job.org, así que no se pierde
+frescura real (no puede haber datos más nuevos que eso) y las lecturas por
+pestaña abierta bajan ~13x.
+
+**Pendiente, a definir con el usuario (no implementado todavía):**
+1. **Colapsar el detalle por chofer a un solo documento por día**
+   (`envios_detalle/<fecha>` con un mapa de choferes, en vez de la
+   subcolección `choferes/<id>` actual) — bajaría tanto las lecturas del
+   dashboard (de ~130 a 1 por poll) como las escrituras de
+   `publicar_firestore.py` (hoy hace un `.set()` por chofer + un
+   `.stream()` completo para borrar choferes fantasma, sección 20.4; con
+   un solo documento sería 1 `.set()` y ningún stream). Riesgo a validar
+   antes de implementar: el límite de Firestore es 1 MiB por documento —
+   con ~130 choferes y ~26 ítems c/u (dato real del 2026-11-13, sección
+   20.13), la estimación da **~650-700 KB**, holgado hoy pero sin mucho
+   margen para días de mayor volumen; habría que medir el tamaño real
+   antes de migrar.
+2. **Evitar que el costo se multiplique por usuario concurrente** — ni
+   (1) ni subir `POLL_MS` resuelven esto: cada pestaña sigue pagando su
+   propia lectura. La única forma real de compartir una sola lectura entre
+   N usuarios simultáneos es agregar una capa de caché fuera del modelo de
+   Firestore (ej. un archivo estático publicado por el propio Action a
+   GitHub Pages, que todas las pestañas lean por HTTP en vez de pegarle a
+   Firestore) — cambio de arquitectura más grande, no justificado solo por
+   este incidente.
+3. **Subir el proyecto de Firebase al plan Blaze** (pago por uso) — elimina
+   el tope diario duro de 50.000 lecturas/20.000 escrituras del plan Spark.
+   A este volumen el costo real esperado es de centavos de dólar por día
+   (Firestore regala las primeras 50.000 lecturas/día incluso en Blaze). Es
+   la red de seguridad más simple, independiente de si se hacen (1) o (2).
+
+**Se evaluó y se descartó (por ahora) migrar de Firestore a Supabase**: el
+problema de fondo no es el motor de base de datos sino el patrón de
+arquitectura (polling por cliente sin caché compartida + modelo de
+facturación por documento leído de Firestore) — el mismo patrón sin
+cuidado podría generar problemas distintos en Supabase (ancho de banda del
+plan free en vez de lecturas). Migrar implica reescribir tanto
+`publicar_firestore.py`/`descargar_lightdata.py` como todas las lecturas
+del dashboard — esfuerzo grande no justificado por un incidente de cuota
+puntual que tiene arreglos mucho más chicos disponibles (arriba). Quedaría
+como decisión separada y deliberada si en el futuro se necesita de verdad
+push en tiempo real (vía websockets/Realtime de Supabase) en vez de
+polling.
+
 | Fecha | Cambio |
 |---|---|
 | 2026-09-01 | Versión inicial: definiciones de entrega efectiva, corte de 21hs, cancelados y efectividad por chofer. |
@@ -1930,3 +2000,4 @@ tooltip (hover real, `position:fixed`) aparece con el texto completo.
 | 2026-11-14 | Sección 20.15: tres pedidos más del usuario sobre "Seguimiento en ruta". (1) Columna nueva "Hora fin." con el último movimiento registrado, solo si el recorrido ya terminó. (2) Alerta "Sin actividad" (rojo) en Rendimiento cuando pasan más de 45 min sin ningún movimiento nuevo y todavía quedan pendientes sin resolver — pisa al ritmo calculado, que podía seguir mostrando "Óptimo"/"A tiempo" aunque el chofer se hubiera quedado parado (ej. accidente) después de entregar pocos paquetes. (3) Estado "Sin terminar" (rojo), nuevo: a partir de las 23:30 o en cualquier fecha pasada, un chofer con pendientes sin resolver deja de verse como "En ruta"/"Sin iniciar" (que insinúan que todavía puede cerrar solo) y pasa a este estado de cierre fallido. De paso se corrigió un bug real que hubiera roto la tarjeta "Demorados ahora" (ahora "Demorados / sin actividad ahora") la primera vez que un chofer quedara "Sin actividad" con ritmo aún no medible — `.toFixed()` sobre `minEntreEntregas === null` tira `TypeError`. |
 | 2026-11-14 | Sección 20.16: cuatro correcciones más, reportadas con captura. (1) La leyenda de "Sin resolver"/"Gestionados" del panel "Pendientes" dejó de ser un texto fijo siempre visible y pasó a un ícono "ⓘ" junto al título, con el mismo texto en el tooltip. (2) Bug real: el panel "Pendientes" se cerraba solo a los 45s (el poll automático) mientras el usuario lo estaba mirando — ahora solo se cierra si cambia la fecha que se está viendo; un refresco de la misma fecha (poll o "Actualizar") refresca su contenido en vez de cerrarlo. (3) Bug real: un chofer con 0 paquetes entregados podía mostrar "En ruta" en vez de "Sin iniciar" si tenía un solo pendiente ya cancelado/reprogramado desde antes de arrancar su recorrido — ahora "Sin iniciar" depende solo de no haber entregado nada. (4) Bug real: Cañuelas y Máximo Paz caían en "Sin zona" en vez de Zona Sur — faltaba ese partido completo en el mapa de localidades (al igual que pasó con Zárate/Campana el 2026-11-12, se agregó a mano). |
 | 2026-11-14 | Sección 16: a pedido del usuario, el job "Hoy — noche" de cron-job.org pasó de cada 20 a cada 10 minutos (21:00-23:50 ART), para seguimiento más fino de repartidores en ese tramo. Cambio puramente de configuración externa (minutos del cronjob), no toca `descarga_diaria.yml` ni ningún script — el `concurrency` del workflow ya cubre el caso de corridas que se superpongan. |
+| 2026-11-15 | Sección 20.17: el Action de descarga diaria falló por cuota de Firestore agotada (`429 Quota exceeded`). Causa real: el dashboard refrescaba cada 45s sin relación con la frecuencia real de los datos (cron cada 10-20 min), y "Seguimiento en ruta" hace una lectura de colección completa (~130 choferes = ~130 lecturas facturadas) en cada poll, por cada pestaña abierta. Fix aplicado: `POLL_MS` de 45s a 10 min. Quedan pendientes de decisión del usuario: colapsar el detalle por chofer a un solo documento por día (baja lecturas Y escrituras, con un límite de 1 MiB/documento a validar antes), agregar una capa de caché compartida entre usuarios, y/o subir el proyecto a plan Blaze como red de seguridad. Se evaluó y descartó (por ahora) migrar a Supabase — el problema es de arquitectura, no del motor de base de datos. |
