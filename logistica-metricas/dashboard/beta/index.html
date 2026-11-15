@@ -3,42 +3,85 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mercadopacks — Beta (Supabase)</title>
+<title>Mercado Packs — Beta (Supabase)</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
   :root{
     --dorado:#F6BE05; --negro:#111; --fondo:#efeeea; --borde:#ddd9d0;
+    --sidebar-w:240px; --sidebar-w-colapsado:64px;
   }
   *{box-sizing:border-box;}
   body{
     margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     background:var(--fondo); color:var(--negro);
   }
-  header{
-    background:var(--negro); color:#fff; padding:14px 20px;
+  button{cursor:pointer; border:none; border-radius:8px; font-size:14px; font-weight:600;}
+
+  /* ===================== Marca ===================== */
+  .marca-nombre{font-weight:700;}
+  .marca-nombre .mercado{color:var(--negro);}
+  .marca-nombre .packs{color:var(--dorado);}
+
+  /* ===================== Login ===================== */
+  #login-view{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+  }
+  #login-view .caja{
+    display:flex; flex-direction:column; align-items:center; gap:18px; width:300px;
+  }
+  #login-view img.logo{width:84px; height:84px;}
+  #login-view h1.marca-nombre{font-size:26px; margin:0;}
+  #login-view form{display:flex; flex-direction:column; gap:12px; width:100%;}
+  #login-view input{
+    padding:10px 12px; border:1px solid var(--borde); border-radius:8px; font-size:14px;
+  }
+  #login-error{color:#c0392b; font-size:13px; min-height:18px; text-align:center;}
+  .btn-primario{background:var(--dorado); color:var(--negro); padding:10px 16px;}
+  .btn-secundario{background:transparent; color:#fff; border:1px solid #555; padding:9px 16px;}
+
+  /* ===================== App shell: sidebar + contenido ===================== */
+  #app-view{display:flex; min-height:100vh;}
+
+  .sidebar{
+    width:var(--sidebar-w); flex-shrink:0; background:var(--negro); color:#fff;
+    display:flex; flex-direction:column; transition:width .18s ease;
+    overflow:hidden; white-space:nowrap;
+  }
+  .sidebar.colapsado{width:var(--sidebar-w-colapsado);}
+  .sidebar-header{
+    display:flex; align-items:center; gap:10px; padding:16px 14px;
+    border-bottom:1px solid #2a2a2a;
+  }
+  .sidebar-header img{width:28px; height:28px; flex-shrink:0;}
+  .sidebar-header .marca-nombre{font-size:15px;}
+  .sidebar-header .mercado{color:#fff;}
+  .sidebar-toggle{
+    background:transparent; color:#aaa; padding:6px; margin-left:auto;
+    font-size:16px; line-height:1;
+  }
+  .sidebar-toggle:hover{color:#fff;}
+  .sidebar nav{display:flex; flex-direction:column; padding:10px;}
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:8px;
+    color:#ccc; background:transparent; text-align:left; font-weight:500;
+  }
+  .nav-item .icono{font-size:16px; width:20px; text-align:center; flex-shrink:0;}
+  .nav-item:hover{background:#1e1e1e; color:#fff;}
+  .nav-item.activo{background:var(--dorado); color:var(--negro);}
+  .sidebar.colapsado .nav-item .texto,
+  .sidebar.colapsado .sidebar-header .marca-nombre{display:none;}
+
+  #contenido{flex:1; min-width:0;}
+  #contenido header{
+    background:#fff; border-bottom:1px solid var(--borde); padding:14px 24px;
     display:flex; align-items:center; justify-content:space-between;
   }
-  header h1{font-size:16px; margin:0; font-weight:600;}
-  header .marca{color:var(--dorado); font-weight:700;}
-  button{
-    cursor:pointer; border:none; border-radius:8px; padding:9px 16px;
-    font-size:14px; font-weight:600;
-  }
-  .btn-primario{background:var(--dorado); color:var(--negro);}
-  .btn-secundario{background:transparent; color:#fff; border:1px solid #555;}
-  main{max-width:900px; margin:0 auto; padding:24px 16px;}
+  #contenido header h2{font-size:16px; margin:0;}
+  main{max-width:1000px; margin:0 auto; padding:24px 20px;}
   .card{
     background:#fff; border:1px solid var(--borde); border-radius:12px;
     padding:20px; margin-bottom:16px;
   }
-  #login-view{
-    min-height:80vh; display:flex; align-items:center; justify-content:center;
-  }
-  #login-view form{display:flex; flex-direction:column; gap:12px; width:280px;}
-  #login-view input{
-    padding:10px 12px; border:1px solid var(--borde); border-radius:8px; font-size:14px;
-  }
-  #login-error{color:#c0392b; font-size:13px; min-height:18px;}
   .kpis{display:flex; gap:16px; flex-wrap:wrap;}
   .kpi{flex:1; min-width:160px;}
   .kpi .valor{font-size:28px; font-weight:700;}
@@ -46,44 +89,77 @@
   table{width:100%; border-collapse:collapse; font-size:13px;}
   th, td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--borde);}
   th{color:#555; font-weight:600;}
+  .proximamente{
+    text-align:center; padding:60px 20px; color:#777;
+  }
   [hidden]{display:none !important;}
 </style>
 </head>
 <body>
 
 <div id="login-view">
-  <form id="login-form">
-    <h2 style="margin:0 0 4px;">Mercadopacks <span style="color:var(--dorado)">beta</span></h2>
-    <input id="login-email" type="email" placeholder="Email" autocomplete="username" required />
-    <input id="login-password" type="password" placeholder="Contraseña" autocomplete="current-password" required />
-    <div id="login-error"></div>
-    <button type="submit" class="btn-primario">Ingresar</button>
-  </form>
+  <div class="caja">
+    <img class="logo" src="../assets/logo-mp.png" alt="Mercado Packs" />
+    <h1 class="marca-nombre"><span class="mercado">Mercado</span> <span class="packs">Packs</span></h1>
+    <form id="login-form">
+      <input id="login-email" type="email" placeholder="Email" autocomplete="username" required />
+      <input id="login-password" type="password" placeholder="Contraseña" autocomplete="current-password" required />
+      <div id="login-error"></div>
+      <button type="submit" class="btn-primario">Ingresar</button>
+    </form>
+  </div>
 </div>
 
 <div id="app-view" hidden>
-  <header>
-    <h1>Mercadopacks <span class="marca">beta</span> — base Supabase</h1>
-    <button id="logout-btn" class="btn-secundario">Cerrar sesión</button>
-  </header>
-  <main>
-    <div class="card">
-      <div class="kpis">
-        <div class="kpi"><div class="valor" id="kpi-total">—</div><div class="label">Envíos cargados</div></div>
-        <div class="kpi"><div class="valor" id="kpi-historial">—</div><div class="label">Cambios registrados (historial)</div></div>
-        <div class="kpi"><div class="valor" id="kpi-actualizado">—</div><div class="label">Última actualización</div></div>
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <img src="../assets/logo-mp.png" alt="Mercado Packs" />
+      <span class="marca-nombre"><span class="mercado">Mercado</span> <span class="packs">Packs</span></span>
+      <button class="sidebar-toggle" id="sidebar-toggle" title="Desplegar/ocultar menú">☰</button>
+    </div>
+    <nav>
+      <button class="nav-item activo" data-vista="envios">
+        <span class="icono">📦</span><span class="texto">Seguimiento de Envíos</span>
+      </button>
+      <button class="nav-item" data-vista="repartidores">
+        <span class="icono">🚚</span><span class="texto">Seguimiento de Repartidores</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="contenido">
+    <header>
+      <h2 id="titulo-vista">Seguimiento de Envíos</h2>
+      <button id="logout-btn" class="btn-secundario" style="background:#111;color:#fff;">Cerrar sesión</button>
+    </header>
+
+    <main>
+      <div id="vista-envios">
+        <div class="card">
+          <div class="kpis">
+            <div class="kpi"><div class="valor" id="kpi-total">—</div><div class="label">Envíos cargados</div></div>
+            <div class="kpi"><div class="valor" id="kpi-historial">—</div><div class="label">Cambios registrados (historial)</div></div>
+            <div class="kpi"><div class="valor" id="kpi-actualizado">—</div><div class="label">Última actualización</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;">Últimos envíos actualizados</h3>
+          <table>
+            <thead>
+              <tr><th>Estado</th><th>Cadete</th><th>Zona</th><th>Localidad</th><th>Fecha Mercadopacks</th></tr>
+            </thead>
+            <tbody id="tabla-envios"></tbody>
+          </table>
+        </div>
       </div>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0;">Últimos envíos actualizados</h3>
-      <table>
-        <thead>
-          <tr><th>Estado</th><th>Cadete</th><th>Zona</th><th>Localidad</th><th>Fecha Mercadopacks</th></tr>
-        </thead>
-        <tbody id="tabla-envios"></tbody>
-      </table>
-    </div>
-  </main>
+
+      <div id="vista-repartidores" hidden>
+        <div class="card proximamente">
+          <p>Seguimiento de Repartidores todavía no se migró a esta base — es el próximo paso del plan.</p>
+        </div>
+      </div>
+    </main>
+  </div>
 </div>
 
 <script>
@@ -105,10 +181,29 @@
   const loginError = document.getElementById("login-error");
   const logoutBtn = document.getElementById("logout-btn");
 
+  // Supabase devuelve mensajes en inglés y, a propósito, no distingue
+  // "no existe el usuario" de "contraseña incorrecta" (evita que alguien
+  // use el login para averiguar qué emails están registrados) — acá solo
+  // se traduce el mensaje a algo claro, sin inventar una distinción que
+  // el propio Supabase no da.
+  function mensajeErrorLogin(error){
+    const msg = (error && error.message || "").toLowerCase();
+    if(msg.includes("invalid login credentials")){
+      return "Email o contraseña incorrectos.";
+    }
+    if(msg.includes("email not confirmed")){
+      return "Esta cuenta todavía no fue confirmada.";
+    }
+    if(msg.includes("too many requests") || msg.includes("rate limit")){
+      return "Demasiados intentos — esperá un momento y volvé a probar.";
+    }
+    return "No se pudo iniciar sesión. Intentá de nuevo.";
+  }
+
   function mostrarApp(){
     loginView.hidden = true;
     appView.hidden = false;
-    cargarDatos();
+    cargarDatosEnvios();
   }
 
   function mostrarLogin(){
@@ -122,7 +217,7 @@
     const email = document.getElementById("login-email").value.trim();
     const password = document.getElementById("login-password").value;
     const { error } = await sb.auth.signInWithPassword({ email, password });
-    if(error){ loginError.textContent = "No se pudo iniciar sesión: " + error.message; return; }
+    if(error){ loginError.textContent = mensajeErrorLogin(error); return; }
     mostrarApp();
   });
 
@@ -131,7 +226,27 @@
     mostrarLogin();
   });
 
-  async function cargarDatos(){
+  // ===================== Sidebar: navegación + colapsar =====================
+  const sidebar = document.getElementById("sidebar");
+  document.getElementById("sidebar-toggle").addEventListener("click", ()=>{
+    sidebar.classList.toggle("colapsado");
+  });
+
+  const vistas = {
+    envios: { titulo: "Seguimiento de Envíos", el: document.getElementById("vista-envios") },
+    repartidores: { titulo: "Seguimiento de Repartidores", el: document.getElementById("vista-repartidores") },
+  };
+
+  document.querySelectorAll(".nav-item").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const v = btn.dataset.vista;
+      document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("activo", b===btn));
+      Object.entries(vistas).forEach(([key, cfg])=>{ cfg.el.hidden = key !== v; });
+      document.getElementById("titulo-vista").textContent = vistas[v].titulo;
+    });
+  });
+
+  async function cargarDatosEnvios(){
     const [{ count: totalEnvios }, { count: totalHistorial }, { data: ultimos, error }] = await Promise.all([
       sb.from("envios").select("id_interno", { count: "exact", head: true }),
       sb.from("envios_historial").select("id", { count: "exact", head: true }),
