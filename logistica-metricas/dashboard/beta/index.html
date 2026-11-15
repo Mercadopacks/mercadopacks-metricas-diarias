@@ -117,7 +117,8 @@
     border-radius:20px; font-size:13px;
   }
   .chip.activo{background:var(--negro); color:#fff; border-color:var(--negro);}
-  #fecha-elegida-envios{
+  #rango-envios{margin-bottom:16px;}
+  #rango-envios input[type="date"]{
     padding:7px 12px; border:1px solid var(--borde); border-radius:20px;
     font-family:inherit; font-size:13px;
   }
@@ -175,8 +176,14 @@
         <div class="chips" id="periodo-envios">
           <button class="chip activo" data-periodo="hoy">Hoy</button>
           <button class="chip" data-periodo="ayer">Ayer</button>
-          <button class="chip" data-periodo="elegir">Elegir fecha…</button>
-          <input type="date" id="fecha-elegida-envios" hidden />
+          <button class="chip" data-periodo="7d">Últimos 7 días</button>
+          <button class="chip" data-periodo="30d">Últimos 30 días</button>
+          <button class="chip" data-periodo="rango">Rango</button>
+        </div>
+        <div class="chips" id="rango-envios" hidden>
+          <input type="date" id="rango-desde-envios" />
+          <span style="align-self:center;color:#777;">a</span>
+          <input type="date" id="rango-hasta-envios" />
         </div>
 
         <div class="card">
@@ -324,38 +331,51 @@
     return valor === null || Number.isNaN(valor) ? "—" : valor.toFixed(1) + "%";
   }
 
-  const inputFechaEnvios = document.getElementById("fecha-elegida-envios");
+  const rangoEnviosDiv = document.getElementById("rango-envios");
+  const inputRangoDesde = document.getElementById("rango-desde-envios");
+  const inputRangoHasta = document.getElementById("rango-hasta-envios");
 
   document.querySelectorAll("#periodo-envios .chip").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       document.querySelectorAll("#periodo-envios .chip").forEach(b=>b.classList.toggle("activo", b===btn));
       stateEnvios.periodo = btn.dataset.periodo;
-      if(stateEnvios.periodo === "elegir"){
-        inputFechaEnvios.hidden = false;
-        if(!inputFechaEnvios.value) inputFechaEnvios.value = fechaART(0);
-        stateEnvios.fecha = inputFechaEnvios.value;
-        inputFechaEnvios.focus();
+      if(stateEnvios.periodo === "rango"){
+        rangoEnviosDiv.hidden = false;
+        if(!inputRangoDesde.value) inputRangoDesde.value = fechaART(-6);
+        if(!inputRangoHasta.value) inputRangoHasta.value = fechaART(0);
       } else {
-        inputFechaEnvios.hidden = true;
+        rangoEnviosDiv.hidden = true;
       }
       cargarResumenEnvios();
     });
   });
 
-  inputFechaEnvios.addEventListener("change", ()=>{
-    stateEnvios.fecha = inputFechaEnvios.value;
-    cargarResumenEnvios();
+  [inputRangoDesde, inputRangoHasta].forEach(input=>{
+    input.addEventListener("change", ()=>{
+      if(inputRangoDesde.value && inputRangoHasta.value) cargarResumenEnvios();
+    });
   });
 
+  // Mismos 5 periodos que el dashboard de produccion (Hoy/Ayer/7d/30d/Rango).
+  function rangoFechasEnvios(){
+    switch(stateEnvios.periodo){
+      case "ayer": return { desde: fechaART(-1), hasta: fechaART(-1) };
+      case "7d":   return { desde: fechaART(-6), hasta: fechaART(0) };
+      case "30d":  return { desde: fechaART(-29), hasta: fechaART(0) };
+      case "rango": return {
+        desde: inputRangoDesde.value || fechaART(-6),
+        hasta: inputRangoHasta.value || fechaART(0),
+      };
+      default: return { desde: fechaART(0), hasta: fechaART(0) }; // "hoy"
+    }
+  }
+
   async function cargarResumenEnvios(){
-    let fecha;
-    if(stateEnvios.periodo === "ayer") fecha = fechaART(-1);
-    else if(stateEnvios.periodo === "elegir") fecha = stateEnvios.fecha || fechaART(0);
-    else fecha = fechaART(0);
+    const { desde, hasta } = rangoFechasEnvios();
 
     const { data, error } = await sb.rpc("resumen_envios", {
-      fecha_desde: fecha,
-      fecha_hasta: fecha,
+      fecha_desde: desde,
+      fecha_hasta: hasta,
     });
 
     if(error){
