@@ -2004,6 +2004,21 @@ que no las usa):**
 - Paleta de marca igual que siempre: dorado `#F6BE05` + negro, fondo
   `#efeeea`, tarjetas blancas — eso no cambia entre el dashboard viejo y
   este ecosistema nuevo.
+- **Campos de entrada (texto, fecha, buscador) vs. chips — dos formas
+  distintas, nunca mezclarlas** (bug real 2026-11-15: un `<input
+  type="date">` quedó con el estilo nativo del navegador, inconsistente
+  con el resto; de paso, `.chips{display:flex}` sin `align-items:center`
+  hacía que el input de fecha —más alto por su ícono nativo— estirara los
+  botones chip de al lado). Regla:
+  - **Chips** (opciones seleccionables, ej. Hoy/Ayer/Rango): forma de
+    "pastilla", `border-radius:20px`.
+  - **Campos de entrada** (donde se escribe o se elige un valor: fecha,
+    buscador, texto): esquinas rectas `border-radius:8px`, fondo blanco,
+    borde `1px solid var(--borde)`, **nunca** forma de pastilla.
+  - Todo elemento dentro de una fila de chips (`.chips`) comparte la misma
+    `height:36px` y el contenedor lleva `align-items:center` — así un
+    input con decoración nativa (como el selector de fecha) nunca estira
+    ni descentra a los botones de al lado.
 
 **Estado actual:** `scripts/publicar_supabase.py` (ingesta probada contra
 un export real: 4107 filas, upsert idempotente por `id_interno`, trigger de

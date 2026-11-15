@@ -98,6 +98,13 @@
     display:flex; align-items:center; justify-content:space-between; min-height:64px;
   }
   #contenido header h2{font-size:16px; margin:0; font-weight:700;}
+  .header-titulo{display:flex; align-items:center; gap:10px;}
+  .header-titulo svg{width:19px; height:19px; color:var(--negro);}
+  .header-derecha{display:flex; align-items:center; gap:14px;}
+  .usuario-logueado{
+    display:flex; align-items:center; gap:7px; font-size:13px; color:#555; font-weight:600;
+  }
+  .usuario-logueado svg{width:16px; height:16px; color:#888;}
   main{max-width:1500px; margin:0 auto; padding:24px 28px;}
   .card{
     background:#fff; border:1px solid var(--borde); border-radius:12px;
@@ -111,23 +118,38 @@
   th, td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--borde);}
   th{color:#555; font-weight:700;}
   .proximamente{text-align:center; padding:60px 20px; color:#777;}
-  .chips{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+  .chips{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center;}
   .chip{
     background:#fff; border:1px solid var(--borde); color:#555; padding:8px 16px;
-    border-radius:20px; font-size:13px;
+    border-radius:20px; font-size:13px; height:36px;
   }
   .chip.activo{background:var(--negro); color:#fff; border-color:var(--negro);}
-  #rango-envios{margin-bottom:16px;}
+  /* Regla de diseño (ver reglas_de_negocio.md sección 21): los campos de
+     entrada (texto, fecha, buscador) SIEMPRE con esta misma apariencia —
+     fondo blanco, borde 1px var(--borde), esquinas rectas (8px, no pastilla),
+     altura 36px para alinear con los chips. La forma de "pastilla"
+     (border-radius:20px) es exclusiva de los chips seleccionables, nunca de
+     un campo donde se escribe o se elige un valor. */
+  #rango-envios{display:inline-flex; align-items:center; gap:8px;}
   #rango-envios input[type="date"]{
-    padding:7px 12px; border:1px solid var(--borde); border-radius:20px;
-    font-family:inherit; font-size:13px;
+    padding:0 12px; border:1px solid var(--borde); border-radius:8px;
+    font-family:inherit; font-size:13px; color:var(--negro); background:#fff;
+    height:36px;
   }
   .sin-datos{color:#999; font-style:italic;}
   .tag-chica{color:#c0892b; font-size:11px; margin-left:6px;}
   [hidden]{display:none !important;}
+  [data-tip]{cursor:help;}
+  #tooltipFlotante{
+    position:fixed; z-index:9999; background:#1a1710; color:#fff; font-size:12px;
+    padding:8px 10px; border-radius:6px; max-width:280px; line-height:1.4;
+    box-shadow:0 4px 16px rgba(0,0,0,.25); pointer-events:none;
+  }
 
   /* ===================== Mini KPIs (tarjetas con detalle) ===================== */
-  .mini-kpis{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:16px;}
+  .mini-kpis{display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:16px;}
+  @media (max-width: 1100px){ .mini-kpis{grid-template-columns:repeat(2, 1fr);} }
+  @media (max-width: 560px){ .mini-kpis{grid-template-columns:1fr;} }
   .mini-kpi{background:#fff; border:1px solid var(--borde); border-radius:12px; padding:16px 18px;}
   .mini-label{display:flex; align-items:center; gap:6px; font-size:13px; color:#555; font-weight:700; margin-bottom:6px;}
   .mini-info{
@@ -162,8 +184,8 @@
   }
   .btn-ver-mas:hover{background:var(--fondo);}
   .buscador{
-    padding:9px 12px; border:1px solid var(--borde); border-radius:8px; font-size:13px;
-    font-family:inherit; width:260px; margin-bottom:14px;
+    padding:0 12px; border:1px solid var(--borde); border-radius:8px; font-size:13px;
+    font-family:inherit; width:260px; margin-bottom:14px; height:36px;
   }
 </style>
 </head>
@@ -205,10 +227,19 @@
 
   <div id="contenido">
     <header>
-      <h2 id="titulo-vista">Seguimiento de Envíos</h2>
-      <button id="logout-btn" class="btn-icono" title="Cerrar sesión">
-        <i data-lucide="log-out"></i>
-      </button>
+      <div class="header-titulo">
+        <i data-lucide="package" id="icono-titulo-vista"></i>
+        <h2 id="titulo-vista">Seguimiento de Envíos</h2>
+      </div>
+      <div class="header-derecha">
+        <div class="usuario-logueado" id="usuario-logueado" title="Usuario conectado">
+          <i data-lucide="user"></i>
+          <span id="usuario-email">—</span>
+        </div>
+        <button id="logout-btn" class="btn-icono" title="Cerrar sesión">
+          <i data-lucide="log-out"></i>
+        </button>
+      </div>
     </header>
 
     <main>
@@ -219,11 +250,11 @@
           <button class="chip" data-periodo="7d">Últimos 7 días</button>
           <button class="chip" data-periodo="30d">Últimos 30 días</button>
           <button class="chip" data-periodo="rango">Rango</button>
-        </div>
-        <div class="chips" id="rango-envios" hidden>
-          <input type="date" id="rango-desde-envios" />
-          <span style="align-self:center;color:#777;">a</span>
-          <input type="date" id="rango-hasta-envios" />
+          <span id="rango-envios" hidden>
+            <input type="date" id="rango-desde-envios" />
+            <span style="color:#777;">a</span>
+            <input type="date" id="rango-hasta-envios" />
+          </span>
         </div>
 
         <div class="mini-kpis" id="mini-kpis"></div>
@@ -325,9 +356,10 @@
     return "No se pudo iniciar sesión. Intentá de nuevo.";
   }
 
-  function mostrarApp(){
+  function mostrarApp(session){
     loginView.hidden = true;
     appView.hidden = false;
+    document.getElementById("usuario-email").textContent = session && session.user ? session.user.email : "—";
     cargarResumenEnvios();
   }
 
@@ -341,9 +373,9 @@
     loginError.textContent = "";
     const email = document.getElementById("login-email").value.trim();
     const password = document.getElementById("login-password").value;
-    const { error } = await sb.auth.signInWithPassword({ email, password });
+    const { data: loginData, error } = await sb.auth.signInWithPassword({ email, password });
     if(error){ loginError.textContent = mensajeErrorLogin(error); return; }
-    mostrarApp();
+    mostrarApp(loginData.session);
   });
 
   logoutBtn.addEventListener("click", async ()=>{
@@ -358,8 +390,8 @@
   });
 
   const vistas = {
-    envios: { titulo: "Seguimiento de Envíos", el: document.getElementById("vista-envios") },
-    repartidores: { titulo: "Seguimiento de Repartidores", el: document.getElementById("vista-repartidores") },
+    envios: { titulo: "Seguimiento de Envíos", icono: "package", el: document.getElementById("vista-envios") },
+    repartidores: { titulo: "Seguimiento de Repartidores", icono: "truck", el: document.getElementById("vista-repartidores") },
   };
 
   document.querySelectorAll(".nav-item").forEach(btn=>{
@@ -368,6 +400,14 @@
       document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("activo", b===btn));
       Object.entries(vistas).forEach(([key, cfg])=>{ cfg.el.hidden = key !== v; });
       document.getElementById("titulo-vista").textContent = vistas[v].titulo;
+      const iconoTitulo = document.querySelector(".header-titulo i, .header-titulo svg");
+      if(iconoTitulo){
+        const nuevo = document.createElement("i");
+        nuevo.id = "icono-titulo-vista";
+        nuevo.setAttribute("data-lucide", vistas[v].icono);
+        iconoTitulo.replaceWith(nuevo);
+        lucide.createIcons();
+      }
     });
   });
 
@@ -535,7 +575,7 @@
       <article class="mini-kpi">
         <div class="mini-label">
           <span>${t.label}</span>
-          <span class="mini-info" title="${t.info.replace(/"/g, "&quot;")}"><i data-lucide="info"></i></span>
+          <span class="mini-info" tabindex="0" role="img" data-tip="${t.info.replace(/"/g, "&quot;")}"><i data-lucide="info"></i></span>
         </div>
         <div class="mini-value-row"><span class="mini-dot ${t.dot}"></span><span class="mini-value">${t.valor}</span></div>
         <div class="mini-sub">de ${r.total} envíos en el período</div>
@@ -544,7 +584,7 @@
         </div>
         ${t.sub ? `
         <div class="mini-detalle mini-sub-seccion">
-          <div class="mini-label"><span>${t.sub.titulo}</span><span class="mini-info" title="${t.sub.info.replace(/"/g, "&quot;")}"><i data-lucide="info"></i></span></div>
+          <div class="mini-label"><span>${t.sub.titulo}</span><span class="mini-info" tabindex="0" role="img" data-tip="${t.sub.info.replace(/"/g, "&quot;")}"><i data-lucide="info"></i></span></div>
           <div class="mini-value-row"><span class="mini-dot ${t.dot}"></span><span class="mini-value">${t.sub.valor}</span></div>
           <div class="mini-detalle">
             ${t.sub.filas.map(([label, v]) => `<div class="mini-fila"><span>${label}</span><span class="mini-fila-valor">${v}</span></div>`).join("")}
@@ -572,10 +612,10 @@
       <div style="display:flex; align-items:flex-end; gap:3px; height:220px;">
         ${valores.map((v, h) => `
           <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;"
-               title="${String(h).padStart(2,"0")}:00 — ${v} entregas">
-            <span style="font-size:9px; color:#555; min-height:11px;">${v > 0 ? v : ""}</span>
+               data-tip="${String(h).padStart(2,"0")}:00 — ${v} entregas">
+            <span style="font-size:11px; font-weight:700; color:#333; min-height:14px; display:block;">${v > 0 ? v : ""}</span>
             <div style="width:100%; max-width:26px; height:${v > 0 ? Math.max((v/max)*180, 3) : 0}px; background:${colorHora(h)}; border-radius:3px 3px 0 0;"></div>
-            <span style="font-size:9px; color:#888; margin-top:4px;">${h % 2 === 0 ? String(h).padStart(2,"0") + "h" : ""}</span>
+            <span style="font-size:11px; font-weight:700; color:#555; margin-top:4px; min-height:14px; display:block;">${String(h).padStart(2,"0")}h</span>
           </div>
         `).join("")}
       </div>
@@ -596,7 +636,7 @@
     document.getElementById("bucket-bar").innerHTML = BUCKETS.map(b => {
       const v = bEf[b.key];
       const w = totalEf ? (v/totalEf*100) : 0;
-      return `<span style="width:${w}%; background:${b.color};" title="${b.label}: ${v} (${_fmtPct(_pct(v,totalEf))})"></span>`;
+      return `<span style="width:${w}%; background:${b.color};" data-tip="${b.label}: ${v} (${_fmtPct(_pct(v,totalEf))})"></span>`;
     }).join("");
 
     document.getElementById("bucket-leyenda").innerHTML = BUCKETS.map(b => `
@@ -721,13 +761,50 @@
   // Al cargar la página, y ante cualquier cambio de sesión (login/logout
   // en otra pestaña, token vencido, etc.), decide qué vista mostrar.
   sb.auth.onAuthStateChange((_event, session)=>{
-    if(session) mostrarApp(); else mostrarLogin();
+    if(session) mostrarApp(session); else mostrarLogin();
   });
 
   sb.auth.getSession().then(({ data: { session } })=>{
-    if(session) mostrarApp(); else mostrarLogin();
+    if(session) mostrarApp(session); else mostrarLogin();
+  });
+
+  // ===================== Tooltip flotante (mismo formato que el resto de la página) =====================
+  function mostrarTooltipFlotante(elx){
+    const texto = elx.dataset.tip;
+    if(!texto) return;
+    const tip = document.getElementById("tooltipFlotante");
+    tip.textContent = texto;
+    tip.hidden = false;
+    const r = elx.getBoundingClientRect();
+    const margen = 8;
+    let top = r.bottom + margen;
+    let left = r.left;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+    const tr = tip.getBoundingClientRect();
+    if(tr.right > window.innerWidth - margen) left -= (tr.right - (window.innerWidth - margen));
+    if(left < margen) left = margen;
+    if(tr.bottom > window.innerHeight - margen) top = r.top - tr.height - margen;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+  function ocultarTooltipFlotante(){
+    document.getElementById("tooltipFlotante").hidden = true;
+  }
+  document.addEventListener("mouseover", (e)=>{
+    const elx = e.target.closest("[data-tip]"); if(elx) mostrarTooltipFlotante(elx);
+  });
+  document.addEventListener("mouseout", (e)=>{
+    if(e.target.closest("[data-tip]")) ocultarTooltipFlotante();
+  });
+  document.addEventListener("focusin", (e)=>{
+    const elx = e.target.closest("[data-tip]"); if(elx) mostrarTooltipFlotante(elx);
+  });
+  document.addEventListener("focusout", (e)=>{
+    if(e.target.closest("[data-tip]")) ocultarTooltipFlotante();
   });
 })();
 </script>
+<div id="tooltipFlotante" hidden></div>
 </body>
 </html>
