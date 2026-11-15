@@ -13,6 +13,13 @@ logistica-metricas/scripts/.venv/
 __pycache__/
 *.pyc
 
+# Credenciales locales (ej. claves de Supabase) para scripts de prueba que
+# todavía no corren en GitHub Actions — nunca se versionan.
+.env
+.env.*
+logistica-metricas/scripts/.env
+logistica-metricas/scripts/.env.*
+
 # Sistema operativo / editor
 .DS_Store
 Thumbs.db

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mercadopacks — Beta (Supabase)</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --dorado:#F6BE05; --negro:#111; --fondo:#efeeea; --borde:#ddd9d0;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--fondo); color:var(--negro);
+  }
+  header{
+    background:var(--negro); color:#fff; padding:14px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  header h1{font-size:16px; margin:0; font-weight:600;}
+  header .marca{color:var(--dorado); font-weight:700;}
+  button{
+    cursor:pointer; border:none; border-radius:8px; padding:9px 16px;
+    font-size:14px; font-weight:600;
+  }
+  .btn-primario{background:var(--dorado); color:var(--negro);}
+  .btn-secundario{background:transparent; color:#fff; border:1px solid #555;}
+  main{max-width:900px; margin:0 auto; padding:24px 16px;}
+  .card{
+    background:#fff; border:1px solid var(--borde); border-radius:12px;
+    padding:20px; margin-bottom:16px;
+  }
+  #login-view{
+    min-height:80vh; display:flex; align-items:center; justify-content:center;
+  }
+  #login-view form{display:flex; flex-direction:column; gap:12px; width:280px;}
+  #login-view input{
+    padding:10px 12px; border:1px solid var(--borde); border-radius:8px; font-size:14px;
+  }
+  #login-error{color:#c0392b; font-size:13px; min-height:18px;}
+  .kpis{display:flex; gap:16px; flex-wrap:wrap;}
+  .kpi{flex:1; min-width:160px;}
+  .kpi .valor{font-size:28px; font-weight:700;}
+  .kpi .label{font-size:13px; color:#555;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th, td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--borde);}
+  th{color:#555; font-weight:600;}
+  [hidden]{display:none !important;}
+</style>
+</head>
+<body>
+
+<div id="login-view">
+  <form id="login-form">
+    <h2 style="margin:0 0 4px;">Mercadopacks <span style="color:var(--dorado)">beta</span></h2>
+    <input id="login-email" type="email" placeholder="Email" autocomplete="username" required />
+    <input id="login-password" type="password" placeholder="Contraseña" autocomplete="current-password" required />
+    <div id="login-error"></div>
+    <button type="submit" class="btn-primario">Ingresar</button>
+  </form>
+</div>
+
+<div id="app-view" hidden>
+  <header>
+    <h1>Mercadopacks <span class="marca">beta</span> — base Supabase</h1>
+    <button id="logout-btn" class="btn-secundario">Cerrar sesión</button>
+  </header>
+  <main>
+    <div class="card">
+      <div class="kpis">
+        <div class="kpi"><div class="valor" id="kpi-total">—</div><div class="label">Envíos cargados</div></div>
+        <div class="kpi"><div class="valor" id="kpi-historial">—</div><div class="label">Cambios registrados (historial)</div></div>
+        <div class="kpi"><div class="valor" id="kpi-actualizado">—</div><div class="label">Última actualización</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;">Últimos envíos actualizados</h3>
+      <table>
+        <thead>
+          <tr><th>Estado</th><th>Cadete</th><th>Zona</th><th>Localidad</th><th>Fecha Mercadopacks</th></tr>
+        </thead>
+        <tbody id="tabla-envios"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // Publishable key: pensada para ir expuesta en el navegador. La
+  // protección real la dan las políticas RLS de Supabase (solo usuarios
+  // autenticados pueden leer `envios`/`envios_historial`), no el secreto
+  // de esta clave.
+  const SUPABASE_URL = "https://pxbovlghjljrbrpjtcpr.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ap5oFuGA3ByxzbewtCVjmA_aP4IRY4M";
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+  const loginView = document.getElementById("login-view");
+  const appView = document.getElementById("app-view");
+  const loginForm = document.getElementById("login-form");
+  const loginError = document.getElementById("login-error");
+  const logoutBtn = document.getElementById("logout-btn");
+
+  function mostrarApp(){
+    loginView.hidden = true;
+    appView.hidden = false;
+    cargarDatos();
+  }
+
+  function mostrarLogin(){
+    appView.hidden = true;
+    loginView.hidden = false;
+  }
+
+  loginForm.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    loginError.textContent = "";
+    const email = document.getElementById("login-email").value.trim();
+    const password = document.getElementById("login-password").value;
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error){ loginError.textContent = "No se pudo iniciar sesión: " + error.message; return; }
+    mostrarApp();
+  });
+
+  logoutBtn.addEventListener("click", async ()=>{
+    await sb.auth.signOut();
+    mostrarLogin();
+  });
+
+  async function cargarDatos(){
+    const [{ count: totalEnvios }, { count: totalHistorial }, { data: ultimos, error }] = await Promise.all([
+      sb.from("envios").select("id_interno", { count: "exact", head: true }),
+      sb.from("envios_historial").select("id", { count: "exact", head: true }),
+      sb.from("envios")
+        .select("estado,cadete,zona,localidad,fecha_mercadopacks,updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(20),
+    ]);
+
+    document.getElementById("kpi-total").textContent = totalEnvios ?? "—";
+    document.getElementById("kpi-historial").textContent = totalHistorial ?? "—";
+
+    if(error){
+      console.error("Error cargando envios:", error);
+      document.getElementById("kpi-actualizado").textContent = "Error";
+      return;
+    }
+
+    if(ultimos && ultimos.length){
+      document.getElementById("kpi-actualizado").textContent =
+        new Date(ultimos[0].updated_at).toLocaleString("es-AR");
+    }
+
+    const tbody = document.getElementById("tabla-envios");
+    tbody.innerHTML = (ultimos || []).map(fila => `
+      <tr>
+        <td>${fila.estado ?? "—"}</td>
+        <td>${fila.cadete ?? "—"}</td>
+        <td>${fila.zona ?? "—"}</td>
+        <td>${fila.localidad ?? "—"}</td>
+        <td>${fila.fecha_mercadopacks ?? "—"}</td>
+      </tr>
+    `).join("");
+  }
+
+  // Al cargar la página, y ante cualquier cambio de sesión (login/logout
+  // en otra pestaña, token vencido, etc.), decide qué vista mostrar.
+  sb.auth.onAuthStateChange((_event, session)=>{
+    if(session) mostrarApp(); else mostrarLogin();
+  });
+
+  sb.auth.getSession().then(({ data: { session } })=>{
+    if(session) mostrarApp(); else mostrarLogin();
+  });
+})();
+</script>
+</body>
+</html>
