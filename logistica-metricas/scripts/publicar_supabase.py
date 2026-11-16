@@ -101,6 +101,15 @@ def construir_filas(df: pd.DataFrame) -> list[dict]:
             "localidad": texto_o_none(fila.get("Localidad")),
             "zona": texto_o_none(fila.get("Zona")),
             "estado": texto_o_none(fila.get("Estado")),
+            # Promovidas desde el raw (ver diccionario_de_datos.md: ninguna de
+            # las dos viene estandarizada) para que el módulo de
+            # Fallidos/Cambios pueda filtrarlas sin tener que parsear jsonb en
+            # cada consulta — el Estado de Lightdata no define un Cambio
+            # (describe el paquete NUEVO entregado, no si el chofer ya trajo
+            # el original), así que la señal real es Logistica Inversa /
+            # Observaciones.
+            "logistica_inversa": texto_o_none(fila.get("Logistica Inversa")),
+            "observaciones": texto_o_none(fila.get("Observaciones")),
             "cadete": texto_o_none(fila.get("Cadete")),
             "fecha_mercadopacks": fecha_mp_iso[:10] if fecha_mp_iso else None,
             "fecha_estado": parsear_fecha(fila.get("Fecha estado")),

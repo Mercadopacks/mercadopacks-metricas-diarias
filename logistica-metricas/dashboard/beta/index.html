@@ -18,8 +18,30 @@
   body{
     margin:0; font-family:'Nunito',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     background:var(--fondo); color:var(--negro);
+    -webkit-user-select:none; user-select:none;
   }
-  button{cursor:pointer; border:none; border-radius:8px; font-size:14px; font-weight:700; font-family:inherit;}
+  /* El sistema es una app, no un documento: títulos, botones, menús,
+     íconos, etc. no deben poder "seleccionarse como texto" (pedido
+     2026-11-15: clickear cualquier parte fija mostraba el cursor de
+     texto/caret parpadeante, como si fuera editable). Reactivado SOLO
+     donde hace falta: los campos reales (input/textarea) y el contenido
+     de datos que alguien querría copiar (celdas de tabla, texto de
+     detalle). */
+  input, textarea, .cel-input, td, .linea-detalle-asist, .hora-detalle, .zc-estado-texto{
+    -webkit-user-select:text; user-select:text;
+  }
+  /* Regla base para TODOS los botones (ver reglas_de_negocio.md sección
+     0): cualquier botón con ícono + texto queda SIEMPRE alineado
+     horizontalmente en una sola línea, centrado verticalmente — nunca el
+     ícono arriba y el texto abajo. No parchear esto por botón (clase
+     .btn-x { display:flex }): si un botón nuevo no se ve alineado, el
+     problema está en que algo le está pisando esta regla base, no en que
+     le falte una regla propia. */
+  button{
+    cursor:pointer; border:none; border-radius:8px; font-size:14px; font-weight:700; font-family:inherit;
+    display:inline-flex; align-items:center; justify-content:flex-start; gap:7px;
+  }
+  button svg{flex-shrink:0;}
 
   /* ===================== Marca ===================== */
   .marca-nombre{font-weight:800;}
@@ -29,20 +51,27 @@
   /* ===================== Login ===================== */
   #login-view{
     min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:var(--negro);
   }
   #login-view .caja{
     display:flex; flex-direction:column; align-items:center; gap:26px; width:320px;
+    animation:login-fade-in .6s ease-out;
+  }
+  @keyframes login-fade-in{
+    from{ opacity:0; transform:translateY(8px); }
+    to{ opacity:1; transform:translateY(0); }
   }
   #login-view .marca-row{display:flex; align-items:center; gap:12px;}
   #login-view .marca-row img.logo{width:52px; height:52px; flex-shrink:0;}
-  #login-view h1.marca-nombre{font-size:24px; margin:0; line-height:1;}
+  #login-view h1.marca-nombre{font-size:30px; margin:0; line-height:1;}
+  #login-view .mercado{color:#fff;}
   #login-view form{display:flex; flex-direction:column; gap:12px; width:100%;}
   #login-view input{
     padding:11px 13px; border:1px solid var(--borde); border-radius:8px; font-size:14px;
     font-family:inherit;
   }
   #login-error{color:#c0392b; font-size:13px; min-height:18px; text-align:center;}
-  .btn-primario{background:var(--dorado); color:var(--negro); padding:11px 16px;}
+  .btn-primario{background:var(--dorado); color:var(--negro); padding:11px 16px; justify-content:center;}
 
   /* ===================== Botones de ícono (Lucide) ===================== */
   .btn-icono{
@@ -63,8 +92,8 @@
   .sidebar.colapsado{width:var(--sidebar-w-colapsado);}
 
   .sidebar-header{
-    display:flex; align-items:center; gap:12px; padding:18px 16px;
-    border-bottom:1px solid #2a2a2a; min-height:64px;
+    display:flex; align-items:center; gap:12px; padding:0 16px;
+    border-bottom:1px solid #2a2a2a; height:64px; box-sizing:border-box;
   }
   .sidebar-header img{width:28px; height:28px; flex-shrink:0;}
   .sidebar-header .marca-nombre{font-size:16px; white-space:nowrap;}
@@ -75,7 +104,7 @@
   }
   .sidebar-toggle:hover{color:#fff;}
   .sidebar-toggle svg{width:18px; height:18px;}
-  .sidebar.colapsado .sidebar-header{justify-content:center; padding:18px 0;}
+  .sidebar.colapsado .sidebar-header{justify-content:center; padding:0;}
   .sidebar.colapsado .sidebar-header img,
   .sidebar.colapsado .sidebar-header .marca-nombre{display:none;}
   .sidebar.colapsado .sidebar-toggle{margin-left:0;}
@@ -92,10 +121,34 @@
   .sidebar.colapsado .nav-item{justify-content:center; padding:12px 0;}
   .sidebar.colapsado .nav-item .texto{display:none;}
 
+  .nav-group-label{
+    display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:8px;
+    color:#999; font-weight:600; font-size:13px;
+    white-space:nowrap; margin-top:8px; cursor:pointer;
+  }
+  .nav-group-label:hover{color:#ccc;}
+  .nav-group-label svg{width:16px; height:16px; flex-shrink:0;}
+  /* Expandido: solo se marca el sub-ítem activo (ej. "Seguimiento en
+     Ruta"), no el grupo entero. Colapsado, los sub-ítems quedan ocultos
+     (ver regla más abajo), así que ahí el grupo SÍ se resalta — es el
+     único indicador visible de en qué sección se está. */
+  .sidebar.colapsado .nav-group-label.activo{background:var(--dorado); color:var(--negro); font-weight:700;}
+  .nav-subitem{
+    display:flex; align-items:center; gap:10px; padding:9px 14px 9px 30px; border-radius:8px;
+    color:#ccc; background:transparent; text-align:left; font-weight:500; width:100%;
+    white-space:nowrap; font-size:12.5px;
+  }
+  .nav-subitem svg{width:14px; height:14px; flex-shrink:0;}
+  .nav-subitem:hover{background:#1e1e1e; color:#fff;}
+  .nav-subitem.activo{background:var(--dorado); color:var(--negro); font-weight:700;}
+  .sidebar.colapsado .nav-group-label .texto,
+  .sidebar.colapsado .nav-subitem{display:none;}
+  .sidebar.colapsado .nav-group-label{justify-content:center; padding:12px 0; margin-top:0;}
+
   #contenido{flex:1; min-width:0;}
   #contenido header{
-    background:#fff; border-bottom:1px solid var(--borde); padding:14px 24px;
-    display:flex; align-items:center; justify-content:space-between; min-height:64px;
+    background:#fff; border-bottom:1px solid var(--borde); padding:0 24px;
+    display:flex; align-items:center; justify-content:space-between; height:64px; box-sizing:border-box;
   }
   #contenido header h2{font-size:16px; margin:0; font-weight:700;}
   .header-titulo{display:flex; align-items:center; gap:10px;}
@@ -116,6 +169,78 @@
   .kpi .label{font-size:13px; color:#555;}
   table{width:100%; border-collapse:collapse; font-size:13px;}
   th, td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--borde);}
+  th{background:#f3f2ec;}
+  /* Wrapper reusable para listas largas: muestra ~10 filas y scrollea el
+     resto adentro de la tarjeta (en vez de alargar toda la página), con
+     el encabezado de columnas fijo arriba mientras se scrollea — mismo
+     patrón que usa dashboard_logistica.html (ver reglas_de_negocio.md
+     seccion 20.9), aplicado acá vía position:sticky en vez del sistema
+     de capas del dashboard viejo. */
+  .tabla-scroll{max-height:460px; overflow-y:auto; border:1px solid var(--borde); border-radius:8px;}
+  /* Reserva el mismo alto siempre (no solo "hasta 460px") para que
+     filtrar/buscar y quedarse con pocas filas no encoja la caja — pedido
+     2026-11-15: a medida que se escribía en el buscador de "Choferes en
+     ruta", la lista se achicaba con cada letra y toda la pantalla saltaba
+     para arriba/abajo siguiendo ese cambio de alto. */
+  .tabla-scroll-ruta-estable{height:460px;}
+  .tabla-scroll-chica{max-height:230px;}
+  .tabla-scroll table{border:none;}
+  .tabla-scroll thead tr:first-child th{
+    position:sticky; top:0; height:38px; box-sizing:border-box;
+    background:#f3f2ec; z-index:2; box-shadow:0 1px 0 var(--borde);
+  }
+  .tabla-scroll td, .tabla-scroll th{padding:8px 10px;}
+  .fila-filtros th{
+    position:sticky; top:38px; z-index:2; background:#f3f2ec;
+    padding-top:4px; padding-bottom:6px; box-shadow:0 1px 0 var(--borde);
+  }
+  .input-filtro-col{
+    width:100%; padding:5px 8px; border:1px solid var(--borde); border-radius:6px;
+    font-family:inherit; font-size:12px; font-weight:400; color:var(--negro); background:#fff;
+  }
+  /* Regla de diseño fija para todo el proyecto (ver reglas_de_negocio.md
+     sección 21): cualquier filtro de columna con opciones fijas (no texto
+     libre) usa ESTE combo con lista propia — nunca un <select> nativo, que
+     no se puede re-estilar en su estado abierto (bug real 2026-11-15:
+     quedaba con la apariencia default del navegador, distinta de toda la
+     página). Port del mismo componente de dashboard_logistica.html. */
+  .combo-filtro{position:relative; width:100%;}
+  .combo-filtro.combo-ancho{width:auto; min-width:150px;}
+  /* Altura uniforme (36px) para TODO control de la barra de filtros —
+     combos, el <input type="date"> y los botones ícono — bug real
+     2026-11-15: esta regla vivía solo en #ruta-toolbar-superior, así que
+     cualquier combo nuevo fuera de esa pantalla (p.ej. Asistencia) salía
+     más bajo que el <input type="date"> de al lado (36px) y se veía
+     desparejo. Ahora es la altura por defecto de CUALQUIER combo-filtro-btn,
+     no una excepción por pantalla. */
+  .combo-filtro-btn{
+    width:100%; text-align:left; background:#fff; border:1px solid var(--borde);
+    color:var(--negro); border-radius:6px; padding:0 22px 0 8px; font-size:12px;
+    font-family:inherit; font-weight:400; cursor:pointer; position:relative;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    height:36px; box-sizing:border-box; display:flex; align-items:center;
+  }
+  .combo-filtro-btn::after{
+    content:""; position:absolute; right:8px; top:50%; margin-top:-2px;
+    width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent;
+    border-top:5px solid #888;
+  }
+  .combo-filtro-btn[aria-expanded="true"]{border-color:var(--dorado);}
+  .combo-filtro-btn:focus-visible{outline:2px solid var(--dorado); outline-offset:1px;}
+  .combo-filtro-lista{
+    position:absolute; top:calc(100% + 4px); left:0; min-width:100%; z-index:40;
+    background:#fff; border:1px solid var(--borde); border-radius:8px;
+    box-shadow:0 10px 24px rgba(17,17,17,.16); padding:4px; margin:0; list-style:none;
+    max-height:220px; overflow-y:auto; font-size:12.5px; white-space:nowrap;
+  }
+  .combo-filtro-lista li{padding:6px 10px; border-radius:6px; cursor:pointer; color:var(--negro);}
+  .combo-filtro-lista li:hover{background:var(--fondo);}
+  .combo-filtro-lista li[aria-selected="true"]{background:var(--dorado); font-weight:700;}
+  .combo-filtro-lista li:focus{outline:2px solid var(--dorado); outline-offset:-2px; background:var(--fondo);}
+  /* Si no hay espacio abajo, se abre hacia arriba — ver posicionarListaCombo(). */
+  .combo-filtro-lista.abre-arriba{top:auto; bottom:calc(100% + 4px);}
+  .panel-filtros-ruta.abre-arriba{top:auto; bottom:calc(100% + 6px);}
+  .texto-muted{color:#777; font-size:12px;}
   th{color:#555; font-weight:700;}
   .proximamente{text-align:center; padding:60px 20px; color:#777;}
   .chips{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center;}
@@ -130,16 +255,26 @@
      altura 36px para alinear con los chips. La forma de "pastilla"
      (border-radius:20px) es exclusiva de los chips seleccionables, nunca de
      un campo donde se escribe o se elige un valor. */
-  #rango-envios{display:inline-flex; align-items:center; gap:8px;}
-  #rango-envios input[type="date"]{
+  #rango-envios, #fecha-ruta-wrap{display:inline-flex; align-items:center; gap:8px;}
+  input[type="date"]{
     padding:0 12px; border:1px solid var(--borde); border-radius:8px;
     font-family:inherit; font-size:13px; color:var(--negro); background:#fff;
     height:36px;
   }
   .sin-datos{color:#999; font-style:italic;}
+  .tabla-scroll > p.sin-datos{margin:0; padding:14px 16px;}
   .tag-chica{color:#c0892b; font-size:11px; margin-left:6px;}
   [hidden]{display:none !important;}
   [data-tip]{cursor:help;}
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(17,17,17,.5); z-index:1000;
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:48px 20px; overflow-y:auto;
+  }
+  .modal-card{
+    background:#fff; border-radius:12px; padding:22px; width:100%; max-width:1000px;
+    box-shadow:0 12px 40px rgba(0,0,0,.25);
+  }
   #tooltipFlotante{
     position:fixed; z-index:9999; background:#1a1710; color:#fff; font-size:12px;
     padding:8px 10px; border-radius:6px; max-width:280px; line-height:1.4;
@@ -183,6 +318,213 @@
     padding:8px 14px; font-size:13px; margin-top:10px;
   }
   .btn-ver-mas:hover{background:var(--fondo);}
+
+  /* ===================== Seguimiento de Repartidores ===================== */
+  .kpis-ruta{display:grid; grid-template-columns:repeat(6, 1fr); gap:14px; margin-bottom:16px;}
+  @media (max-width: 1200px){ .kpis-ruta{grid-template-columns:repeat(3, 1fr);} }
+  @media (max-width: 640px){ .kpis-ruta{grid-template-columns:repeat(2, 1fr);} }
+  .kpi-ruta{background:#fff; border:1px solid var(--borde); border-radius:12px; padding:14px 16px;}
+  .kpi-ruta .label{font-size:12px; color:#777; margin-bottom:4px; display:flex; align-items:center; gap:5px;}
+  .kpi-ruta .valor{font-size:20px; font-weight:800; display:flex; align-items:center; gap:7px;}
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; padding:4px 10px;
+    border-radius:12px; font-size:12px; font-weight:700; white-space:nowrap;
+  }
+  .badge.verde{background:#e8f8ee; color:#1e7e3c;}
+  .badge.azul{background:#e8f1fb; color:#1d5aa6;}
+  .badge.amarillo{background:#fff4e5; color:#b9700a;}
+  .badge.rojo{background:#fdecea; color:#c0392b;}
+  .badge.naranja{background:#fff1e0; color:#b85c00;}
+  .badge.gris{background:#f0efe9; color:#777;}
+  .mini-dot.azul{background:#4a90d9;}
+  .mini-dot.naranja{background:#f2994a;}
+  .mini-dot.gris{background:#aaa;}
+  /* ===================== Asistencia de Repartidores (tabla editable) ===================== */
+  #tabla-asistencia-el th{font-size:11px; white-space:nowrap; line-height:1.3;}
+  #tabla-asistencia-el td{padding:4px 6px; vertical-align:middle;}
+  /* La cabecera de esta tabla tiene hasta 3 líneas (label + <br> +
+     "Soporte"/"Depósito"), pero la regla genérica .tabla-scroll
+     thead tr:first-child th fuerza height:38px (pensada para un
+     encabezado de una sola línea, como en Ruta) — bug real 2026-11-15:
+     el texto de abajo se salía afuera del área "sticky" de 38px, así que
+     esa parte NO quedaba pegada arriba al scrollear, se veía flotando
+     separada de su propio encabezado y dejaba ver los datos "pasando por
+     detrás". Esta regla, al tener un ID, le gana a la genérica sin
+     importar el orden, y le da el alto real que necesita. */
+  #tabla-asistencia-el thead tr:first-child th{
+    height:64px; vertical-align:middle;
+  }
+  .tabla-scroll-asistencia{overflow-x:auto;}
+  .cel-input{
+    width:100%; min-width:70px; padding:4px 6px; border:1px solid var(--borde); border-radius:5px;
+    font-family:inherit; font-size:12px; color:var(--negro); background:#fff;
+  }
+  .cel-input.ancho{min-width:110px;}
+  input.cel-input[type="checkbox"]{width:16px; height:16px; min-width:0; accent-color:var(--dorado); cursor:pointer;}
+  .btn-borrar-fila{background:transparent; color:#c0392b; padding:4px;}
+  .btn-borrar-fila svg{width:15px; height:15px;}
+  .ruta-progreso-txt{font-size:12px; color:#555; white-space:nowrap;}
+  .repa-meter{height:7px; border-radius:999px; overflow:hidden; margin-top:6px; background:#eee;}
+  .repa-meter.verde{background:#ddf2e3;} .repa-meter.verde > div{background:#34c759;}
+  .repa-meter.azul{background:#e1ebf8;} .repa-meter.azul > div{background:#4a90d9;}
+  .repa-meter.amarillo{background:#fdecd4;} .repa-meter.amarillo > div{background:#f2994a;}
+  .repa-meter.rojo{background:#fbdcda;} .repa-meter.rojo > div{background:#ef5b5b;}
+  .repa-meter.gris{background:#eee;} .repa-meter.gris > div{background:#aaa;}
+  .repa-meter > div{height:100%; border-radius:999px;}
+  #tabla-asistencia-el th{text-align:center;}
+  th.paso .quien{display:block; font-size:9px; font-weight:400; margin-top:2px;}
+  /* #tabla-asistencia-el adelante para ganarle en especificidad a la
+     regla genérica de fondo del thead sticky (.tabla-scroll thead
+     tr:first-child th), que si no, pisa este color por tener más
+     selectores de tipo (thead/tr/th) aunque este tenga más clases. */
+  #tabla-asistencia-el th.paso.soporte{background:var(--dorado); color:var(--negro);}
+  #tabla-asistencia-el th.paso.soporte .quien{color:var(--negro); opacity:.7;}
+  #tabla-asistencia-el th.paso.deposito{background:var(--negro); color:#fff;}
+  #tabla-asistencia-el th.paso.deposito .quien{color:#fff; opacity:.7;}
+  .btn-icono-chico.detalle:hover{color:#4a90d9;}
+  /* Estado pasó de badge de texto a un solo ícono con tooltip (pedido
+     2026-11-15: el texto seguía estirando la columna por más ancho fijo
+     que se le pusiera) — así la columna queda angosta sí o sí. El ancho
+     real tiene que alcanzar para el header ("Estado" + flecha + ícono de
+     info), no solo para el ícono de la fila — bug real 2026-11-15: con
+     56px el ícono de info quedaba recortado/invisible (no es que faltara
+     en el HTML, no entraba). */
+  #tabla-asistencia-el th.col-estado-asist, #tabla-asistencia-el td.col-estado-asist{
+    width:78px; max-width:78px; text-align:center;
+  }
+  #tabla-asistencia-el th.col-estado-asist{
+    white-space:normal; line-height:1.2;
+  }
+  #tabla-asistencia-el th.col-estado-asist .mini-info{
+    margin-left:3px; width:13px; height:13px;
+  }
+  #tabla-asistencia-el th.col-estado-asist .mini-info svg{width:8px; height:8px;}
+  .card-header-acciones{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:14px;}
+  .card-header-acciones .chips{margin-bottom:0;}
+  .acciones-icono{display:flex; gap:4px;}
+  .acciones-icono .btn-icono-chico{border:1px solid var(--borde); border-radius:8px; padding:8px;}
+  .acciones-icono .btn-icono-chico svg{width:16px; height:16px;}
+  .panel-columnas{display:flex; flex-direction:column; gap:2px; max-height:280px; overflow-y:auto; min-width:190px;}
+  /* El multiselect de un campo del modal (p.ej. "Localidades") tiene que
+     ocupar el mismo ancho que el campo, no el ancho fijo/angosto del
+     popover "Filtrar" (pedido 2026-11-15: se veía pegado a un costado,
+     mucho más angosto que el combo). Como .combo-filtro ya tiene
+     position:relative y ocupa el 100% del campo, basta con left:0/right:
+     auto/width:100% en vez del right:0/width:220px genérico. */
+  .panel-multiselect{left:0; right:auto; width:100%; box-sizing:border-box; gap:8px;}
+  .buscador-multiselect{
+    width:100%; padding:7px 10px; border:1px solid var(--borde); border-radius:6px;
+    font-family:inherit; font-size:13px; color:var(--negro); background:#fff; box-sizing:border-box;
+  }
+  .buscador-multiselect:focus{outline:none; border-color:var(--dorado);}
+  .lista-multiselect{display:flex; flex-direction:column; gap:2px; max-height:220px; overflow-y:auto;}
+  /* El check va a la izquierda y el texto a la derecha, en una sola fila
+     — bug real 2026-11-15: la regla genérica ".panel-filtros-ruta label"
+     (usada por los selects de Vehículo/Estado del popover "Filtrar") pisaba
+     a ".check-columna" porque tenía más especificidad (clase + elemento
+     contra una sola clase), y la ganaba aunque .check-columna se hubiera
+     declarado después — por eso quedaba el check arriba y el texto abajo.
+     Acá se repite el selector completo para ganarle esa pulseada. */
+  .panel-filtros-ruta label.check-columna{
+    display:flex; flex-direction:row; align-items:center; gap:8px;
+    font-size:13px; font-weight:400; color:var(--negro); padding:6px 4px; cursor:pointer;
+  }
+  .check-columna input{width:15px; height:15px; accent-color:var(--dorado); cursor:pointer; flex-shrink:0;}
+  .col-oculta{display:none !important;}
+  /* Estado como ícono + tooltip (no texto): la columna queda chica sí o sí. */
+  .estado-icono-fila{display:inline-flex; width:22px; height:22px; border-radius:50%; align-items:center; justify-content:center; cursor:help;}
+  .estado-icono-fila svg{width:13px; height:13px;}
+  .estado-icono-fila.verde{background:#e8f8ee; color:#1e7e3c;}
+  .estado-icono-fila.azul{background:#e8f1fb; color:#1d5aa6;}
+  .estado-icono-fila.amarillo{background:#fff4e5; color:#b9700a;}
+  .estado-icono-fila.gris{background:#f0efe9; color:#888;}
+  .estado-icono-fila.rojo{background:#fdecea; color:#c0392b;}
+  .celda-texto-solo{color:var(--negro); max-width:130px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .celda-texto-solo.muted{color:#999; font-style:italic;}
+  .zonas-vivo{display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:12px;}
+  .zona-card-vivo{background:#fff; border:1px solid var(--borde); border-radius:12px; padding:14px 16px;}
+  .zona-card-vivo h4{margin:0 0 10px; font-size:13px;}
+  .zona-fila-vivo{display:flex; justify-content:space-between; font-size:12.5px; color:#555; margin-bottom:5px;}
+  .zona-fila-vivo b{color:var(--negro);}
+  .zona-choferes-vivo{border-top:1px solid var(--borde); margin-top:10px; padding-top:10px; max-height:180px; overflow-y:auto;}
+  .zona-chofer-fila{padding:6px 0; border-bottom:1px solid var(--borde);}
+  .zona-chofer-fila:last-child{border-bottom:none;}
+  .zc-fila-arriba{display:flex; align-items:center; gap:7px; font-size:12px; color:#555;}
+  .zc-fila-arriba .zc-nombre{flex:1; font-weight:600; color:var(--negro); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .zc-fila-arriba .zc-dato{color:#888; white-space:nowrap;}
+  .zc-estado-texto{font-size:11px; margin-top:3px; margin-left:28px; font-weight:600;}
+  .zc-estado-texto.verde{color:#1e7e3c;} .zc-estado-texto.azul{color:#1d5aa6;}
+  .zc-estado-texto.amarillo{color:#b9700a;} .zc-estado-texto.gris{color:#888; font-weight:400;}
+  .zc-estado-texto.rojo{color:#c0392b;}
+  .estado-icono-fila.chico{width:18px; height:18px; flex-shrink:0;}
+  .estado-icono-fila.chico svg{width:10px; height:10px;}
+  .alerta-item-vivo{display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--borde); font-size:13px;}
+  .alerta-item-vivo:last-child{border-bottom:none;}
+  .alerta-item-vivo svg{width:15px; height:15px; flex-shrink:0;}
+  .alerta-item-vivo.rojo{color:#c0392b;} .alerta-item-vivo.rojo svg{color:#c0392b;}
+  .alerta-item-vivo.amarillo{color:#b9700a;} .alerta-item-vivo.amarillo svg{color:#b9700a;}
+  .alerta-item-vivo .nombre-chofer{font-weight:700; color:var(--negro);}
+  #modal-detalle-asistencia .modal-card{max-width:380px;}
+  .linea-detalle-asist{display:flex; justify-content:space-between; font-size:13px; padding:7px 0; border-bottom:1px solid var(--borde); gap:10px;}
+  .linea-detalle-asist:last-child{border-bottom:none;}
+  .linea-detalle-asist .hora-detalle{color:#888; white-space:nowrap;}
+  th.ordenable{cursor:pointer; user-select:none;}
+  th.ordenable:hover{color:var(--negro);}
+  th.ordenable .flecha{font-size:10px; margin-left:3px; color:#aaa;}
+  th.ordenable .flecha.activa{color:var(--negro); font-weight:700;}
+  .btn-pendientes{font-size:12px; padding:5px 10px; border-radius:8px; font-weight:700;}
+
+  /* ===================== ABM (Administración): modal + columna Opciones ===================== */
+  .btn-secundario-modal{
+    background:#fff; color:var(--negro); border:1px solid var(--borde); padding:9px 16px;
+  }
+  .btn-secundario-modal:hover{background:var(--fondo);}
+  .modal-abm-label{display:flex; flex-direction:column; gap:5px; font-size:13px; font-weight:600; color:#555;}
+  .modal-abm-check{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:#555;}
+  th.col-opciones, td.col-opciones{text-align:right; padding-right:16px;}
+  .opciones-fila{display:inline-flex; gap:4px; justify-content:flex-end;}
+  .btn-icono-chico{
+    background:transparent; color:#666; padding:6px; border-radius:6px; display:inline-flex;
+  }
+  .btn-icono-chico:hover{background:var(--fondo); color:var(--negro);}
+  .btn-icono-chico.borrar:hover{color:#c0392b;}
+  .btn-icono-chico svg{width:15px; height:15px;}
+  .fila-inactiva{color:#999;}
+  .badge-inactivo{background:#f0efe9; color:#999; font-size:11px; padding:2px 8px; border-radius:10px; margin-left:6px;}
+  .buscar-mas-filtrar{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
+  .buscar-mas-filtrar .buscador{flex:1; max-width:280px; min-width:0; margin-bottom:0;}
+  .buscar-mas-filtrar .combo-filtro{width:auto; flex-shrink:0;}
+  .btn-filtrar{
+    display:flex; align-items:center; gap:7px; background:#fff; border:1px solid var(--borde);
+    color:var(--negro); border-radius:8px; padding:0 14px; height:36px; font-size:13px; font-weight:600;
+    white-space:nowrap; flex-shrink:0;
+  }
+  .btn-filtrar svg{width:15px; height:15px;}
+  .btn-filtrar[aria-expanded="true"]{border-color:var(--dorado);}
+  .panel-filtros-ruta{
+    position:absolute; top:calc(100% + 6px); right:0; z-index:40; width:220px;
+    background:#fff; border:1px solid var(--borde); border-radius:10px;
+    box-shadow:0 10px 24px rgba(17,17,17,.16); padding:14px; display:flex; flex-direction:column; gap:12px;
+  }
+  /* DIV, no <label>: un <label> alrededor de un combo hace que el
+     navegador reenvíe el click de cualquier <li> de adentro al PRIMER
+     control "labelable" que encuentre (el botón del combo) — eso es lo
+     que reabría la lista apenas se elegía una opción (bug real
+     2026-11-15, confirmado con un test automatizado: el stack trace
+     mostraba literalmente "HTMLLabelElement._activationBehavior ->
+     sendClickToAssociatedNode"). Un <label> solo puede envolver el
+     control que de verdad le pertenece (un checkbox, un <input> de
+     texto) — nunca un combo propio ni nada con una lista adentro. */
+  .panel-filtros-ruta-campo{font-size:12px; color:#555; font-weight:600; display:flex; flex-direction:column; gap:5px;}
+  .btn-pendientes.sin-resolver{background:#fdecea; color:#c0392b;}
+  .btn-pendientes.gestionado{background:#f0efe9; color:#777;}
+  .ruta-alerta-fila{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:9px 10px; border-bottom:1px solid var(--borde); flex-wrap:wrap;
+    font-size:13px; font-weight:400;
+  }
+  .ruta-alerta-fila:last-child{border-bottom:none;}
+  .ruta-alerta-fila strong{font-weight:600;}
   .buscador{
     padding:0 12px; border:1px solid var(--borde); border-radius:8px; font-size:13px;
     font-family:inherit; width:260px; margin-bottom:14px; height:36px;
@@ -219,8 +561,23 @@
       <button class="nav-item activo" data-vista="envios">
         <i data-lucide="package"></i><span class="texto">Seguimiento de Envíos</span>
       </button>
-      <button class="nav-item" data-vista="repartidores">
-        <i data-lucide="truck"></i><span class="texto">Seguimiento de Repartidores</span>
+      <button class="nav-item" data-vista="fallidos">
+        <i data-lucide="rotate-ccw"></i><span class="texto">Fallidos y Cambios</span>
+      </button>
+      <div class="nav-group">
+        <div class="nav-group-label"><i data-lucide="truck"></i><span class="texto">Seguimiento de Repartidores</span></div>
+        <button class="nav-subitem" data-vista="repa-ruta">
+          <i data-lucide="map-pin"></i><span class="texto">Seguimiento en Ruta</span>
+        </button>
+        <button class="nav-subitem" data-vista="repa-asistencia">
+          <i data-lucide="clipboard-check"></i><span class="texto">Asistencia de Repartidores</span>
+        </button>
+        <button class="nav-subitem" data-vista="repa-vivo">
+          <i data-lucide="radio"></i><span class="texto">Operación en vivo</span>
+        </button>
+      </div>
+      <button class="nav-item" data-vista="admin">
+        <i data-lucide="settings"></i><span class="texto">Administración</span>
       </button>
     </nav>
   </div>
@@ -276,43 +633,537 @@
           <h3 style="margin-top:0;">Cruce por hora de entrega</h3>
           <div class="bucket-bar" id="bucket-bar"></div>
           <div class="bucket-leyenda" id="bucket-leyenda"></div>
-          <table>
-            <thead>
-              <tr><th>Estado</th><th>Antes 21</th><th>21-22</th><th>22-23</th><th>Desp. 23</th><th>Total</th></tr>
-            </thead>
-            <tbody id="tabla-cruce"></tbody>
-          </table>
+          <div class="tabla-scroll">
+            <table>
+              <thead>
+                <tr><th>Estado</th><th>Antes 21</th><th>21-22</th><th>22-23</th><th>Desp. 23</th><th>Total</th></tr>
+              </thead>
+              <tbody id="tabla-cruce"></tbody>
+            </table>
+          </div>
         </div>
 
         <div class="card" id="panel-zona" hidden>
           <h3 style="margin-top:0;">Por zona</h3>
-          <table>
-            <thead>
-              <tr><th>Zona</th><th>Total</th><th>% Efectividad</th><th>% Antes de 21hs</th><th>% Cancelados</th></tr>
-            </thead>
-            <tbody id="tabla-zona"></tbody>
-          </table>
+          <div class="tabla-scroll">
+            <table>
+              <thead>
+                <tr><th>Zona</th><th>Total</th><th>% Efectividad</th><th>% Antes de 21hs</th><th>% Cancelados</th></tr>
+              </thead>
+              <tbody id="tabla-zona"></tbody>
+            </table>
+          </div>
         </div>
 
         <div class="card" id="panel-ranking" hidden>
           <h3 style="margin-top:0;">Ranking de choferes</h3>
           <input id="buscar-chofer" class="buscador" placeholder="Buscar chofer…" />
-          <table>
-            <thead>
-              <tr><th>Cadete</th><th>Asignados</th><th>% Efectividad</th><th>% Antes de 21hs</th></tr>
-            </thead>
-            <tbody id="tabla-choferes"></tbody>
-          </table>
+          <div class="tabla-scroll">
+            <table>
+              <thead>
+                <tr><th>Cadete</th><th>Asignados</th><th>% Efectividad</th><th>% Antes de 21hs</th></tr>
+              </thead>
+              <tbody id="tabla-choferes"></tbody>
+            </table>
+          </div>
           <button class="btn-ver-mas" id="btn-ver-mas-choferes" hidden></button>
         </div>
       </div>
 
-      <div id="vista-repartidores" hidden>
-        <div class="card proximamente">
-          <p>Seguimiento de Repartidores todavía no se migró a esta base — es el próximo paso del plan.</p>
+      <div id="vista-fallidos" hidden>
+        <div class="mini-kpis" id="mini-kpis-fallidos"></div>
+        <div class="card">
+          <div class="card-header-acciones">
+            <div class="chips" id="fallidos-tipo-toolbar">
+              <button class="chip activo" data-tipo-fallido="todos">Todos</button>
+              <button class="chip" data-tipo-fallido="Fallido">Fallidos</button>
+              <button class="chip" data-tipo-fallido="Cambio">Cambios</button>
+            </div>
+            <div class="acciones-icono">
+              <button type="button" class="btn-filtrar" id="btn-agregar-duplicado"><i data-lucide="copy-plus"></i>Marcar duplicado</button>
+            </div>
+          </div>
+          <div class="buscar-mas-filtrar">
+            <input id="buscar-fallidos" class="buscador" placeholder="Buscar por chofer, cliente, localidad o tracking…" />
+            <div class="combo-filtro" id="popover-filtros-fallidos">
+              <button type="button" class="btn-filtrar" aria-haspopup="true" aria-expanded="false">
+                <i data-lucide="sliders-horizontal"></i>Filtrar
+              </button>
+              <div class="panel-filtros-ruta" hidden>
+                <div class="panel-filtros-ruta-campo">Destino
+                  <div class="combo-filtro" id="combo-destino-fallidos">
+                    <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Todos</button>
+                    <ul class="combo-filtro-lista" role="listbox" hidden>
+                      <li data-valor="" aria-selected="true">Todos</li>
+                      <li data-valor="Vuelve a salir">Vuelve a salir</li>
+                      <li data-valor="Devolver a tienda">Devolver a tienda</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="panel-filtros-ruta-campo">Estatus
+                  <div class="combo-filtro" id="combo-estatus-fallidos">
+                    <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Pendientes</button>
+                    <ul class="combo-filtro-lista" role="listbox" hidden>
+                      <li data-valor="pendiente" aria-selected="true">Pendientes</li>
+                      <li data-valor="cerrados">Cerrados (todos los motivos)</li>
+                      <li data-valor="todos">Todos</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="panel-filtros-ruta-campo">Antigüedad
+                  <div class="combo-filtro" id="combo-rango-fallidos">
+                    <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Últimos 30 días</button>
+                    <ul class="combo-filtro-lista" role="listbox" hidden>
+                      <li data-valor="30" aria-selected="true">Últimos 30 días</li>
+                      <li data-valor="90">Últimos 90 días</li>
+                      <li data-valor="0">Todo el historial</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tabla-scroll" id="tabla-fallidos-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Antigüedad</th>
+                  <th>Tracking</th>
+                  <th>Cliente</th>
+                  <th>Localidad</th>
+                  <th>Chofer</th>
+                  <th>Estado</th>
+                  <th>Tipo</th>
+                  <th>Destino</th>
+                  <th>Estatus</th>
+                  <th>Observaciones</th>
+                  <th class="col-opciones">Opciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-fallidos"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="modal-duplicado-fallidos" hidden>
+        <div class="modal-card">
+          <h3 style="margin-top:0;">Marcar paquete duplicado</h3>
+          <p class="mini-sub">Buscá el envío real por tracking, cliente o localidad y marcalo como duplicado — significa que hay más de un paquete físico en el sector para ese mismo envío de Lightdata.</p>
+          <input id="buscar-duplicado-fallidos" class="buscador" placeholder="Buscar envío…" />
+          <div class="tabla-scroll tabla-scroll-chica">
+            <table>
+              <thead><tr><th>Tracking</th><th>Cliente</th><th>Localidad</th><th>Chofer</th><th>Estado</th><th></th></tr></thead>
+              <tbody id="tabla-buscar-duplicado"></tbody>
+            </table>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+            <button type="button" class="btn-secundario-modal" id="modal-duplicado-cerrar">Cerrar</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="vista-repa-ruta" hidden>
+        <div id="ruta-main-content">
+          <div class="chips" id="ruta-toolbar-superior">
+            <div class="combo-filtro combo-ancho" id="combo-fecha-ruta">
+              <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Hoy</button>
+              <ul class="combo-filtro-lista" role="listbox" hidden>
+                <li data-valor="hoy" aria-selected="true">Hoy</li>
+                <li data-valor="ayer">Ayer</li>
+                <li data-valor="elegir">Elegir fecha…</li>
+              </ul>
+            </div>
+            <span id="fecha-ruta-wrap" hidden><input type="date" id="fecha-ruta-input" /></span>
+            <div class="combo-filtro combo-ancho" id="combo-zona-superior">
+              <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Todas las zonas</button>
+              <ul class="combo-filtro-lista" role="listbox" hidden>
+                <li data-valor="global" aria-selected="true">Todas las zonas</li>
+                <li data-valor="CABA">CABA</li>
+                <li data-valor="Norte">Zona Norte</li>
+                <li data-valor="Sur">Zona Sur</li>
+                <li data-valor="Oeste">Zona Oeste</li>
+                <li data-valor="Sin zona">Sin zona</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="kpis-ruta" id="kpis-ruta"></div>
+
+          <div class="card">
+            <h3 style="margin-top:0;">Demorados / sin actividad ahora</h3>
+            <div class="tabla-scroll tabla-scroll-chica" id="ruta-alertas-lista"></div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-top:0;">Choferes en ruta</h3>
+            <div class="buscar-mas-filtrar">
+              <input id="buscar-ruta" class="buscador" placeholder="Buscar chofer…" style="margin-bottom:0;" />
+              <div class="combo-filtro" id="popover-filtros-ruta">
+                <button type="button" class="btn-filtrar" aria-haspopup="true" aria-expanded="false">
+                  <i data-lucide="sliders-horizontal"></i>Filtrar
+                </button>
+                <div class="panel-filtros-ruta" hidden>
+                  <div class="panel-filtros-ruta-campo">Rendimiento
+                    <div class="combo-filtro" id="combo-rendimiento">
+                      <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Todos</button>
+                      <ul class="combo-filtro-lista" role="listbox" hidden>
+                        <li data-valor="" aria-selected="true">Todos</li>
+                        <li data-valor="óptimo">Óptimo</li>
+                        <li data-valor="a tiempo">A tiempo</li>
+                        <li data-valor="demorado">Demorado</li>
+                        <li data-valor="sin actividad">Sin actividad</li>
+                        <li data-valor="sin datos">Sin datos</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="panel-filtros-ruta-campo">Estado
+                    <div class="combo-filtro" id="combo-estado">
+                      <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Todos</button>
+                      <ul class="combo-filtro-lista" role="listbox" hidden>
+                        <li data-valor="" aria-selected="true">Todos</li>
+                        <li data-valor="sin iniciar">Sin iniciar</li>
+                        <li data-valor="en ruta">En ruta</li>
+                        <li data-valor="terminó sin pendientes">Terminó sin pendientes</li>
+                        <li data-valor="terminó con pendientes">Terminó con pendientes</li>
+                        <li data-valor="sin terminar">Sin terminar</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tabla-scroll tabla-scroll-ruta-estable">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="ordenable" data-sort="cadete">Chofer<span class="flecha">↕</span></th>
+                    <th class="ordenable" data-sort="zona">Zona<span class="flecha">↕</span></th>
+                    <th class="ordenable" data-sort="progreso">Progreso<span class="flecha">↕</span></th>
+                    <th class="ordenable" data-sort="rendimiento">Rendimiento<span class="flecha">↕</span>
+                      <span class="mini-info" tabindex="0" role="img" data-tip="Qué tan rápido entrega, medido entre una entrega y la siguiente.&#10;Óptimo: hasta 5 min · A tiempo: 6 a 20 min · Demorado: más de 20 min.&#10;Sin actividad: más de 45 min sin ningún movimiento nuevo.&#10;Pasá el mouse sobre el valor de cada fila para ver el detalle."><i data-lucide="info"></i></span>
+                    </th>
+                    <th class="ordenable" data-sort="estado">Estado<span class="flecha">↕</span>
+                      <span class="mini-info" tabindex="0" role="img" data-tip="Avance del recorrido contra lo asignado.&#10;Sin iniciar: 0 entregas.&#10;En ruta: ya avanzó, le quedan pendientes sin resolver.&#10;Sin terminar: cerró el día con pendientes sin resolver.&#10;Terminó sin pendientes: entregó el 100%.&#10;Terminó con pendientes: sin pendientes sin resolver, aunque no haya entregado todo."><i data-lucide="info"></i></span>
+                    </th>
+                    <th class="ordenable" data-sort="horaFin">Hora fin.<span class="flecha">↕</span>
+                      <span class="mini-info" tabindex="0" role="img" data-tip="Hora del último movimiento registrado (entrega o gestión de un pendiente). Solo se muestra cuando el recorrido ya terminó."><i data-lucide="info"></i></span>
+                    </th>
+                    <th class="ordenable" data-sort="sinResolver">Pendientes<span class="flecha">↕</span>
+                      <span class="mini-info" tabindex="0" role="img" data-tip="Sin resolver: el chofer no fue o no cerró el estado — hay que preguntarle qué pasó.&#10;Gestionados: Nadie, Reprogramado, Rechazado, Cancelado, No entregado — cuenta como recorrido cerrado."><i data-lucide="info"></i></span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-ruta"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-overlay" id="ruta-detalle-overlay" hidden>
+        <div class="modal-card">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+            <h3 style="margin:0;">Pendientes — <span id="ruta-detalle-nombre"></span></h3>
+            <input id="buscar-ruta-detalle" class="buscador" placeholder="Buscar tracking o cliente…" style="margin:0 0 0 auto;" />
+            <button class="btn-icono" id="cerrar-ruta-detalle" title="Cerrar"><i data-lucide="x"></i></button>
+          </div>
+          <div class="tabla-scroll">
+            <table>
+              <thead>
+                <tr><th>Tracking</th><th>Cliente</th><th>Origen</th><th>Localidad</th><th>Zona</th><th>Estado</th><th>Hora</th></tr>
+              </thead>
+              <tbody id="tabla-ruta-detalle"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="vista-repa-asistencia" hidden>
+        <div class="card">
+          <div class="card-header-acciones">
+            <div class="chips" id="asistencia-toolbar-superior">
+              <div class="combo-filtro combo-ancho" id="combo-fecha-asistencia">
+                <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Hoy</button>
+                <ul class="combo-filtro-lista" role="listbox" hidden>
+                  <li data-valor="hoy" aria-selected="true">Hoy</li>
+                  <li data-valor="ayer">Ayer</li>
+                  <li data-valor="elegir">Elegir fecha…</li>
+                </ul>
+              </div>
+              <span id="fecha-asistencia-wrap" hidden><input type="date" id="fecha-asistencia-input" /></span>
+              <div class="combo-filtro combo-ancho" id="combo-zona-asistencia">
+                <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Todas las zonas</button>
+                <ul class="combo-filtro-lista" role="listbox" hidden>
+                  <li data-valor="global" aria-selected="true">Todas las zonas</li>
+                  <li data-valor="CABA">CABA</li>
+                  <li data-valor="ZONA NORTE">Zona Norte</li>
+                  <li data-valor="ZONA NOROESTE">Zona Noroeste</li>
+                  <li data-valor="ZONA SUR">Zona Sur</li>
+                  <li data-valor="ZONA OESTE">Zona Oeste</li>
+                </ul>
+              </div>
+            </div>
+            <div class="acciones-icono">
+              <button type="button" class="btn-icono-chico" id="btn-cargar-manana" title="Cargar choferes de mañana"><i data-lucide="calendar-plus"></i></button>
+              <button type="button" class="btn-icono-chico" id="btn-imprimir-rutas" title="Imprimir hojas de ruta pendientes"><i data-lucide="printer"></i></button>
+              <button type="button" class="btn-icono-chico" id="btn-agregar-chofer" title="Agregar chofer"><i data-lucide="plus"></i></button>
+            </div>
+          </div>
+          <div class="buscar-mas-filtrar">
+            <input id="buscar-asistencia" class="buscador" placeholder="Buscar chofer…" />
+            <div class="combo-filtro" id="popover-filtros-asistencia">
+              <button type="button" class="btn-filtrar" aria-haspopup="true" aria-expanded="false">
+                <i data-lucide="sliders-horizontal"></i>Filtrar
+              </button>
+              <div class="panel-filtros-ruta" hidden>
+                <div class="panel-filtros-ruta-campo">Vehículo
+                  <div class="combo-filtro" id="combo-vehiculo-asistencia">
+                    <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Todos</button>
+                    <ul class="combo-filtro-lista" role="listbox" hidden>
+                      <li data-valor="" aria-selected="true">Todos</li>
+                      <li data-valor="auto">Auto</li>
+                      <li data-valor="moto">Moto</li>
+                      <li data-valor="furgoneta">Furgoneta</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="panel-filtros-ruta-campo">Estado
+                  <div class="combo-filtro" id="combo-estado-asistencia">
+                    <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">Todos</button>
+                    <ul class="combo-filtro-lista" role="listbox" hidden>
+                      <li data-valor="" aria-selected="true">Todos</li>
+                      <li data-valor="verde">Retirado / en ruta</li>
+                      <li data-valor="azul">En camino / pallet listo</li>
+                      <li data-valor="amarillo">Asistencia confirmada</li>
+                      <li data-valor="gris">Sin confirmar</li>
+                      <li data-valor="rojo">Alerta</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="combo-filtro" id="popover-columnas-asistencia">
+              <button type="button" class="btn-filtrar" aria-haspopup="true" aria-expanded="false">
+                <i data-lucide="columns-3"></i>Columnas
+              </button>
+              <div class="panel-filtros-ruta panel-columnas" hidden>
+                <label class="check-columna"><input type="checkbox" data-col="tipo_vehiculo" checked /> Vehículo</label>
+                <label class="check-columna"><input type="checkbox" data-col="turno" checked /> Turno</label>
+                <label class="check-columna"><input type="checkbox" data-col="zona" checked /> Zona</label>
+                <label class="check-columna"><input type="checkbox" data-col="localidades" checked /> Localidades</label>
+                <label class="check-columna"><input type="checkbox" data-col="observaciones" checked /> Observaciones</label>
+                <label class="check-columna"><input type="checkbox" data-col="asiste_soporte" checked /> Asiste</label>
+                <label class="check-columna"><input type="checkbox" data-col="tiene_fallidos_soporte" checked /> Tiene fallidos</label>
+                <label class="check-columna"><input type="checkbox" data-col="fallidos_recibidos_deposito" checked /> Fallidos recibidos</label>
+                <label class="check-columna"><input type="checkbox" data-col="pallet_listo_deposito" checked /> Pallet listo</label>
+                <label class="check-columna"><input type="checkbox" data-col="confirma_retiro_soporte" checked /> Confirma retiro</label>
+                <label class="check-columna"><input type="checkbox" data-col="llego_deposito" checked /> Llegó a depósito</label>
+                <label class="check-columna"><input type="checkbox" data-col="pallet_retirado_deposito" checked /> Pallet retirado</label>
+              </div>
+            </div>
+          </div>
+          <div class="tabla-scroll tabla-scroll-asistencia">
+            <table id="tabla-asistencia-el">
+              <thead>
+                <tr>
+                  <th class="ordenable" data-sort="nombre">Chofer<span class="flecha">↕</span></th>
+                  <th class="ordenable" data-col="tipo_vehiculo" data-sort="tipo_vehiculo">Vehículo<span class="flecha">↕</span></th>
+                  <th class="ordenable" data-col="turno" data-sort="turno">Turno<span class="flecha">↕</span></th>
+                  <th class="ordenable" data-col="zona" data-sort="zona">Zona<span class="flecha">↕</span></th>
+                  <th data-col="localidades">Localidades</th>
+                  <th data-col="observaciones">Observaciones</th>
+                  <th class="paso soporte" data-col="asiste_soporte">Asiste<span class="quien">Soporte</span></th>
+                  <th class="paso soporte" data-col="tiene_fallidos_soporte">Tiene<br>fallidos<span class="quien">Soporte</span></th>
+                  <th class="paso deposito" data-col="fallidos_recibidos_deposito">Fallidos<br>recibidos<span class="quien">Depósito</span></th>
+                  <th class="paso deposito" data-col="pallet_listo_deposito">Pallet<br>listo<span class="quien">Depósito</span></th>
+                  <th class="paso soporte" data-col="confirma_retiro_soporte">Confirma<br>retiro<span class="quien">Soporte</span></th>
+                  <th class="paso deposito" data-col="llego_deposito">Llegó a<br>depósito<span class="quien">Depósito</span></th>
+                  <th class="paso deposito" data-col="pallet_retirado_deposito">Pallet<br>retirado<span class="quien">Depósito</span></th>
+                  <th class="ordenable col-estado-asist" data-sort="estado">
+                    Estado<span class="flecha">↕</span>
+                    <span class="mini-info" tabindex="0" role="img" data-tip="✅ Retirado / en ruta.&#10;📦 Pallet listo para retirar (ya llegó al depósito).&#10;🚪 Llegó al depósito, sin pallet todavía.&#10;🚚 En camino al depósito.&#10;📦 Pallet listo, esperando al chofer.&#10;✔️ Asistencia confirmada (recién empieza el proceso).&#10;⚬ Sin confirmar / no asiste.&#10;⚠️ Alerta: no asiste con pallet armado, o tiene fallidos sin recibir."><i data-lucide="info"></i></span>
+                  </th>
+                  <th class="col-opciones">Opciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-asistencia"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="vista-repa-vivo" hidden>
+        <div class="kpis-ruta" id="kpis-vivo"></div>
+
+        <div class="card">
+          <h3 style="margin-top:0;">Alertas activas</h3>
+          <div class="tabla-scroll tabla-scroll-chica" id="alertas-vivo"></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0;">Choferes por zona</h3>
+          <div class="zonas-vivo" id="zonas-vivo"></div>
+        </div>
+      </div>
+
+      <div id="vista-admin" hidden>
+        <div class="chips" id="modo-admin">
+          <button class="chip activo" data-modo-admin="choferes">Choferes</button>
+          <button class="chip" data-modo-admin="vehiculos">Vehículos</button>
+          <button class="chip" data-modo-admin="zonas">Zonas</button>
+          <button class="chip" data-modo-admin="turnos">Turnos</button>
+          <button class="chip" data-modo-admin="localidades">Localidades</button>
+          <button class="chip" data-modo-admin="alertas">Umbrales de alerta</button>
+          <button class="chip" data-modo-admin="fallidos">Fallidos y Cambios</button>
+        </div>
+
+        <div id="admin-choferes">
+          <div class="card">
+            <div class="buscar-mas-filtrar">
+              <input id="buscar-admin-choferes" class="buscador" placeholder="Buscar chofer…" />
+              <button type="button" class="btn-filtrar" id="btn-agregar-chofer-roster"><i data-lucide="plus"></i>Agregar chofer</button>
+            </div>
+            <div class="tabla-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nombre</th><th>Vehículo</th><th>Turno</th>
+                    <th>Zona</th><th>Localidades</th><th>Observaciones</th>
+                    <th>Activo</th><th>Asiste sábado</th><th class="col-opciones">Opciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-admin-choferes"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="admin-vehiculos" hidden>
+          <div class="card">
+            <div class="buscar-mas-filtrar">
+              <input id="buscar-admin-vehiculos" class="buscador" placeholder="Buscar vehículo…" />
+              <button type="button" class="btn-filtrar" id="btn-agregar-vehiculo"><i data-lucide="plus"></i>Agregar vehículo</button>
+            </div>
+            <div class="tabla-scroll">
+              <table>
+                <thead><tr><th>Nombre</th><th>Activo</th><th class="col-opciones">Opciones</th></tr></thead>
+                <tbody id="tabla-admin-vehiculos"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="admin-zonas" hidden>
+          <div class="card">
+            <div class="buscar-mas-filtrar">
+              <input id="buscar-admin-zonas" class="buscador" placeholder="Buscar zona…" />
+              <button type="button" class="btn-filtrar" id="btn-agregar-zona"><i data-lucide="plus"></i>Agregar zona</button>
+            </div>
+            <div class="tabla-scroll">
+              <table>
+                <thead><tr><th>Nombre</th><th>Activa</th><th class="col-opciones">Opciones</th></tr></thead>
+                <tbody id="tabla-admin-zonas"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="admin-turnos" hidden>
+          <div class="card">
+            <div class="buscar-mas-filtrar">
+              <input id="buscar-admin-turnos" class="buscador" placeholder="Buscar turno…" />
+              <button type="button" class="btn-filtrar" id="btn-agregar-turno"><i data-lucide="plus"></i>Agregar turno</button>
+            </div>
+            <div class="tabla-scroll">
+              <table>
+                <thead><tr><th>Hora</th><th>Activo</th><th class="col-opciones">Opciones</th></tr></thead>
+                <tbody id="tabla-admin-turnos"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="admin-localidades" hidden>
+          <div class="card">
+            <div class="buscar-mas-filtrar">
+              <input id="buscar-admin-localidades" class="buscador" placeholder="Buscar localidad…" />
+              <button type="button" class="btn-filtrar" id="btn-agregar-localidad"><i data-lucide="plus"></i>Agregar localidad</button>
+            </div>
+            <div class="tabla-scroll">
+              <table>
+                <thead><tr><th>Nombre</th><th>Activa</th><th class="col-opciones">Opciones</th></tr></thead>
+                <tbody id="tabla-admin-localidades"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="admin-alertas" hidden class="card">
+          <h3 style="margin-top:0;">Umbrales de "Alertado" (minutos)</h3>
+          <table>
+            <thead><tr><th>Parámetro</th><th>Minutos</th><th>Descripción</th><th class="col-opciones">Opciones</th></tr></thead>
+            <tbody id="tabla-admin-alertas"></tbody>
+          </table>
+        </div>
+
+        <div id="admin-fallidos" hidden>
+          <div class="card">
+            <div class="buscar-mas-filtrar">
+              <input id="buscar-admin-fallidos-mapeo" class="buscador" placeholder="Buscar estado…" />
+              <button type="button" class="btn-filtrar" id="btn-agregar-fallidos-mapeo"><i data-lucide="plus"></i>Agregar estado</button>
+            </div>
+            <p class="mini-sub">Qué significa cada "Estado" que trae Lightdata para los Fallidos: si vuelve a salir o se devuelve a la tienda. Los Cambios NO se detectan por este mapeo — entran solos a la lista cuando Lightdata trae algo cargado en "Logistica Inversa" o la palabra "cambio" en "Observaciones", sin importar el Estado (el Estado describe el paquete nuevo entregado, no si el chofer ya devolvió el original).</p>
+            <div class="tabla-scroll">
+              <table>
+                <thead><tr><th>Estado (Lightdata)</th><th>Tipo</th><th>Destino</th><th class="col-opciones">Opciones</th></tr></thead>
+                <tbody id="tabla-admin-fallidos-mapeo"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0;">Umbrales del semáforo (días)</h3>
+            <table>
+              <thead><tr><th>Parámetro</th><th>Días</th><th>Descripción</th><th class="col-opciones">Opciones</th></tr></thead>
+              <tbody id="tabla-admin-fallidos-alertas"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </main>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-abm" hidden>
+  <div class="modal-card" style="max-width:480px;">
+    <h3 id="modal-abm-titulo" style="margin-top:0;"></h3>
+    <div id="modal-abm-campos" style="display:flex; flex-direction:column; gap:14px;"></div>
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+      <button type="button" class="btn-secundario-modal" id="modal-abm-cerrar">Cerrar</button>
+      <button type="button" class="btn-primario" id="modal-abm-guardar">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-aviso" hidden style="z-index:1100;">
+  <div class="modal-card" style="max-width:380px; text-align:left;">
+    <p id="modal-aviso-texto" style="margin:0 0 20px; font-size:14px; color:var(--negro); line-height:1.5;"></p>
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" class="btn-secundario-modal" id="modal-aviso-cancelar" hidden>Cancelar</button>
+      <button type="button" class="btn-primario" id="modal-aviso-aceptar">Aceptar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-detalle-asistencia" hidden>
+  <div class="modal-card">
+    <h3 id="modal-detalle-asistencia-titulo" style="margin-top:0;"></h3>
+    <div id="modal-detalle-asistencia-cuerpo"></div>
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+      <button type="button" class="btn-secundario-modal" id="modal-detalle-asistencia-reimprimir"><i data-lucide="printer"></i> Reimprimir</button>
+      <button type="button" class="btn-secundario-modal" id="modal-detalle-asistencia-cerrar">Cerrar</button>
+    </div>
   </div>
 </div>
 
@@ -330,6 +1181,60 @@
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
   lucide.createIcons();
+
+  // Reemplaza mostrarAviso()/mostrarConfirmacion() nativos (que muestran el nombre del host
+  // y rompen el diseño) por el mismo modal-overlay usado en el resto del
+  // sistema. mostrarAviso devuelve siempre; mostrarConfirmacion devuelve
+  // una Promise<boolean> para poder hacer `if(await mostrarConfirmacion(...))`.
+  const modalAviso = document.getElementById("modal-aviso");
+  const modalAvisoTexto = document.getElementById("modal-aviso-texto");
+  const modalAvisoAceptar = document.getElementById("modal-aviso-aceptar");
+  const modalAvisoCancelar = document.getElementById("modal-aviso-cancelar");
+
+  function mostrarAviso(texto){
+    modalAvisoTexto.textContent = texto;
+    modalAvisoCancelar.hidden = true;
+    modalAviso.hidden = false;
+    return new Promise(resolve=>{
+      function cerrar(){ modalAviso.hidden = true; modalAvisoAceptar.removeEventListener("click", cerrar); resolve(); }
+      modalAvisoAceptar.addEventListener("click", cerrar);
+    });
+  }
+
+  function mostrarConfirmacion(texto){
+    modalAvisoTexto.textContent = texto;
+    modalAvisoCancelar.hidden = false;
+    modalAviso.hidden = false;
+    return new Promise(resolve=>{
+      function terminar(resultado){
+        modalAviso.hidden = true;
+        modalAvisoAceptar.removeEventListener("click", onAceptar);
+        modalAvisoCancelar.removeEventListener("click", onCancelar);
+        resolve(resultado);
+      }
+      function onAceptar(){ terminar(true); }
+      function onCancelar(){ terminar(false); }
+      modalAvisoAceptar.addEventListener("click", onAceptar);
+      modalAvisoCancelar.addEventListener("click", onCancelar);
+    });
+  }
+
+  // Mide el alto real de la fila de títulos de columna y corre la fila de
+  // filtros justo debajo (en vez de un top: fijo adivinado) — bug real
+  // 2026-11-15: un offset fijo dejaba un hueco de 1-2px por el que se veía
+  // el cuerpo de la tabla al scrollear. Se llama de nuevo cada vez que se
+  // vuelve a pintar la tabla de ruta (el alto no cambia, pero así queda a
+  // prueba de que algún ajuste futuro de fuente/ícono lo corra un poco).
+  function ajustarOffsetFilaFiltros(){
+    document.querySelectorAll(".tabla-scroll").forEach(wrap=>{
+      const filaFiltros = wrap.querySelector(".fila-filtros");
+      if(!filaFiltros) return;
+      const filaTitulos = filaFiltros.parentElement.querySelector("tr:first-child");
+      if(!filaTitulos) return;
+      const h = Math.ceil(filaTitulos.getBoundingClientRect().height);
+      filaFiltros.querySelectorAll("th").forEach(th => { th.style.top = h + "px"; });
+    });
+  }
 
   const loginView = document.getElementById("login-view");
   const appView = document.getElementById("app-view");
@@ -356,16 +1261,35 @@
     return "No se pudo iniciar sesión. Intentá de nuevo.";
   }
 
+  // Supabase dispara onAuthStateChange periódicamente para renovar el
+  // token de sesión (no solo al loguearse) — mostrarApp() se llama cada
+  // vez que eso pasa, así que NO hay que resetear la vista activa salvo
+  // la primera vez que se muestra la app (bug real reportado 2026-11-15:
+  // la pantalla "saltaba sola" a Seguimiento de Envíos cada tanto tiempo
+  // mientras alguien miraba otra sección).
+  let appYaMostrada = false;
+
   function mostrarApp(session){
     loginView.hidden = true;
     appView.hidden = false;
     document.getElementById("usuario-email").textContent = session && session.user ? session.user.email : "—";
-    cargarResumenEnvios();
+    if(!appYaMostrada){
+      appYaMostrada = true;
+      seleccionarVista("envios");
+      // Vehículos/Zonas/Turnos/Localidades se usan en los modales de
+      // "Agregar/Editar chofer" de Asistencia, aunque el usuario nunca
+      // haya entrado a Administración.
+      abmVehiculos.cargar();
+      abmZonas.cargar();
+      abmTurnos.cargar();
+      abmLocalidades.cargar();
+    }
   }
 
   function mostrarLogin(){
     appView.hidden = true;
     loginView.hidden = false;
+    appYaMostrada = false;
   }
 
   loginForm.addEventListener("submit", async (e)=>{
@@ -390,26 +1314,43 @@
   });
 
   const vistas = {
-    envios: { titulo: "Seguimiento de Envíos", icono: "package", el: document.getElementById("vista-envios") },
-    repartidores: { titulo: "Seguimiento de Repartidores", icono: "truck", el: document.getElementById("vista-repartidores") },
+    "envios": { titulo: "Seguimiento de Envíos", icono: "package", el: document.getElementById("vista-envios") },
+    "fallidos": { titulo: "Fallidos y Cambios", icono: "rotate-ccw", el: document.getElementById("vista-fallidos") },
+    "repa-ruta": { titulo: "Seguimiento en Ruta", icono: "map-pin", el: document.getElementById("vista-repa-ruta") },
+    "repa-asistencia": { titulo: "Asistencia de Repartidores", icono: "clipboard-check", el: document.getElementById("vista-repa-asistencia") },
+    "repa-vivo": { titulo: "Operación en vivo", icono: "radio", el: document.getElementById("vista-repa-vivo") },
+    "admin": { titulo: "Administración", icono: "settings", el: document.getElementById("vista-admin") },
   };
 
-  document.querySelectorAll(".nav-item").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const v = btn.dataset.vista;
-      document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("activo", b===btn));
-      Object.entries(vistas).forEach(([key, cfg])=>{ cfg.el.hidden = key !== v; });
-      document.getElementById("titulo-vista").textContent = vistas[v].titulo;
-      const iconoTitulo = document.querySelector(".header-titulo i, .header-titulo svg");
-      if(iconoTitulo){
-        const nuevo = document.createElement("i");
-        nuevo.id = "icono-titulo-vista";
-        nuevo.setAttribute("data-lucide", vistas[v].icono);
-        iconoTitulo.replaceWith(nuevo);
-        lucide.createIcons();
-      }
-    });
+  function seleccionarVista(v){
+    document.querySelectorAll(".nav-item, .nav-subitem").forEach(b=>b.classList.toggle("activo", b.dataset.vista === v));
+    document.querySelector(".nav-group-label").classList.toggle("activo", v === "repa-ruta" || v === "repa-asistencia" || v === "repa-vivo");
+    Object.entries(vistas).forEach(([key, cfg])=>{ cfg.el.hidden = key !== v; });
+    document.getElementById("titulo-vista").textContent = vistas[v].titulo;
+    const iconoTitulo = document.querySelector(".header-titulo i, .header-titulo svg");
+    if(iconoTitulo){
+      const nuevo = document.createElement("i");
+      nuevo.id = "icono-titulo-vista";
+      nuevo.setAttribute("data-lucide", vistas[v].icono);
+      iconoTitulo.replaceWith(nuevo);
+      lucide.createIcons();
+    }
+    if(v === "envios") cargarResumenEnvios();
+    if(v === "fallidos") cargarFallidos();
+    if(v === "repa-ruta") cargarRuta();
+    if(v === "repa-asistencia") cargarAsistencia();
+    if(v === "repa-vivo") cargarOperacionVivo();
+    if(v === "admin") cargarAdminChoferes();
+  }
+
+  document.querySelectorAll(".nav-item, .nav-subitem").forEach(btn=>{
+    btn.addEventListener("click", ()=> seleccionarVista(btn.dataset.vista));
   });
+
+  // Clic en el grupo "Seguimiento de Repartidores" (el título, no un
+  // sub-ítem puntual) lleva a Seguimiento en Ruta por defecto, que es la
+  // única sección ya migrada.
+  document.querySelector(".nav-group-label").addEventListener("click", ()=> seleccionarVista("repa-ruta"));
 
   // "Hoy"/"ayer" en hora de Argentina (ART = UTC-3 fijo, sin horario de
   // verano — mismo criterio que el resto del proyecto, ver
@@ -757,6 +1698,2091 @@
     renderZonaTabla(data);
     renderChoferesTabla(data);
   }
+
+  // ======================================================================
+  // Fallidos y Cambios — reemplaza la planilla "Seguimiento Fallidos y
+  // Devoluciones V2" (ver Sistema_Cambios_Fallidos_Mercadopacks.md).
+  // Un paquete fallido/cambio que nadie tocó todavía NO tiene fila en
+  // `fallidos_seguimiento` — se calcula al vuelo cruzando `envios`
+  // (filtrado por el mapeo de `parametros_fallidos_mapeo`) con esa tabla.
+  // Antigüedad = hoy − fecha_mercadopacks (confirmado con el usuario:
+  // fecha_estado se mueve con cada cambio de estado y no sirve para medir
+  // cuánto tiempo lleva un paquete sin entregar).
+  // ======================================================================
+
+  const ESTATUS_LABEL_FALLIDOS = {
+    pendiente: "Pendiente",
+    devuelto_tienda: "Devuelto a tienda",
+    recibido_planta: "Recibido en planta",
+    descontar: "Descontar al chofer",
+    cerrado_manual: "Cerrado",
+  };
+
+  const stateFallidos = {
+    tipo: "todos", destino: "", estatus: "pendiente", rangoDias: 30, search: "",
+    mapeo: {}, umbrales: { pedir: 2, prioridad: 3, revisar: 5 }, filas: [],
+  };
+
+  function diasDesde(fechaISO){
+    if(!fechaISO) return null;
+    const hoy = new Date(fechaART(0) + "T00:00:00Z");
+    const d = new Date(fechaISO + "T00:00:00Z");
+    return Math.round((hoy - d) / (24 * 60 * 60 * 1000));
+  }
+
+  const COLUMNAS_ENVIO_FALLIDOS = "id_interno,tracking,cliente,localidad,cadete,estado,fecha_mercadopacks,logistica_inversa,observaciones";
+
+  // El Estado de Lightdata NO define un Cambio (describe el paquete NUEVO
+  // que se entrega, no si el chofer ya devolvió el producto ORIGINAL) — la
+  // señal real está en Logistica Inversa/Observaciones, texto libre sin
+  // estandarizar (confirmado con el usuario 2026-11-16). Por eso un Cambio
+  // puede entrar a la lista aunque su Estado no sea ninguno de los mapeados
+  // (ej. "Entregado" del paquete nuevo, con el original todavía sin volver).
+  function determinarTipoDestinoFallido(envio){
+    const esCambio = !!(envio.logistica_inversa && envio.logistica_inversa.trim())
+      || /cambio/i.test(envio.observaciones || "");
+    if(esCambio) return { tipo: "Cambio", destino: "Devolver a tienda" };
+    return stateFallidos.mapeo[envio.estado] || null;
+  }
+
+  function alertaDiasFallido(dias){
+    const u = stateFallidos.umbrales;
+    if(dias === null) return { label: "—", color: "gris" };
+    if(dias >= u.revisar) return { label: "Revisar", color: "rojo" };
+    if(dias >= u.prioridad) return { label: "Prioridad", color: "naranja" };
+    if(dias >= u.pedir) return { label: "Pedir", color: "amarillo" };
+    return { label: "Normal", color: "verde" };
+  }
+
+  async function cargarMapeoFallidos(){
+    const { data, error } = await sb.from("parametros_fallidos_mapeo").select("estado,tipo,destino");
+    if(error){ console.error("Error cargando parametros_fallidos_mapeo:", error); stateFallidos.mapeo = {}; return; }
+    stateFallidos.mapeo = {};
+    (data || []).forEach(m => { stateFallidos.mapeo[m.estado] = { tipo: m.tipo, destino: m.destino }; });
+  }
+
+  async function cargarUmbralesFallidos(){
+    const { data, error } = await sb.from("parametros_alertas_fallidos").select("clave,valor_dias");
+    if(error){ console.error("Error cargando parametros_alertas_fallidos:", error); return; }
+    (data || []).forEach(u => { if(u.clave in stateFallidos.umbrales) stateFallidos.umbrales[u.clave] = u.valor_dias; });
+  }
+
+  async function cargarFallidos(){
+    await Promise.all([cargarMapeoFallidos(), cargarUmbralesFallidos()]);
+    const estados = Object.keys(stateFallidos.mapeo);
+    if(!estados.length){
+      stateFallidos.filas = [];
+      renderFallidos();
+      return;
+    }
+    const cutoff = stateFallidos.rangoDias ? fechaART(-stateFallidos.rangoDias) : null;
+
+    // Query A: candidatos por Estado (fallidos clásicos).
+    let qA = sb.from("envios").select(COLUMNAS_ENVIO_FALLIDOS).in("estado", estados);
+    if(cutoff) qA = qA.gte("fecha_mercadopacks", cutoff);
+    const { data: enviosA, error: errA } = await qA;
+    if(errA){ console.error("Error cargando envíos fallidos:", errA); stateFallidos.filas = []; renderFallidos(); return; }
+
+    // Query D: candidatos por señal de Cambio (Logistica Inversa /
+    // Observaciones), independiente del Estado — ver determinarTipoDestinoFallido().
+    let qD = sb.from("envios").select(COLUMNAS_ENVIO_FALLIDOS)
+      .or("logistica_inversa.not.is.null,observaciones.ilike.%cambio%");
+    if(cutoff) qD = qD.gte("fecha_mercadopacks", cutoff);
+    const { data: enviosD, error: errD } = await qD;
+    if(errD) console.error("Error cargando envíos con señal de cambio:", errD);
+
+    let qB = sb.from("fallidos_seguimiento").select("*");
+    if(cutoff) qB = qB.gte("created_at", cutoff + "T00:00:00Z");
+    const { data: seguimiento, error: errB } = await qB;
+    if(errB){ console.error("Error cargando fallidos_seguimiento:", errB); }
+    const seguimientoRows = seguimiento || [];
+
+    const enviosById = {};
+    (enviosA || []).forEach(e => { enviosById[e.id_interno] = e; });
+    (enviosD || []).forEach(e => { enviosById[e.id_interno] = e; });
+
+    // Casos cerrados cuyo envío ya no aparece en A ni en D (ej. "descontar"
+    // sobre un paquete que Lightdata después marcó de otra forma) — se
+    // busca su dato de envío aparte porque ninguna de las dos lo trae.
+    const idsFaltantes = [...new Set(seguimientoRows.map(s => s.id_interno))].filter(id => !enviosById[id]);
+    if(idsFaltantes.length){
+      const { data: enviosC } = await sb.from("envios")
+        .select(COLUMNAS_ENVIO_FALLIDOS)
+        .in("id_interno", idsFaltantes);
+      (enviosC || []).forEach(e => { enviosById[e.id_interno] = e; });
+    }
+
+    const seguimientoPorEnvio = {};
+    seguimientoRows.forEach(s => {
+      (seguimientoPorEnvio[s.id_interno] = seguimientoPorEnvio[s.id_interno] || []).push(s);
+    });
+
+    const filas = [];
+    Object.values(enviosById).forEach(envio => {
+      const grupo = seguimientoPorEnvio[envio.id_interno] || [];
+      const clasif = determinarTipoDestinoFallido(envio);
+      if(!clasif && !grupo.length) return; // sin señal de fallido/cambio y nadie lo tocó a mano: no entra
+      const tipo = clasif ? clasif.tipo : "—";
+      const destino = clasif ? clasif.destino : "—";
+      const original = grupo.find(s => !s.duplicado) || null;
+      const duplicados = grupo.filter(s => s.duplicado);
+      const base = (seg, duplicado) => ({
+        envio, tipo, destino, duplicado,
+        seguimiento: seg,
+        estatus: seg ? seg.estatus : "pendiente",
+        dias: diasDesde(envio.fecha_mercadopacks),
+      });
+      filas.push(base(original, false));
+      duplicados.forEach(s => filas.push(base(s, true)));
+    });
+    stateFallidos.filas = filas;
+    renderFallidos();
+  }
+
+  function renderKpisFallidos(filas){
+    const u = stateFallidos.umbrales;
+    const pendientes = filas.filter(f => f.estatus === "pendiente");
+    const urgentes = pendientes.filter(f => f.dias !== null && f.dias >= u.prioridad);
+    const cerrados = filas.filter(f => f.estatus !== "pendiente");
+    const tarjetas = [
+      { label: "Pendientes", valor: pendientes.length },
+      { label: "Urgentes (Prioridad + Revisar)", valor: urgentes.length },
+      { label: "Cerrados en este rango", valor: cerrados.length },
+    ];
+    document.getElementById("mini-kpis-fallidos").innerHTML = tarjetas.map(t => `
+      <div class="kpi-ruta"><div class="label">${t.label}</div><div class="valor">${t.valor}</div></div>
+    `).join("");
+  }
+
+  function renderFallidos(){
+    let filas = stateFallidos.filas;
+    if(stateFallidos.tipo !== "todos") filas = filas.filter(f => f.tipo === stateFallidos.tipo);
+    if(stateFallidos.destino) filas = filas.filter(f => f.destino === stateFallidos.destino);
+    if(stateFallidos.estatus === "pendiente") filas = filas.filter(f => f.estatus === "pendiente");
+    else if(stateFallidos.estatus === "cerrados") filas = filas.filter(f => f.estatus !== "pendiente");
+
+    renderKpisFallidos(filas);
+
+    const q = stateFallidos.search;
+    if(q){
+      filas = filas.filter(f =>
+        (f.envio.cadete || "").toLowerCase().includes(q) ||
+        (f.envio.cliente || "").toLowerCase().includes(q) ||
+        (f.envio.localidad || "").toLowerCase().includes(q) ||
+        (f.envio.tracking || "").toLowerCase().includes(q)
+      );
+    }
+    filas = [...filas].sort((a, b) => (b.dias ?? -1) - (a.dias ?? -1));
+
+    const tbody = document.getElementById("tabla-fallidos");
+    if(!filas.length){
+      tbody.innerHTML = `<tr><td colspan="11" class="sin-datos">Sin casos en este filtro.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filas.map(f => {
+      const alerta = alertaDiasFallido(f.dias);
+      const idSeg = f.seguimiento ? f.seguimiento.id : "";
+      const idInterno = f.envio.id_interno;
+      return `
+      <tr>
+        <td><span class="badge ${alerta.color}">${f.dias === null ? "—" : f.dias + " d"} · ${alerta.label}</span></td>
+        <td>${f.envio.tracking || "—"}</td>
+        <td>${f.envio.cliente || "—"}</td>
+        <td>${f.envio.localidad || "—"}</td>
+        <td>${f.envio.cadete || "—"}</td>
+        <td>${f.envio.estado || "—"}${f.duplicado ? ' <span class="badge gris">Duplicado</span>' : ""}</td>
+        <td>${f.tipo}</td>
+        <td>${f.destino}</td>
+        <td><span class="badge ${f.estatus === "pendiente" ? "amarillo" : "verde"}">${ESTATUS_LABEL_FALLIDOS[f.estatus]}</span></td>
+        <td class="texto-muted">${(f.seguimiento && f.seguimiento.observaciones) || "—"}</td>
+        <td class="col-opciones">
+          <button type="button" class="btn-icono-chico editar" data-id-interno="${idInterno}" data-id-seg="${idSeg}" title="Cambiar estatus"><i data-lucide="pencil"></i></button>
+        </td>
+      </tr>`;
+    }).join("");
+    lucide.createIcons();
+  }
+
+  document.querySelectorAll("#fallidos-tipo-toolbar .chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll("#fallidos-tipo-toolbar .chip").forEach(b=>b.classList.toggle("activo", b===btn));
+      stateFallidos.tipo = btn.dataset.tipoFallido;
+      renderFallidos();
+    });
+  });
+  document.getElementById("buscar-fallidos").addEventListener("input", (e)=>{
+    stateFallidos.search = e.target.value.trim().toLowerCase();
+    renderFallidos();
+  });
+  crearPopoverGenerico("popover-filtros-fallidos");
+  crearComboGenerico("combo-destino-fallidos", (valor)=>{ stateFallidos.destino = valor; renderFallidos(); });
+  crearComboGenerico("combo-estatus-fallidos", (valor)=>{ stateFallidos.estatus = valor; renderFallidos(); });
+  crearComboGenerico("combo-rango-fallidos", (valor)=>{ stateFallidos.rangoDias = Number(valor); cargarFallidos(); });
+
+  function abrirEdicionFallido(idInterno, idSeg){
+    const fila = stateFallidos.filas.find(f =>
+      f.envio.id_interno === idInterno && (f.seguimiento ? f.seguimiento.id : "") === idSeg
+    );
+    if(!fila) return;
+    abrirModalAbm(`Caso: ${fila.envio.tracking || idInterno}`, [
+      { clave: "estatus", label: "Estatus", tipo: "select", opciones: Object.entries(ESTATUS_LABEL_FALLIDOS).map(([valor, texto]) => ({ valor, texto })) },
+      { clave: "precio_descuento", label: "Precio a descontar (si aplica)", tipo: "number" },
+      { clave: "motivo_cierre", label: "Motivo de cierre", tipo: "texto" },
+      { clave: "observaciones", label: "Observaciones", tipo: "texto" },
+    ], fila.seguimiento || { estatus: "pendiente" }, async (vals)=>{
+      const payload = {
+        estatus: vals.estatus || "pendiente",
+        precio_descuento: vals.precio_descuento ? Number(vals.precio_descuento) : null,
+        motivo_cierre: vals.motivo_cierre || null,
+        observaciones: vals.observaciones || null,
+        fecha_cierre: vals.estatus && vals.estatus !== "pendiente" ? fechaART(0) : null,
+      };
+      let error;
+      if(fila.seguimiento){
+        ({ error } = await sb.from("fallidos_seguimiento").update(payload).eq("id", fila.seguimiento.id));
+      } else {
+        ({ error } = await sb.from("fallidos_seguimiento").insert({ id_interno: idInterno, duplicado: false, ...payload }));
+      }
+      if(error){ console.error(error); await mostrarAviso("No se pudo guardar."); return; }
+      cargarFallidos();
+    });
+  }
+  document.getElementById("tabla-fallidos").addEventListener("click", (e)=>{
+    const btn = e.target.closest(".btn-icono-chico.editar");
+    if(btn) abrirEdicionFallido(btn.dataset.idInterno, btn.dataset.idSeg);
+  });
+
+  // ----- Marcar duplicado: buscar el envío real y agregarle una segunda fila de seguimiento -----
+  let duplicadoBuscarTimeout = null;
+  async function buscarEnviosParaDuplicado(texto){
+    const tbody = document.getElementById("tabla-buscar-duplicado");
+    if(!texto || texto.length < 2){
+      tbody.innerHTML = `<tr><td colspan="6" class="sin-datos">Escribí al menos 2 caracteres.</td></tr>`;
+      return;
+    }
+    const { data, error } = await sb.from("envios")
+      .select("id_interno,tracking,cliente,localidad,cadete,estado")
+      .or(`tracking.ilike.%${texto}%,cliente.ilike.%${texto}%,localidad.ilike.%${texto}%`)
+      .limit(20);
+    if(error){ console.error(error); tbody.innerHTML = `<tr><td colspan="6" class="sin-datos">Error buscando.</td></tr>`; return; }
+    if(!data || !data.length){
+      tbody.innerHTML = `<tr><td colspan="6" class="sin-datos">Sin resultados.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(e => `
+      <tr>
+        <td>${e.tracking || "—"}</td>
+        <td>${e.cliente || "—"}</td>
+        <td>${e.localidad || "—"}</td>
+        <td>${e.cadete || "—"}</td>
+        <td>${e.estado || "—"}</td>
+        <td><button type="button" class="btn-secundario-modal btn-marcar-duplicado" data-id-interno="${e.id_interno}">Marcar duplicado</button></td>
+      </tr>`).join("");
+  }
+  document.getElementById("btn-agregar-duplicado").addEventListener("click", ()=>{
+    document.getElementById("buscar-duplicado-fallidos").value = "";
+    document.getElementById("tabla-buscar-duplicado").innerHTML = `<tr><td colspan="6" class="sin-datos">Buscá un envío arriba.</td></tr>`;
+    document.getElementById("modal-duplicado-fallidos").hidden = false;
+  });
+  document.getElementById("modal-duplicado-cerrar").addEventListener("click", ()=>{
+    document.getElementById("modal-duplicado-fallidos").hidden = true;
+  });
+  document.getElementById("buscar-duplicado-fallidos").addEventListener("input", (e)=>{
+    clearTimeout(duplicadoBuscarTimeout);
+    const texto = e.target.value.trim();
+    duplicadoBuscarTimeout = setTimeout(() => buscarEnviosParaDuplicado(texto), 300);
+  });
+  document.getElementById("tabla-buscar-duplicado").addEventListener("click", async (e)=>{
+    const btn = e.target.closest(".btn-marcar-duplicado");
+    if(!btn) return;
+    const { error } = await sb.from("fallidos_seguimiento").insert({
+      id_interno: btn.dataset.idInterno, duplicado: true, estatus: "pendiente",
+      observaciones: "Hay más de un paquete físico en el sector para este envío.",
+    });
+    if(error){ console.error(error); await mostrarAviso("No se pudo marcar como duplicado."); return; }
+    document.getElementById("modal-duplicado-fallidos").hidden = true;
+    cargarFallidos();
+  });
+
+  // ----- Administración: mapeo Estado->Tipo/Destino y umbrales de días -----
+  let adminFallidosMapeoData = [];
+  let adminFallidosMapeoSearch = "";
+  const OPCIONES_TIPO_FALLIDO = ["Fallido", "Cambio"];
+  const OPCIONES_DESTINO_FALLIDO = ["Vuelve a salir", "Devolver a tienda"];
+
+  async function cargarAdminFallidosMapeo(){
+    const { data, error } = await sb.from("parametros_fallidos_mapeo").select("*").order("estado");
+    if(error){ console.error("Error cargando parametros_fallidos_mapeo:", error); return; }
+    adminFallidosMapeoData = data || [];
+    renderAdminFallidosMapeo();
+  }
+  function renderAdminFallidosMapeo(){
+    let filas = adminFallidosMapeoData;
+    if(adminFallidosMapeoSearch) filas = filas.filter(f => f.estado.toLowerCase().includes(adminFallidosMapeoSearch));
+    const tbody = document.getElementById("tabla-admin-fallidos-mapeo");
+    if(!filas.length){ tbody.innerHTML = `<tr><td colspan="4" class="sin-datos">Sin estados mapeados.</td></tr>`; return; }
+    tbody.innerHTML = filas.map(f => `
+      <tr data-id="${f.id}">
+        <td>${f.estado}</td>
+        <td>${f.tipo}</td>
+        <td>${f.destino}</td>
+        <td class="col-opciones">
+          <span class="opciones-fila">
+            <button type="button" class="btn-icono-chico editar" data-id="${f.id}" title="Editar"><i data-lucide="pencil"></i></button>
+            <button type="button" class="btn-icono-chico borrar" data-id="${f.id}" title="Borrar"><i data-lucide="trash-2"></i></button>
+          </span>
+        </td>
+      </tr>
+    `).join("");
+    lucide.createIcons();
+  }
+  function abrirFormularioMapeoFallido(titulo, valores, onGuardar){
+    abrirModalAbm(titulo, [
+      { clave: "estado", label: "Estado (tal cual lo trae Lightdata)", tipo: "texto" },
+      { clave: "tipo", label: "Tipo", tipo: "select", opciones: OPCIONES_TIPO_FALLIDO },
+      { clave: "destino", label: "Destino", tipo: "select", opciones: OPCIONES_DESTINO_FALLIDO },
+    ], valores, onGuardar);
+  }
+  document.getElementById("buscar-admin-fallidos-mapeo").addEventListener("input", (e)=>{
+    adminFallidosMapeoSearch = e.target.value.toLowerCase();
+    renderAdminFallidosMapeo();
+  });
+  document.getElementById("btn-agregar-fallidos-mapeo").addEventListener("click", ()=>{
+    abrirFormularioMapeoFallido("Agregar estado", { tipo: "Fallido", destino: "Vuelve a salir" }, async (vals)=>{
+      if(!vals.estado || !vals.tipo || !vals.destino){ await mostrarAviso("Completá los 3 campos."); return; }
+      const { data, error } = await sb.from("parametros_fallidos_mapeo").insert(vals).select().single();
+      if(error){ await mostrarAviso("No se pudo guardar (¿ese estado ya está mapeado?)."); return; }
+      adminFallidosMapeoData.push(data);
+      renderAdminFallidosMapeo();
+    });
+  });
+  document.getElementById("tabla-admin-fallidos-mapeo").addEventListener("click", async (e)=>{
+    const btnEditar = e.target.closest(".btn-icono-chico.editar");
+    const btnBorrar = e.target.closest(".btn-icono-chico.borrar");
+    if(btnEditar){
+      const id = Number(btnEditar.dataset.id);
+      const fila = adminFallidosMapeoData.find(f => f.id === id);
+      abrirFormularioMapeoFallido("Editar estado", fila, async (vals)=>{
+        const { error } = await sb.from("parametros_fallidos_mapeo").update(vals).eq("id", id);
+        if(error){ await mostrarAviso("No se pudo guardar."); return; }
+        Object.assign(fila, vals);
+        renderAdminFallidosMapeo();
+      });
+    }
+    if(btnBorrar){
+      const id = Number(btnBorrar.dataset.id);
+      if(!(await mostrarConfirmacion("¿Borrar este mapeo? No se puede deshacer."))) return;
+      const { error } = await sb.from("parametros_fallidos_mapeo").delete().eq("id", id);
+      if(error){ await mostrarAviso("No se pudo borrar."); return; }
+      adminFallidosMapeoData = adminFallidosMapeoData.filter(f => f.id !== id);
+      renderAdminFallidosMapeo();
+    }
+  });
+
+  let adminFallidosAlertasData = [];
+  async function cargarAdminFallidosAlertas(){
+    const { data, error } = await sb.from("parametros_alertas_fallidos").select("*").order("valor_dias");
+    if(error){ console.error("Error cargando parametros_alertas_fallidos:", error); return; }
+    adminFallidosAlertasData = data || [];
+    renderAdminFallidosAlertas();
+  }
+  function renderAdminFallidosAlertas(){
+    const tbody = document.getElementById("tabla-admin-fallidos-alertas");
+    tbody.innerHTML = adminFallidosAlertasData.map(a => `
+      <tr data-clave="${a.clave}">
+        <td>${a.clave}</td>
+        <td>${a.valor_dias} días</td>
+        <td class="texto-muted">${a.descripcion || ""}</td>
+        <td class="col-opciones">
+          <span class="opciones-fila">
+            <button type="button" class="btn-icono-chico editar" data-clave="${a.clave}" title="Editar"><i data-lucide="pencil"></i></button>
+          </span>
+        </td>
+      </tr>
+    `).join("");
+    lucide.createIcons();
+  }
+  document.getElementById("tabla-admin-fallidos-alertas").addEventListener("click", (e)=>{
+    const btn = e.target.closest(".btn-icono-chico.editar");
+    if(!btn) return;
+    const clave = btn.dataset.clave;
+    const fila = adminFallidosAlertasData.find(a => a.clave === clave);
+    abrirModalAbm(`Editar umbral: ${clave}`, [
+      { clave: "valor_dias", label: "Días", tipo: "number" },
+    ], fila, async (vals)=>{
+      const valor = Number(vals.valor_dias);
+      if(!valor || valor < 1){ await mostrarAviso("Tiene que ser un número mayor a 0."); return; }
+      const { error } = await sb.from("parametros_alertas_fallidos").update({ valor_dias: valor }).eq("clave", clave);
+      if(error){ await mostrarAviso("No se pudo guardar."); return; }
+      fila.valor_dias = valor;
+      renderAdminFallidosAlertas();
+    });
+  });
+
+  // ======================================================================
+  // Seguimiento de Repartidores — Seguimiento en ruta
+  // ======================================================================
+
+  // Mapa localidad -> zona, copiado tal cual de dashboard_logistica.html
+  // (criterio ML Flex del equipo) para que la zona de cada chofer se vea
+  // igual acá que en producción — la columna "Zona" que trae LightData NO
+  // se usa para esto (ver nota en el dashboard viejo).
+  function normalizarLocalidad(str){
+    return (str || "")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[,.]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  const ZONA_POR_LOCALIDAD = {
+    'caba':'CABA', 'capital federal':'CABA', 'buenos aires':'CABA', 'caba villa lugano':'CABA', 'palermo soho':'CABA',
+    'agronomia':'CABA', 'almagro':'CABA', 'balvanera':'CABA', 'barracas':'CABA', 'belgrano':'CABA',
+    'boedo':'CABA', 'caballito':'CABA', 'chacarita':'CABA', 'coghlan':'CABA', 'colegiales':'CABA',
+    'constitucion':'CABA', 'flores':'CABA', 'floresta':'CABA', 'la boca':'CABA', 'la paternal':'CABA',
+    'paternal':'CABA', 'liniers':'CABA', 'mataderos':'CABA', 'monte castro':'CABA',
+    'montserrat':'CABA', 'monserrat':'CABA', 'nueva pompeya':'CABA', 'nunez':'CABA', 'palermo':'CABA',
+    'parque avellaneda':'CABA', 'parque chacabuco':'CABA', 'parque chas':'CABA', 'parque patricios':'CABA',
+    'puerto madero':'CABA', 'recoleta':'CABA', 'retiro':'CABA', 'saavedra':'CABA',
+    'san cristobal':'CABA', 'san nicolas':'CABA', 'san telmo':'CABA', 'velez sarsfield':'CABA',
+    'versalles':'CABA', 'versailles':'CABA', 'villa crespo':'CABA', 'villa del parque':'CABA',
+    'villa devoto':'CABA', 'villa general mitre':'CABA', 'villa gral mitre':'CABA', 'villa lugano':'CABA',
+    'villa luro':'CABA', 'villa ortuzar':'CABA', 'villa pueyrredon':'CABA', 'villa real':'CABA',
+    'villa riachuelo':'CABA', 'villa santa rita':'CABA', 'villa soldati':'CABA', 'villa urquiza':'CABA',
+    'abasto':'CABA', 'belgrano barrancas':'CABA', 'belgrano r':'CABA',
+    'vicente lopez':'Norte', 'olivos':'Norte', 'florida':'Norte', 'florida oeste':'Norte',
+    'la lucila':'Norte', 'munro':'Norte', 'carapachay':'Norte', 'villa martelli':'Norte', 'villa adelina':'Norte',
+    'san isidro':'Norte', 'acassuso':'Norte', 'martinez':'Norte', 'boulogne':'Norte', 'beccar':'Norte',
+    'san fernando':'Norte', 'victoria':'Norte', 'virreyes':'Norte', 'vireeyes':'Norte',
+    'tigre':'Norte', 'don torcuato':'Norte', 'general pacheco':'Norte', 'grl pacheco tigre':'Norte',
+    'el talar':'Norte', 'benavidez':'Norte',
+    'ricardo rojas':'Norte', 'rincon de milberg':'Norte', 'nordelta':'Norte', 'villa nueva':'Norte',
+    'dique lujan':'Norte', 'troncos del talar':'Norte', 'los troncos':'Norte', 'los troncos del talar':'Norte',
+    'san martin':'Norte', 'general san martin':'Norte', 'gral san martin':'Norte', 'villa ballester':'Norte',
+    'san andres':'Norte', 'villa maipu':'Norte', 'villa bosch':'Norte', 'jose leon suarez':'Norte', 'billinghurst':'Norte',
+    'villa lynch':'Norte',
+    'malvinas argentinas':'Norte', 'los polvorines':'Norte', 'grand bourg':'Norte', 'tortuguitas':'Norte',
+    'tierras altas':'Norte', 'villa de mayo':'Norte', 'ingeniero adolfo sourdeaux':'Norte', 'pablo nogues':'Norte',
+    'san miguel':'Norte', 'bella vista':'Norte', 'muniz':'Norte', 'campo de mayo':'Norte',
+    'escobar':'Norte', 'belen de escobar':'Norte', 'garin':'Norte', 'garin escobar':'Norte',
+    'ingeniero maschwitz':'Norte', 'maquinista savio':'Norte', 'matheu':'Norte',
+    'pilar':'Norte', 'del viso':'Norte', 'manuel alberti':'Norte', 'villa rosa':'Norte', 'la lonja':'Norte',
+    'pilar sur':'Norte', 'presidente derqui':'Norte', 'manzanares':'Norte', 'zelaya':'Norte',
+    'pilar el panchito':'Norte', 'fatima':'Norte',
+    'jose c paz':'Norte', 'jose clemente paz':'Norte',
+    'zarate':'Norte', 'campana':'Norte',
+    'avellaneda':'Sur', 'wilde':'Sur', 'sarandi':'Sur', 'gerli':'Sur', 'dock sud':'Sur', 'pineyro':'Sur',
+    'villa dominico':'Sur',
+    'lanus oeste':'Sur', 'lanus este':'Sur', 'lanus':'Sur', 'remedios de escalada':'Sur', 'valentin alsina':'Sur',
+    'monte chingolo':'Sur', 'villa centenario':'Sur',
+    'lomas de zamora':'Sur', 'banfield':'Sur', 'temperley':'Sur', 'turdera':'Sur', 'llavallol':'Sur',
+    'san jose':'Sur', 'villa fiorito':'Sur', 'ingeniero budge':'Sur',
+    'quilmes':'Sur', 'bernal':'Sur', 'don bosco':'Sur', 'ezpeleta':'Sur', 'villa la florida':'Sur',
+    'quilmes oeste':'Sur', 'bernal este':'Sur', 'bernal oeste':'Sur', 'ezpeleta este':'Sur', 'ezpeleta oeste':'Sur',
+    'almirante brown':'Sur', 'adrogue':'Sur', 'burzaco':'Sur', 'longchamps':'Sur', 'claypole':'Sur',
+    'rafael calzada':'Sur', 'jose marmol':'Sur', 'glew':'Sur', 'don orione':'Sur',
+    'berazategui':'Sur', 'ranelagh':'Sur', 'villa espana':'Sur', 'platanos':'Sur', 'berazategui platanos':'Sur',
+    'hudson':'Sur', 'sourigues':'Sur',
+    'esteban echeverria':'Sur', 'monte grande':'Sur', 'luis guillon':'Sur', 'el jaguel':'Sur', 'canning':'Sur',
+    'ezeiza':'Sur', 'tristan suarez':'Sur', 'carlos spegazzini':'Sur', 'la union':'Sur',
+    'florencio varela':'Sur', 'bosques':'Sur', 'zeballos':'Sur', 'gobernador costa':'Sur', 'villa vatteone':'Sur',
+    'berisso':'Sur', 'villa arguello':'Sur', 'villa zula':'Sur',
+    'ensenada':'Sur', 'esenada':'Sur', 'el carmen':'Sur', 'punta lara':'Sur',
+    'la plata':'Sur', 'tolosa':'Sur', 'ringuelet':'Sur', 'manuel b gonnet':'Sur', 'city bell':'Sur',
+    'villa elisa':'Sur', 'los hornos':'Sur', 'san carlos':'Sur', 'melchor romero':'Sur', 'el peligro':'Sur',
+    'villa elvira':'Sur', 'lisandro olmos':'Sur', 'arturo segui':'Sur', 'joaquin gorina':'Sur',
+    'presidente peron':'Sur', 'guernica':'Sur',
+    'san vicente':'Sur', 'alejandro korn':'Sur',
+    'canuelas':'Sur', 'maximo paz':'Sur',
+    'tres de febrero':'Oeste', 'partido de tres de febrero':'Oeste', 'caseros':'Oeste', 'ciudadela':'Oeste',
+    'santos lugares':'Oeste', 'saenz pena':'Oeste', 'martin coronado':'Oeste', 'pablo podesta':'Oeste',
+    'el palomar':'Oeste', 'ciudad jardin del palomar':'Oeste', 'loma hermosa':'Oeste',
+    'la matanza':'Oeste', 'ramos mejia':'Oeste', 'san justo':'Oeste', 'haedo':'Oeste',
+    'lomas del mirador':'Oeste', 'la tablada':'Oeste', 'villa luzuriaga':'Oeste', 'ciudad evita':'Oeste',
+    'aldo bonzi':'Oeste', 'tapiales':'Oeste', 'villa madero':'Oeste', 'isidro casanova':'Oeste',
+    'rafael castillo':'Oeste', 'gregorio de la ferrere':'Oeste', 'gregorio de laferrere':'Oeste',
+    'moron':'Oeste', 'castelar':'Oeste', 'villa sarmiento':'Oeste',
+    'hurlingham':'Oeste', 'villa tesei':'Oeste', 'william c morris':'Oeste',
+    'ituzaingo':'Oeste', 'villa udaondo':'Oeste',
+    'merlo':'Oeste', 'buenos aires merlo':'Oeste', 'san antonio de padua':'Oeste', 'libertad':'Oeste',
+    'parque san martin':'Oeste', 'mariano acosta':'Oeste', 'pontevedra':'Oeste',
+    'moreno':'Oeste', 'paso del rey':'Oeste', 'trujui':'Oeste', 'francisco alvarez':'Oeste', 'la reja':'Oeste',
+    'gonzalez catan':'Oeste', 'virrey del pino':'Oeste', '20 de junio':'Oeste',
+    'general rodriguez':'Oeste', 'las malvinas':'Oeste', 'open door':'Oeste', 'opendoor':'Oeste',
+    'marcos paz':'Oeste', 'vicente casares':'Oeste',
+  };
+
+  function zonaPorLocalidad(localidadCruda){
+    return ZONA_POR_LOCALIDAD[normalizarLocalidad(localidadCruda)] || "Sin zona";
+  }
+
+  // Zona del chofer = la más frecuente entre sus paquetes del día (puede
+  // tener de más de una), ignorando "Sin zona" salvo que NINGUNO sea
+  // reconocible — mismo criterio que dashboard_logistica.html.
+  function zonaDeChofer(localidades){
+    const conteo = {};
+    for(const [loc, cant] of Object.entries(localidades || {})){
+      const z = zonaPorLocalidad(loc);
+      conteo[z] = (conteo[z] || 0) + cant;
+    }
+    const reconocidas = Object.keys(conteo).filter(z => z !== "Sin zona");
+    const candidatas = reconocidas.length ? reconocidas : Object.keys(conteo);
+    if(!candidatas.length) return "Sin zona";
+    return candidatas.reduce((mejor, z) => conteo[z] > (conteo[mejor] || 0) ? z : mejor, candidatas[0]);
+  }
+
+  const UMBRAL_SIN_ACTIVIDAD_MIN = 45;
+  const HORA_CIERRE_DIA_MIN = 23 * 60 + 30;
+
+  // Mismas funciones que calcularEstadoRuta()/calcularEstadoRutaChofer()
+  // de dashboard_logistica.html — ver ese archivo para la explicación
+  // completa de cada umbral.
+  function calcularEstadoRuta(minEntreEntregas, minutosSinActividad){
+    if(minutosSinActividad !== null && minutosSinActividad > UMBRAL_SIN_ACTIVIDAD_MIN){
+      return { color: "rojo", label: "Sin actividad" };
+    }
+    if(minEntreEntregas === null) return { color: "gris", label: "Sin datos" };
+    if(minEntreEntregas <= 5) return { color: "verde", label: "Óptimo" };
+    if(minEntreEntregas <= 20) return { color: "azul", label: "A tiempo" };
+    return { color: "rojo", label: "Demorado" };
+  }
+
+  function calcularEstadoRutaChofer(entregados, pendientes, sinResolver, diaCerrado){
+    if(sinResolver === 0){
+      return pendientes === 0
+        ? { color: "verde", label: "Terminó sin pendientes" }
+        : { color: "azul", label: "Terminó con pendientes" };
+    }
+    if(diaCerrado) return { color: "rojo", label: "Sin terminar" };
+    if(entregados === 0) return { color: "gris", label: "Sin iniciar" };
+    return { color: "amarillo", label: "En ruta" };
+  }
+
+  function nowMinutesART(){
+    const ms = Date.now() - 3 * 60 * 60 * 1000;
+    const d = new Date(ms);
+    return d.getUTCHours() * 60 + d.getUTCMinutes();
+  }
+
+  const stateRuta = { modoFecha: "hoy", fechaElegida: null, zona: "global", search: "", sort: { key: "sinResolver", dir: "desc" }, filas: [], filtrosCol: {} };
+
+  function fechaRutaActual(){
+    if(stateRuta.modoFecha === "ayer") return fechaART(-1);
+    if(stateRuta.modoFecha === "elegir") return stateRuta.fechaElegida || fechaART(0);
+    return fechaART(0);
+  }
+
+  document.getElementById("fecha-ruta-input").addEventListener("change", (e)=>{
+    stateRuta.fechaElegida = e.target.value;
+    cargarRuta();
+  });
+  document.getElementById("buscar-ruta").addEventListener("input", (e)=>{
+    stateRuta.search = e.target.value.toLowerCase();
+    renderRuta();
+  });
+
+  // ----- Combo/popover con lista o panel propio (ver regla en
+  // reglas_de_negocio.md sección 21/22) — UN SOLO menú flotante puede
+  // estar abierto a la vez, sea un combo de opción única o un popover
+  // "Filtrar"/"Columnas" con varios controles adentro. Abrir cualquiera
+  // de ellos cierra el que estuviera abierto antes a través de este mismo
+  // singleton (bug real 2026-11-15: cada popover tenía su propia variable
+  // "yaAbierto" aislada, así que abrir "Columnas" no cerraba "Filtrar" —
+  // quedaban los dos paneles dibujados uno encima del otro, con un
+  // "doble borde" donde se pisaban). Cualquier combo o popover flotante
+  // nuevo DEBE crearse con crearComboGenerico o crearPopoverGenerico, no
+  // con su propio hidden/aria-expanded aislado.
+  // Pila (no un solo valor) porque un combo puede vivir ANIDADO adentro
+  // de un popover ya abierto (p.ej. "Rendimiento"/"Estado" adentro de
+  // "Filtrar", en Choferes en ruta) — bug real 2026-11-15: con un solo
+  // "esto es lo único abierto", abrir el combo de adentro cerraba el
+  // popover de afuera (que lo contiene), así que el combo quedaba oculto
+  // apenas se abría — se veía como "el desplegable no funciona". Al abrir
+  // algo nuevo, solo se cierra lo que NO sea un antepasado de lo nuevo.
+  let pilaFlotantes = []; // [{ cont, el, cerrar }], del más externo al más interno
+  function cerrarComboGlobal(){
+    while(pilaFlotantes.length) pilaFlotantes.pop().cerrar();
+  }
+  function cerrarHastaAntepasadosDe(cont){
+    while(pilaFlotantes.length && !pilaFlotantes[pilaFlotantes.length - 1].cont.contains(cont)){
+      pilaFlotantes.pop().cerrar();
+    }
+  }
+  function estaAbierto(el){
+    return pilaFlotantes.some(x => x.el === el);
+  }
+  function abrirEnPila(cont, el, cerrar){
+    cerrarHastaAntepasadosDe(cont);
+    pilaFlotantes.push({ cont, el, cerrar });
+  }
+  function cerrarDeLaPila(el){
+    const i = pilaFlotantes.findIndex(x => x.el === el);
+    if(i !== -1) pilaFlotantes.splice(i, 1);
+  }
+  document.addEventListener("click", (e)=>{
+    if(pilaFlotantes.length && !e.target.closest(".combo-filtro")) cerrarComboGlobal();
+  });
+
+  // Si no entra hacia abajo en lo que queda de pantalla, abre hacia arriba
+  // (bug real 2026-11-15: siempre abría hacia abajo, cortando la pantalla
+  // cuando no había espacio). Se mide ANTES de mostrar la lista, con su
+  // alto ya conocido (max-height fijo en CSS).
+  function posicionarListaCombo(btn, lista){
+    const rectBtn = btn.getBoundingClientRect();
+    const altoLista = lista.scrollHeight || 220;
+    const espacioAbajo = window.innerHeight - rectBtn.bottom;
+    lista.classList.toggle("abre-arriba", espacioAbajo < altoLista + 12 && rectBtn.top > altoLista);
+  }
+
+  // El combo tiene que poder manejarse igual que un <select> nativo:
+  // click en una opción CIERRA la lista siempre (sin excepción), y las
+  // flechas ↑/↓ recorren las opciones, Enter confirma, Escape cierra —
+  // pedido 2026-11-15, "es una regla que no debes pasar". `seleccionar()`
+  // es el ÚNICO camino para elegir un valor (lo usan tanto el click como
+  // el teclado), así que cerrar-al-elegir no puede quedar implementado en
+  // un solo lugar sí y en el otro no.
+  function crearComboGenerico(contenedorId, onSelect){
+    const cont = document.getElementById(contenedorId);
+    const btn = cont.querySelector(".combo-filtro-btn");
+    const lista = cont.querySelector(".combo-filtro-lista");
+    const items = () => Array.from(lista.querySelectorAll("li"));
+
+    function cerrar(){
+      lista.hidden = true;
+      lista.classList.remove("abre-arriba");
+      btn.setAttribute("aria-expanded", "false");
+      items().forEach(li => li.removeAttribute("tabindex"));
+    }
+    function abrir(){
+      lista.hidden = false;
+      posicionarListaCombo(btn, lista);
+      btn.setAttribute("aria-expanded", "true");
+      abrirEnPila(cont, lista, cerrar);
+      const activa = items().find(li => li.getAttribute("aria-selected") === "true") || items()[0];
+      items().forEach(li => li.tabIndex = -1);
+      if(activa){ activa.tabIndex = 0; activa.focus(); }
+    }
+    function seleccionar(li){
+      if(!li) return;
+      btn.textContent = li.textContent;
+      items().forEach(x => x.setAttribute("aria-selected", String(x === li)));
+      cerrar();
+      cerrarDeLaPila(lista);
+      btn.focus();
+      onSelect(li.dataset.valor, li);
+    }
+
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const yaAbierta = estaAbierto(lista);
+      if(yaAbierta){ cerrar(); cerrarDeLaPila(lista); }
+      else abrir();
+    });
+    btn.addEventListener("keydown", (e)=>{
+      if(["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)){
+        e.preventDefault();
+        if(lista.hidden) abrir();
+      }
+    });
+    items().forEach(li=>{
+      li.addEventListener("click", (e)=>{ e.stopPropagation(); seleccionar(li); });
+      li.addEventListener("keydown", (e)=>{
+        const lis = items();
+        const i = lis.indexOf(li);
+        if(e.key === "ArrowDown"){ e.preventDefault(); const sig = lis[Math.min(i + 1, lis.length - 1)]; sig.tabIndex = 0; li.tabIndex = -1; sig.focus(); }
+        else if(e.key === "ArrowUp"){ e.preventDefault(); const ant = lis[Math.max(i - 1, 0)]; ant.tabIndex = 0; li.tabIndex = -1; ant.focus(); }
+        else if(e.key === "Home"){ e.preventDefault(); const primero = lis[0]; primero.tabIndex = 0; li.tabIndex = -1; primero.focus(); }
+        else if(e.key === "End"){ e.preventDefault(); const ultimo = lis[lis.length - 1]; ultimo.tabIndex = 0; li.tabIndex = -1; ultimo.focus(); }
+        else if(e.key === "Enter" || e.key === " "){ e.preventDefault(); seleccionar(li); }
+        else if(e.key === "Escape"){ e.preventDefault(); cerrar(); cerrarDeLaPila(lista); btn.focus(); }
+      });
+    });
+  }
+
+  // Popover genérico (botón "Filtrar" / "Columnas" + panel con controles
+  // adentro, p.ej. #popover-filtros-ruta, #popover-filtros-asistencia,
+  // #popover-columnas-asistencia) — mismo singleton que crearComboGenerico.
+  function crearPopoverGenerico(contenedorId){
+    const cont = document.getElementById(contenedorId);
+    const btn = cont.querySelector(".btn-filtrar");
+    const panel = cont.querySelector(".panel-filtros-ruta");
+    function cerrar(){ panel.hidden = true; panel.classList.remove("abre-arriba"); btn.setAttribute("aria-expanded", "false"); }
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const yaAbierto = estaAbierto(panel);
+      if(yaAbierto){ cerrar(); cerrarDeLaPila(panel); }
+      else {
+        panel.hidden = false;
+        posicionarListaCombo(btn, panel);
+        btn.setAttribute("aria-expanded", "true");
+        abrirEnPila(cont, panel, cerrar);
+      }
+    });
+  }
+
+  // Campo de selección múltiple para el modal ABM (p.ej. "Localidades" de
+  // un chofer: puede atender varias) — mismo singleton que los combos y
+  // popovers, pero con checkboxes en vez de una lista de opción única.
+  function crearMultiSelectGenerico(contenedorId){
+    const cont = document.getElementById(contenedorId);
+    const btn = cont.querySelector(".combo-filtro-btn");
+    const panel = cont.querySelector(".panel-filtros-ruta");
+    const buscador = panel.querySelector(".buscador-multiselect");
+    const sinResultados = panel.querySelector(".sin-resultados-multiselect");
+    const opciones = Array.from(panel.querySelectorAll(".check-columna"));
+    function actualizarTexto(){
+      const marcados = Array.from(panel.querySelectorAll("input:checked")).map(i => i.value);
+      cont.dataset.valorActual = marcados.join(", ");
+      btn.textContent = marcados.length ? marcados.join(", ") : "Elegir…";
+    }
+    function cerrar(){
+      panel.hidden = true;
+      panel.classList.remove("abre-arriba");
+      btn.setAttribute("aria-expanded", "false");
+      if(buscador){ buscador.value = ""; filtrar(""); }
+    }
+    // Buscador de texto dentro del panel — un multiselect no puede usar el
+    // mismo type-ahead por teclado de los combos de opción única (acá
+    // cada tecla tiene que poder togglear un checkbox con Espacio, no
+    // saltar de opción), así que la forma de "buscar con el teclado" es
+    // este campo de texto, enfocado automáticamente al abrir.
+    function filtrar(texto){
+      const q = texto.trim().toLowerCase();
+      let visibles = 0;
+      opciones.forEach(op=>{
+        const coincide = !q || (op.dataset.texto || "").includes(q);
+        op.hidden = !coincide;
+        if(coincide) visibles++;
+      });
+      if(sinResultados) sinResultados.hidden = visibles > 0;
+    }
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const yaAbierto = estaAbierto(panel);
+      if(yaAbierto){ cerrar(); cerrarDeLaPila(panel); }
+      else {
+        panel.hidden = false;
+        posicionarListaCombo(btn, panel);
+        btn.setAttribute("aria-expanded", "true");
+        abrirEnPila(cont, panel, cerrar);
+        if(buscador) buscador.focus();
+      }
+    });
+    panel.querySelectorAll("input[type=checkbox]").forEach(input => input.addEventListener("change", actualizarTexto));
+    if(buscador){
+      buscador.addEventListener("click", (e) => e.stopPropagation());
+      buscador.addEventListener("input", (e) => filtrar(e.target.value));
+      buscador.addEventListener("keydown", (e) => { if(e.key === "Escape"){ cerrar(); cerrarDeLaPila(panel); btn.focus(); } });
+    }
+  }
+
+  crearPopoverGenerico("popover-filtros-ruta");
+
+  crearComboGenerico("combo-fecha-ruta", (valor)=>{
+    stateRuta.modoFecha = valor;
+    const wrap = document.getElementById("fecha-ruta-wrap");
+    if(valor === "elegir"){
+      wrap.hidden = false;
+      const input = document.getElementById("fecha-ruta-input");
+      if(!input.value) input.value = fechaART(0);
+      stateRuta.fechaElegida = input.value;
+    } else {
+      wrap.hidden = true;
+    }
+    cargarRuta();
+  });
+
+  crearComboGenerico("combo-zona-superior", (valor)=>{
+    stateRuta.zona = valor;
+    renderRuta();
+  });
+
+  crearComboGenerico("combo-rendimiento", (valor)=>{
+    stateRuta.filtrosCol.rendimiento = valor.toLowerCase();
+    renderRuta();
+  });
+  crearComboGenerico("combo-estado", (valor)=>{
+    stateRuta.filtrosCol.estado = valor.toLowerCase();
+    renderRuta();
+  });
+  document.querySelectorAll('[data-sort]').forEach(th=>{
+    if(!th.closest("#vista-repa-ruta")) return;
+    th.addEventListener("click", (e)=>{
+      if(e.target.closest(".mini-info")) return; // el ícono de ayuda no ordena
+      const key = th.dataset.sort;
+      if(stateRuta.sort.key === key) stateRuta.sort.dir = stateRuta.sort.dir === "asc" ? "desc" : "asc";
+      else stateRuta.sort = { key, dir: "desc" };
+      renderRuta();
+    });
+  });
+
+  async function cargarRuta(){
+    document.getElementById("ruta-detalle-overlay").hidden = true;
+    const fecha = fechaRutaActual();
+    const { data, error } = await sb.rpc("choferes_en_ruta", { p_fecha: fecha });
+    if(error){
+      console.error("Error cargando choferes_en_ruta:", error);
+      document.getElementById("tabla-ruta").innerHTML = `<tr><td colspan="7" class="sin-datos">Error cargando los datos.</td></tr>`;
+      return;
+    }
+
+    const hoy = fechaART(0);
+    const esHoy = fecha === hoy;
+    const diaCerrado = !esHoy || nowMinutesART() >= HORA_CIERRE_DIA_MIN;
+    const ahoraMin = nowMinutesART();
+
+    stateRuta.filas = data.map(c => {
+      const zona = zonaDeChofer(c.localidades);
+      const minutosSinActividad = (esHoy && !diaCerrado && c.sin_resolver > 0 && c.min_entre_entregas !== null && c.hora_ultima_actividad)
+        ? (ahoraMin - minutosDesdeISO(c.hora_ultima_actividad))
+        : null;
+      const rendimiento = calcularEstadoRuta(c.min_entre_entregas, minutosSinActividad);
+      const estado = calcularEstadoRutaChofer(c.entregados, c.pendientes, c.sin_resolver, diaCerrado);
+      const velocidad = c.min_entre_entregas ? (60 / c.min_entre_entregas) : null;
+      const terminoElRecorrido = c.sin_resolver === 0;
+      return {
+        cadete: c.cadete, zona,
+        asignados: c.asignados, entregados: c.entregados, pendientes: c.pendientes, sinResolver: c.sin_resolver,
+        minEntreEntregas: c.min_entre_entregas, minutosSinActividad, velocidad,
+        horaPrimeraEntregaTxt: formatHoraART(c.hora_primera_entrega),
+        horaFinTxt: terminoElRecorrido ? formatHoraART(c.hora_ultima_actividad) : "—",
+        rendimiento, estado,
+        progreso: c.asignados ? (c.entregados / c.asignados) * 100 : 0,
+      };
+    });
+
+    renderRuta();
+    requestAnimationFrame(ajustarOffsetFilaFiltros);
+  }
+
+  // Convierte un timestamp ISO (con offset) a "minutos desde las 00:00 ART".
+  function minutosDesdeISO(iso){
+    const ms = new Date(iso).getTime() - 3 * 60 * 60 * 1000;
+    const d = new Date(ms);
+    return d.getUTCHours() * 60 + d.getUTCMinutes();
+  }
+
+  function formatHoraART(iso){
+    if(!iso) return "—";
+    return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" });
+  }
+
+  function renderRuta(){
+    let filas = stateRuta.filas;
+    if(stateRuta.zona !== "global") filas = filas.filter(f => f.zona === stateRuta.zona);
+    if(stateRuta.search) filas = filas.filter(f => f.cadete.toLowerCase().includes(stateRuta.search));
+    const fr = stateRuta.filtrosCol.rendimiento;
+    if(fr) filas = filas.filter(f => f.rendimiento.label.toLowerCase().includes(fr));
+    const fe = stateRuta.filtrosCol.estado;
+    if(fe) filas = filas.filter(f => f.estado.label.toLowerCase().includes(fe));
+
+    const { key, dir } = stateRuta.sort;
+    document.querySelectorAll("#vista-repa-ruta th.ordenable").forEach(th=>{
+      const flecha = th.querySelector(".flecha");
+      if(!flecha) return;
+      if(th.dataset.sort === key){
+        flecha.textContent = dir === "asc" ? "▲" : "▼";
+        flecha.classList.add("activa");
+      } else {
+        flecha.textContent = "↕";
+        flecha.classList.remove("activa");
+      }
+    });
+    const mul = dir === "asc" ? 1 : -1;
+    filas = [...filas].sort((a, b) => {
+      let va = a[key], vb = b[key];
+      if(typeof va === "string") return va.localeCompare(vb) * mul;
+      va = va ?? -Infinity; vb = vb ?? -Infinity;
+      return (va - vb) * mul;
+    });
+
+    renderKpisRuta(filas);
+    renderAlertasRuta(filas);
+
+    const tbody = document.getElementById("tabla-ruta");
+    if(!filas.length){
+      tbody.innerHTML = `<tr><td colspan="7" class="sin-datos">Sin choferes para este filtro.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filas.map(f => {
+      let celdaPendientes;
+      if(f.pendientes === 0){
+        celdaPendientes = `<span class="sin-datos">Faltan: 0</span>`;
+      } else if(f.sinResolver > 0){
+        celdaPendientes = `<button type="button" class="btn-pendientes sin-resolver" data-chofer="${f.cadete}">Sin resolver: ${f.sinResolver}</button>`;
+      } else {
+        celdaPendientes = `<button type="button" class="btn-pendientes gestionado" data-chofer="${f.cadete}">Gestionados: ${f.pendientes}</button>`;
+      }
+      const tipRendimiento = (f.rendimiento.label === "Sin actividad"
+        ? `Sin ningún movimiento hace ${Math.round(f.minutosSinActividad)} min — consultar al chofer qué pasó.\n\n`
+        : "")
+        + `Min. entre entregas: ${f.minEntreEntregas === null ? "—" : f.minEntreEntregas.toFixed(1) + " min"}\n`
+        + `Hora 1ª entrega: ${f.horaPrimeraEntregaTxt}\n`
+        + `Paq./hora: ${f.velocidad === null ? "—" : f.velocidad.toFixed(1)}`;
+      return `
+      <tr>
+        <td>${f.cadete}</td>
+        <td>${f.zona}</td>
+        <td>
+          <div class="ruta-progreso-txt">${f.entregados} de ${f.asignados} (${_fmtPct(f.progreso)})</div>
+          <div class="repa-meter ${f.estado.color}"><div style="width:${f.progreso.toFixed(0)}%;"></div></div>
+        </td>
+        <td><span class="badge ${f.rendimiento.color}" tabindex="0" data-tip="${tipRendimiento.replace(/"/g, "&quot;")}">${f.rendimiento.label}</span></td>
+        <td><span class="badge ${f.estado.color}">${f.estado.label}</span></td>
+        <td>${f.horaFinTxt}</td>
+        <td>${celdaPendientes}</td>
+      </tr>
+    `; }).join("");
+  }
+
+  function renderAlertasRuta(filas){
+    const demorados = [...filas].filter(f => f.rendimiento.color === "rojo")
+      .sort((a, b) => (b.minEntreEntregas ?? -1) - (a.minEntreEntregas ?? -1));
+    const cont = document.getElementById("ruta-alertas-lista");
+    if(!demorados.length){
+      cont.innerHTML = `<p class="sin-datos">Ningún chofer está demorado ni sin actividad en este filtro.</p>`;
+      return;
+    }
+    cont.innerHTML = demorados.map(f => `
+      <div class="ruta-alerta-fila">
+        <span><strong>${f.cadete}</strong> <span class="texto-muted">(${f.zona})</span></span>
+        <span style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span class="texto-muted">${f.entregados}/${f.asignados} entregados · faltan ${f.pendientes}</span>
+          <span class="badge ${f.rendimiento.color}">${f.rendimiento.label} · ${f.rendimiento.label === "Sin actividad" ? "hace " + Math.round(f.minutosSinActividad) + " min" : (f.minEntreEntregas === null ? "sin datos" : f.minEntreEntregas.toFixed(1) + " min/entrega")}</span>
+        </span>
+      </div>
+    `).join("");
+  }
+
+  // ----- Detalle de pendientes de un chofer (click en el botón de la tabla) -----
+  const ESTADOS_PENDIENTE_GESTIONADO = [
+    "nadie", "nadie 2da visita", "reprogramado por comprador",
+    "rechazado por el comprador", "reprogramado por meli", "cancelado", "no entregado",
+  ];
+  function esPendienteGestionado(estado){
+    return ESTADOS_PENDIENTE_GESTIONADO.includes((estado || "").toLowerCase().trim());
+  }
+
+  let detalleRutaItems = [];
+  // Protege contra condición de carrera (bug real 2026-11-15): abrir el
+  // detalle de un chofer, cerrarlo y abrir el de otro antes de que la
+  // primera consulta termine podía hacer que la respuesta VIEJA pisara a
+  // la nueva. Cada apertura saca un número; al volver una respuesta, si ya
+  // no es la apertura más reciente, se descarta en silencio.
+  let detalleRutaRequestId = 0;
+
+  async function abrirDetalleRutaChofer(cadete){
+    const miRequestId = ++detalleRutaRequestId;
+    document.getElementById("ruta-detalle-nombre").textContent = cadete;
+    document.getElementById("ruta-detalle-overlay").hidden = false;
+    document.getElementById("buscar-ruta-detalle").value = "";
+    detalleRutaItems = [];
+    document.getElementById("tabla-ruta-detalle").innerHTML = `<tr><td colspan="7" class="sin-datos">Cargando…</td></tr>`;
+    const fecha = fechaRutaActual();
+    const { data, error } = await sb.from("envios")
+      .select("tracking,cliente,localidad,zona,estado,fecha_estado,raw->>Origen")
+      .eq("fecha_mercadopacks", fecha)
+      .eq("cadete", cadete)
+      .not("estado", "in", '("Entregado","Entregado 2DA visita","A retirar")');
+    if(miRequestId !== detalleRutaRequestId) return; // ya se abrió otro chofer mientras tanto
+    if(error){ console.error("Error cargando detalle de pendientes:", error); detalleRutaItems = []; }
+    else detalleRutaItems = data || [];
+    renderDetalleRutaTabla();
+  }
+
+  function renderDetalleRutaTabla(){
+    const q = document.getElementById("buscar-ruta-detalle").value.trim().toLowerCase();
+    let items = q
+      ? detalleRutaItems.filter(it => (it.tracking || "").toLowerCase().includes(q) || (it.cliente || "").toLowerCase().includes(q))
+      : detalleRutaItems;
+    items = [...items].sort((a, b) => (esPendienteGestionado(a.estado) ? 1 : 0) - (esPendienteGestionado(b.estado) ? 1 : 0));
+
+    const tbody = document.getElementById("tabla-ruta-detalle");
+    if(!items.length){
+      tbody.innerHTML = `<tr><td colspan="7" class="sin-datos">Sin resultados.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(it => {
+      const gestionado = esPendienteGestionado(it.estado);
+      const hora = it.fecha_estado
+        ? new Date(it.fecha_estado).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" })
+        : "—";
+      return `
+      <tr>
+        <td>${it.tracking || "—"}</td>
+        <td>${it.cliente || "—"}</td>
+        <td>${it.Origen || "—"}</td>
+        <td>${it.localidad || "—"}</td>
+        <td>${it.zona || "—"}</td>
+        <td><span class="mini-dot ${gestionado ? "verde" : "rojo"}" style="margin-right:6px;"></span>${it.estado || "—"}</td>
+        <td>${hora}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  document.getElementById("tabla-ruta").addEventListener("click", (e)=>{
+    const btn = e.target.closest(".btn-pendientes");
+    if(btn) abrirDetalleRutaChofer(btn.dataset.chofer);
+  });
+  document.getElementById("buscar-ruta-detalle").addEventListener("input", renderDetalleRutaTabla);
+  document.getElementById("cerrar-ruta-detalle").addEventListener("click", ()=>{
+    document.getElementById("ruta-detalle-overlay").hidden = true;
+  });
+  // Clic en el fondo oscuro (fuera de la tarjeta) también cierra el modal.
+  document.getElementById("ruta-detalle-overlay").addEventListener("click", (e)=>{
+    if(e.target.id === "ruta-detalle-overlay") document.getElementById("ruta-detalle-overlay").hidden = true;
+  });
+
+  function renderKpisRuta(filas){
+    const total = filas.length;
+    const conRitmo = filas.filter(f => f.rendimiento.color !== "gris");
+    const demorados = conRitmo.filter(f => f.rendimiento.color === "rojo").length;
+    const pctDentroRitmo = conRitmo.length ? ((conRitmo.length - demorados) / conRitmo.length) * 100 : null;
+    const conVelocidad = filas.filter(f => f.minEntreEntregas !== null);
+    const velocidadProm = conVelocidad.length
+      ? conVelocidad.reduce((s, f) => s + (60 / f.minEntreEntregas), 0) / conVelocidad.length
+      : null;
+    const pendientesTotal = filas.reduce((s, f) => s + f.pendientes, 0);
+    const sinResolverTotal = filas.reduce((s, f) => s + f.sinResolver, 0);
+
+    const tarjetas = [
+      { label: "Choferes en ruta", valor: total,
+        info: "Cantidad de choferes que entran en el filtro de zona y búsqueda actual (no el total de la operación)." },
+      { label: "% dentro de ritmo", valor: pctDentroRitmo === null ? "—" : _fmtPct(pctDentroRitmo),
+        info: 'Porcentaje con rendimiento "Óptimo" o "A tiempo" (hasta 20 min entre una entrega y la siguiente), sobre los choferes que ya tienen al menos 2 entregas (el resto todavía no tiene ritmo medible).' },
+      { label: "Demorados / sin actividad", valor: demorados,
+        info: 'Choferes en estado "Demorado" (más de 20 min entre entregas) o "Sin actividad" (más de 45 min sin ningún movimiento).' },
+      { label: "Velocidad promedio (paq/h)", valor: velocidadProm === null ? "—" : velocidadProm.toFixed(1),
+        info: "Paquetes por hora promedio de los choferes con al menos 2 entregas (60 ÷ minutos entre entregas de cada chofer)." },
+      { label: "Paquetes pendientes", valor: pendientesTotal,
+        info: "Suma de paquetes sin entregar de todas las hojas de ruta de este filtro (asignados − entregados)." },
+      { label: "Sin resolver", valor: sinResolverTotal,
+        info: "Suma de pendientes que todavía no tienen una gestión cerrada — hay que preguntarle al chofer qué pasó." },
+    ];
+    document.getElementById("kpis-ruta").innerHTML = tarjetas.map(t => `
+      <div class="kpi-ruta">
+        <div class="label">${t.label} <span class="mini-info" tabindex="0" role="img" data-tip="${t.info.replace(/"/g, "&quot;")}"><i data-lucide="info"></i></span></div>
+        <div class="valor">${t.valor}</div>
+      </div>
+    `).join("");
+    lucide.createIcons();
+  }
+
+  // ======================================================================
+  // Asistencia de Repartidores — reemplaza la planilla de Google Sheets.
+  // Una fila por chofer asignado ese día en public.asistencia_diaria;
+  // cualquier usuario autenticado puede leer/escribir (mismo criterio que
+  // hoy: Soporte y Depósito editan la misma fila a lo largo del día, sin
+  // fórmulas de por medio).
+  // ======================================================================
+
+  const TOLERANCIA_PUNTUALIDAD_MIN = 15;
+  const stateAsistencia = {
+    modoFecha: "hoy", fechaElegida: null, search: "", zona: "global", filas: [],
+    filtrosCol: { vehiculo: "", estado: "" }, sort: { key: null, dir: "asc" },
+  };
+
+  function diaDeSemanaAsistencia(fechaISO){
+    const [y,m,d] = fechaISO.split("-").map(Number);
+    return new Date(y, m-1, d).getDay(); // 0=domingo ... 6=sábado
+  }
+
+  function fechaAsistenciaActual(){
+    if(stateAsistencia.modoFecha === "ayer") return fechaART(-1);
+    if(stateAsistencia.modoFecha === "elegir") return stateAsistencia.fechaElegida || fechaART(0);
+    return fechaART(0);
+  }
+
+  crearComboGenerico("combo-fecha-asistencia", (valor)=>{
+    stateAsistencia.modoFecha = valor;
+    const wrap = document.getElementById("fecha-asistencia-wrap");
+    if(valor === "elegir"){
+      wrap.hidden = false;
+      const input = document.getElementById("fecha-asistencia-input");
+      if(!input.value) input.value = fechaART(0);
+      stateAsistencia.fechaElegida = input.value;
+    } else {
+      wrap.hidden = true;
+    }
+    cargarAsistencia();
+  });
+  document.getElementById("fecha-asistencia-input").addEventListener("change", (e)=>{
+    stateAsistencia.fechaElegida = e.target.value;
+    cargarAsistencia();
+  });
+  document.getElementById("buscar-asistencia").addEventListener("input", (e)=>{
+    stateAsistencia.search = e.target.value.toLowerCase();
+    renderAsistencia();
+  });
+  crearComboGenerico("combo-zona-asistencia", (valor)=>{
+    stateAsistencia.zona = valor;
+    renderAsistencia();
+  });
+  crearComboGenerico("combo-vehiculo-asistencia", (valor)=>{
+    stateAsistencia.filtrosCol.vehiculo = valor.toLowerCase();
+    renderAsistencia();
+  });
+  crearComboGenerico("combo-estado-asistencia", (valor)=>{
+    stateAsistencia.filtrosCol.estado = valor;
+    renderAsistencia();
+  });
+
+  // Popover "Filtrar" (Vehículo + Estado) de Asistencia — mismo singleton
+  // que el resto (crearPopoverGenerico), para que no se superponga con
+  // "Columnas" ni con ningún otro combo abierto.
+  crearPopoverGenerico("popover-filtros-asistencia");
+
+  document.querySelectorAll('#vista-repa-asistencia th.ordenable').forEach(th=>{
+    th.addEventListener("click", ()=>{
+      const key = th.dataset.sort;
+      if(stateAsistencia.sort.key === key) stateAsistencia.sort.dir = stateAsistencia.sort.dir === "asc" ? "desc" : "asc";
+      else stateAsistencia.sort = { key, dir: "asc" };
+      renderAsistencia();
+    });
+  });
+
+  async function cargarAsistencia(){
+    const fecha = fechaAsistenciaActual();
+    const { data: filas, error } = await sb.from("asistencia_diaria").select("*").eq("fecha", fecha).order("id");
+    if(error){
+      console.error("Error cargando asistencia_diaria:", error);
+      document.getElementById("tabla-asistencia").innerHTML = `<tr><td colspan="15" class="sin-datos">Error cargando los datos.</td></tr>`;
+      return;
+    }
+    stateAsistencia.filas = filas || [];
+    renderAsistencia();
+  }
+
+  // Los indicadores (% asistencia, % llegada a tiempo, % pallet retirado)
+  // ya se muestran en "Operación en vivo" — no hace falta repetirlos acá
+  // (esta pantalla es la operativa, la de consulta es la otra).
+  function horaATimestamp(fecha, horaStr){
+    if(!horaStr) return null;
+    return new Date(`${fecha}T${horaStr}`).getTime();
+  }
+
+  // Columnas de paso a paso, en el mismo orden secuencial que la planilla
+  // vieja (J,L,M,O,Q,S,U) — ver reglas_de_negocio.md para el detalle del
+  // flujo Soporte/Depósito.
+  const COLUMNAS_BOOL_ASISTENCIA = [
+    "asiste_soporte", "tiene_fallidos_soporte", "fallidos_recibidos_deposito",
+    "pallet_listo_deposito", "confirma_retiro_soporte", "llego_deposito",
+    "pallet_retirado_deposito",
+  ];
+  const COLUMNAS_HORA_ASISTENCIA = [
+    "hora_aviso_soporte", "hora_fallidos_recibidos", "hora_pallet_listo",
+    "hora_confirma_retiro", "hora_llegada", "hora_pallet_retirado",
+  ];
+
+  // Réplica del ESTADO DEL CHOFER de la planilla (fórmula decodificada del
+  // Sheet real) — es un valor calculado en el momento, no se guarda en la
+  // base, así que siempre refleja el estado actual de los checks.
+  // El ícono depende del PASO en el que está (no solo del color): dos
+  // estados pueden compartir color (p.ej. "amarillo") pero son pasos muy
+  // distintos del proceso — pedido 2026-11-15: con un ícono por color
+  // nada más, varias combinaciones de checks distintas terminaban
+  // mostrando el mismo dibujito, y la única forma de notar la diferencia
+  // era leyendo el tooltip. Ahora cada uno de los 8 estados posibles
+  // tiene su propio ícono, y el color sigue marcando la urgencia.
+  function calcularEstadoChofer(f){
+    let base, color, icono;
+    if(f.pallet_retirado_deposito){ base = "Retirado / En ruta"; color = "verde"; icono = "check-circle-2"; }
+    else if(f.llego_deposito){
+      if(f.pallet_listo_deposito){ base = "Pallet listo para retirar"; color = "azul"; icono = "package-check"; }
+      else { base = "Llegó - Sin pallet"; color = "azul"; icono = "door-open"; }
+    }
+    else if(f.confirma_retiro_soporte){ base = "En camino al depósito"; color = "azul"; icono = "truck"; }
+    else if(f.pallet_listo_deposito){
+      if(f.asiste_soporte){ base = "Pallet listo - esperando chofer"; color = "amarillo"; icono = "package"; }
+      else { base = "No asiste - pallet armado"; color = "rojo"; icono = "alert-triangle"; }
+    }
+    else if(f.asiste_soporte){ base = "Asistencia confirmada"; color = "amarillo"; icono = "check"; }
+    else { base = "Sin confirmar / No asiste"; color = "gris"; icono = "circle-dashed"; }
+
+    if(f.tiene_fallidos_soporte){
+      base += f.fallidos_recibidos_deposito ? " · Fallidos recibidos" : " · Reportar fallidos";
+      if(!f.fallidos_recibidos_deposito && color !== "rojo") color = "amarillo";
+    }
+    return { label: base, color, icono };
+  }
+
+  const COLUMNAS_TEXTO_ASISTENCIA = ["zona", "tipo_vehiculo", "localidades", "observaciones"];
+
+  async function guardarCampoAsistencia(id, campo, valor){
+    const { error } = await sb.from("asistencia_diaria").update({ [campo]: valor }).eq("id", id);
+    if(error) console.error(`Error guardando ${campo} (fila ${id}):`, error);
+  }
+
+  function renderAsistencia(){
+    let filas = stateAsistencia.filas;
+    if(stateAsistencia.zona !== "global") filas = filas.filter(f => (f.zona || "") === stateAsistencia.zona);
+    if(stateAsistencia.search) filas = filas.filter(f => (f.nombre || "").toLowerCase().includes(stateAsistencia.search));
+    const filtroVeh = stateAsistencia.filtrosCol.vehiculo;
+    if(filtroVeh) filas = filas.filter(f => (f.tipo_vehiculo || "").toLowerCase() === filtroVeh);
+    const filtroEstado = stateAsistencia.filtrosCol.estado;
+    if(filtroEstado) filas = filas.filter(f => calcularEstadoChofer(f).color === filtroEstado);
+
+    const ORDEN_CAMPOS_ASISTENCIA = {
+      nombre: f => (f.nombre || "").toLowerCase(),
+      tipo_vehiculo: f => (f.tipo_vehiculo || "").toLowerCase(),
+      turno: f => f.turno || "99:99",
+      zona: f => (f.zona || "").toLowerCase(),
+      estado: f => calcularEstadoChofer(f).label,
+    };
+    const { key, dir } = stateAsistencia.sort;
+    if(key){
+      const accessor = ORDEN_CAMPOS_ASISTENCIA[key];
+      filas = filas.slice().sort((a, b)=>{
+        const va = accessor(a), vb = accessor(b);
+        if(va < vb) return dir === "asc" ? -1 : 1;
+        if(va > vb) return dir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    document.querySelectorAll("#vista-repa-asistencia th.ordenable").forEach(th=>{
+      const flecha = th.querySelector(".flecha");
+      if(!flecha) return;
+      if(th.dataset.sort === key){
+        flecha.textContent = dir === "asc" ? "▲" : "▼";
+        flecha.classList.add("activa");
+      } else {
+        flecha.textContent = "↕";
+        flecha.classList.remove("activa");
+      }
+    });
+
+    const tbody = document.getElementById("tabla-asistencia");
+    if(!filas.length){
+      tbody.innerHTML = `<tr><td colspan="15" class="sin-datos">Sin choferes cargados para esta fecha. Usá "Agregar chofer" para empezar.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filas.map(f => {
+      const estado = calcularEstadoChofer(f);
+      let html = `<tr data-id="${f.id}">`;
+      html += `<td class="celda-texto-solo">${(f.nombre || "(sin nombre)")}</td>`;
+      html += `<td class="celda-texto-solo${f.tipo_vehiculo ? "" : " muted"}" data-col="tipo_vehiculo">${f.tipo_vehiculo || "—"}</td>`;
+      html += `<td class="celda-texto-solo${f.turno ? "" : " muted"}" data-col="turno">${f.turno ? f.turno.slice(0,5) : "—"}</td>`;
+      html += `<td class="celda-texto-solo${f.zona ? "" : " muted"}" data-col="zona" title="${(f.zona || "").replace(/"/g, "&quot;")}">${f.zona || "—"}</td>`;
+      html += `<td class="celda-texto-solo${f.localidades ? "" : " muted"}" data-col="localidades" title="${(f.localidades || "").replace(/"/g, "&quot;")}">${f.localidades || "—"}</td>`;
+      html += `<td data-col="observaciones"><input class="cel-input ancho" data-campo="observaciones" placeholder="Ej: no asiste hoy" value="${(f.observaciones || "").replace(/"/g, "&quot;")}" /></td>`;
+      html += `<td style="text-align:center;" data-col="asiste_soporte"><input type="checkbox" class="cel-input" data-campo="asiste_soporte" ${f.asiste_soporte ? "checked" : ""} /></td>`;
+      html += `<td style="text-align:center;" data-col="tiene_fallidos_soporte"><input type="checkbox" class="cel-input" data-campo="tiene_fallidos_soporte" ${f.tiene_fallidos_soporte ? "checked" : ""} /></td>`;
+      html += `<td style="text-align:center;" data-col="fallidos_recibidos_deposito"><input type="checkbox" class="cel-input" data-campo="fallidos_recibidos_deposito" ${f.fallidos_recibidos_deposito ? "checked" : ""} /></td>`;
+      html += `<td style="text-align:center;" data-col="pallet_listo_deposito"><input type="checkbox" class="cel-input" data-campo="pallet_listo_deposito" ${f.pallet_listo_deposito ? "checked" : ""} /></td>`;
+      html += `<td style="text-align:center;" data-col="confirma_retiro_soporte"><input type="checkbox" class="cel-input" data-campo="confirma_retiro_soporte" ${f.confirma_retiro_soporte ? "checked" : ""} /></td>`;
+      html += `<td style="text-align:center;" data-col="llego_deposito"><input type="checkbox" class="cel-input" data-campo="llego_deposito" ${f.llego_deposito ? "checked" : ""} /></td>`;
+      html += `<td style="text-align:center;" data-col="pallet_retirado_deposito"><input type="checkbox" class="cel-input" data-campo="pallet_retirado_deposito" ${f.pallet_retirado_deposito ? "checked" : ""} /></td>`;
+      html += `<td class="col-estado-asist"><span class="estado-icono-fila ${estado.color}" tabindex="0" role="img" data-tip="${estado.label.replace(/"/g, "&quot;")}"><i data-lucide="${estado.icono}"></i></span></td>`;
+      html += `<td class="col-opciones"><span class="opciones-fila">`;
+      html += `<button type="button" class="btn-icono-chico editar" title="Editar datos del chofer" data-id="${f.id}"><i data-lucide="pencil"></i></button>`;
+      html += `<button type="button" class="btn-icono-chico detalle" title="Ver detalle (horas, impreso)" data-id="${f.id}"><i data-lucide="list"></i></button>`;
+      html += `<button type="button" class="btn-icono-chico borrar" title="Borrar fila" data-id="${f.id}"><i data-lucide="trash-2"></i></button>`;
+      html += `</span></td>`;
+      html += `</tr>`;
+      return html;
+    }).join("");
+    lucide.createIcons();
+    aplicarColumnasVisiblesAsistencia();
+  }
+
+  // Autoguardado por celda: delegado en el tbody (las filas se redibujan
+  // enteras en cada carga, así que el listener va en el contenedor fijo).
+  // El auto-estampado de hora (K,N,P,R,T,V en el Sheet: se graba la primera
+  // vez que el check pasa a true, se limpia si vuelve a false) se replica
+  // acá, ya que son las que alimentan los indicadores.
+  const CHECK_A_HORA = {
+    asiste_soporte: "hora_aviso_soporte",
+    fallidos_recibidos_deposito: "hora_fallidos_recibidos",
+    pallet_listo_deposito: "hora_pallet_listo",
+    confirma_retiro_soporte: "hora_confirma_retiro",
+    llego_deposito: "hora_llegada",
+    pallet_retirado_deposito: "hora_pallet_retirado",
+  };
+
+  document.getElementById("tabla-asistencia").addEventListener("change", (e)=>{
+    const input = e.target.closest(".cel-input");
+    if(!input) return;
+    const tr = input.closest("tr");
+    const id = Number(tr.dataset.id);
+    const campo = input.dataset.campo;
+    const valor = input.type === "checkbox" ? input.checked : (input.value || null);
+    const fila = stateAsistencia.filas.find(f => f.id === id);
+    if(!fila) return;
+
+    // Optimista: se actualiza el estado local y se repinta YA, sin esperar
+    // la ida y vuelta a Supabase — el guardado real va en paralelo, abajo.
+    // (bug real 2026-11-15: esperar el `await` antes de repintar hacía
+    // sentir que el ícono de Estado "no cambiaba" al tildar un check,
+    // cuando en realidad solo estaba demorado por la red).
+    fila[campo] = valor;
+    const cambios = { [campo]: valor };
+
+    const campoHora = CHECK_A_HORA[campo];
+    if(campoHora){
+      const nuevaHora = valor ? (fila[campoHora] || new Date().toTimeString().slice(0,8)) : null;
+      if(nuevaHora !== fila[campoHora]){
+        fila[campoHora] = nuevaHora;
+        cambios[campoHora] = nuevaHora;
+      }
+    }
+
+    if(COLUMNAS_BOOL_ASISTENCIA.includes(campo)){
+      renderAsistencia(); // recalcula y repinta el ícono de Estado al instante
+    }
+
+    (async ()=>{
+      for(const [c, v] of Object.entries(cambios)){
+        await guardarCampoAsistencia(id, c, v);
+      }
+    })();
+  });
+
+  document.getElementById("tabla-asistencia").addEventListener("click", async (e)=>{
+    const btnEditar = e.target.closest(".btn-icono-chico.editar");
+    if(btnEditar){
+      abrirEditarChoferAsistencia(Number(btnEditar.dataset.id));
+      return;
+    }
+    const btnDetalle = e.target.closest(".btn-icono-chico.detalle");
+    if(btnDetalle){
+      abrirDetalleAsistencia(Number(btnDetalle.dataset.id));
+      return;
+    }
+    const btn = e.target.closest(".btn-icono-chico.borrar");
+    if(!btn) return;
+    const id = Number(btn.dataset.id);
+    if(!(await mostrarConfirmacion("¿Borrar esta fila? No se puede deshacer."))) return;
+    const { error } = await sb.from("asistencia_diaria").delete().eq("id", id);
+    if(error){ console.error("Error borrando fila:", error); return; }
+    stateAsistencia.filas = stateAsistencia.filas.filter(f => f.id !== id);
+    renderAsistencia();
+  });
+
+  // Los datos "de roster" (nombre, vehículo, turno, zona, localidades) son
+  // de solo lectura en la tabla — pedido 2026-11-15: se editaban sin
+  // querer con un solo click. Para cambiarlos hace falta pasar por este
+  // modal, como el resto de los ABM del sistema.
+  function abrirEditarChoferAsistencia(id){
+    const f = stateAsistencia.filas.find(x => x.id === id);
+    if(!f) return;
+    abrirModalAbm("Editar chofer", [
+      { clave: "nombre", label: "Nombre", tipo: "texto" },
+      { clave: "tipo_vehiculo", label: "Vehículo", tipo: "select", opciones: abmVehiculos.obtenerActivos() },
+      { clave: "turno", label: "Turno", tipo: "select", opciones: abmTurnos.obtenerActivos() },
+      { clave: "zona", label: "Zona", tipo: "select", opciones: abmZonas.obtenerActivos() },
+      { clave: "localidades", label: "Localidades", tipo: "multiselect", opciones: abmLocalidades.obtenerActivos() },
+    ], { ...f, turno: f.turno ? f.turno.slice(0,5) : "" }, async (vals)=>{
+      if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+      if(vals.turno === "") vals.turno = null;
+      const { error } = await sb.from("asistencia_diaria").update(vals).eq("id", id);
+      if(error){ console.error("Error editando chofer:", error); await mostrarAviso("No se pudo guardar."); return; }
+      Object.assign(f, vals);
+      renderAsistencia();
+    });
+  }
+
+  // Selector de columnas: oculta/muestra columnas no esenciales para que
+  // entre toda la tabla sin scroll horizontal. Se recuerda por navegador
+  // (localStorage), no por usuario de Supabase.
+  const LS_COLUMNAS_ASISTENCIA = "mp_asistencia_columnas_ocultas";
+  function columnasOcultasGuardadas(){
+    try { return new Set(JSON.parse(localStorage.getItem(LS_COLUMNAS_ASISTENCIA) || "[]")); }
+    catch { return new Set(); }
+  }
+  function guardarColumnasOcultas(set){
+    try { localStorage.setItem(LS_COLUMNAS_ASISTENCIA, JSON.stringify([...set])); } catch {}
+  }
+  function aplicarColumnasVisiblesAsistencia(){
+    const ocultas = columnasOcultasGuardadas();
+    document.querySelectorAll("#tabla-asistencia-el [data-col]").forEach(el=>{
+      el.classList.toggle("col-oculta", ocultas.has(el.dataset.col));
+    });
+  }
+  document.querySelectorAll("#popover-columnas-asistencia .check-columna input").forEach(chk=>{
+    const ocultas = columnasOcultasGuardadas();
+    chk.checked = !ocultas.has(chk.dataset.col);
+    chk.addEventListener("change", ()=>{
+      const set = columnasOcultasGuardadas();
+      if(chk.checked) set.delete(chk.dataset.col); else set.add(chk.dataset.col);
+      guardarColumnasOcultas(set);
+      aplicarColumnasVisiblesAsistencia();
+    });
+  });
+  crearPopoverGenerico("popover-columnas-asistencia");
+
+  function abrirDetalleAsistencia(id){
+    const f = stateAsistencia.filas.find(x => x.id === id);
+    if(!f) return;
+    document.getElementById("modal-detalle-asistencia-titulo").textContent = `Detalle — ${f.nombre || "(sin nombre)"}`;
+    const lineas = [
+      ["Aviso de asistencia (soporte)", f.hora_aviso_soporte],
+      ["Tiene fallidos", f.tiene_fallidos_soporte ? "Sí" : "No"],
+      ["Fallidos recibidos (depósito)", f.fallidos_recibidos_deposito ? f.hora_fallidos_recibidos : "—"],
+      ["Pallet listo (depósito)", f.pallet_listo_deposito ? f.hora_pallet_listo : "—"],
+      ["Confirma retiro (soporte)", f.confirma_retiro_soporte ? f.hora_confirma_retiro : "—"],
+      ["Llegó a depósito", f.llego_deposito ? f.hora_llegada : "—"],
+      ["Pallet retirado (depósito)", f.pallet_retirado_deposito ? f.hora_pallet_retirado : "—"],
+      ["Asignación de ruta impresa", f.impreso ? "Sí" : "No"],
+    ];
+    document.getElementById("modal-detalle-asistencia-cuerpo").innerHTML = lineas.map(([label, valor]) => `
+      <div class="linea-detalle-asist"><span>${label}</span><span class="hora-detalle">${(valor || "—").toString().slice(0,8) || "—"}</span></div>
+    `).join("");
+    document.getElementById("modal-detalle-asistencia").hidden = false;
+    document.getElementById("modal-detalle-asistencia-reimprimir").dataset.id = id;
+  }
+  document.getElementById("modal-detalle-asistencia-cerrar").addEventListener("click", ()=>{
+    document.getElementById("modal-detalle-asistencia").hidden = true;
+  });
+  document.getElementById("modal-detalle-asistencia").addEventListener("click", (e)=>{
+    if(e.target.id === "modal-detalle-asistencia") document.getElementById("modal-detalle-asistencia").hidden = true;
+  });
+  // Reimprimir una asignación de ruta puntual (ya impresa o no) sin pasar
+  // por el flujo masivo de "pendientes" — responde al pedido del usuario
+  // de poder reimprimir una que ya se había impreso.
+  document.getElementById("modal-detalle-asistencia-reimprimir").addEventListener("click", async ()=>{
+    const id = Number(document.getElementById("modal-detalle-asistencia-reimprimir").dataset.id);
+    const f = stateAsistencia.filas.find(x => x.id === id);
+    if(!f) return;
+    await imprimirAsignacionesDeRuta([f]);
+  });
+
+  // Construye y abre la ventana de impresión para un lote de asignaciones
+  // de ruta (reemplaza generarRutasPDF() del Apps Script). Reutilizada
+  // tanto por "Imprimir hojas de ruta" (lote de pendientes) como por
+  // "Reimprimir" (una sola fila, desde el detalle).
+  function construirHtmlAsignacionesRuta(filas, fechaHoja){
+    const hojas = filas.map(f => `
+      <section class="hoja">
+        <div class="marca"><span class="marca-mercado">Mercado</span><span class="marca-packs">Packs</span></div>
+        <h1>Asignación de ruta — ${fechaHoja.split("-").reverse().join("/")}</h1>
+        <div class="fila-dato"><span class="etiqueta">Repartidor</span><span class="valor">${f.nombre || "—"}</span></div>
+        <div class="fila-dato"><span class="etiqueta">Vehículo</span><span class="valor">${f.tipo_vehiculo || "—"}</span></div>
+        <div class="fila-dato"><span class="etiqueta">Turno</span><span class="valor">${f.turno ? f.turno.slice(0,5) : "—"}</span></div>
+        <div class="fila-dato"><span class="etiqueta">Zona</span><span class="valor">${f.zona || "—"}</span></div>
+        <div class="fila-dato"><span class="etiqueta">Localidades</span><span class="valor">${f.localidades || "—"}</span></div>
+        <div class="fila-dato"><span class="etiqueta">Observaciones</span><span class="valor">${f.observaciones || "—"}</span></div>
+      </section>
+    `).join("");
+    return `
+      <!doctype html><html><head><meta charset="utf-8"><title>Asignación de ruta</title>
+      <style>
+        body{font-family:"Nunito",Arial,sans-serif; color:#1a1710; margin:0;}
+        .hoja{page-break-after:always; padding:48px;}
+        .hoja:last-child{page-break-after:auto;}
+        .marca{font-size:15px; font-weight:800; margin-bottom:24px;}
+        .marca-mercado{color:#1a1710;} .marca-packs{color:#F6BE05;}
+        h1{font-size:19px; border-bottom:3px solid #F6BE05; padding-bottom:12px; margin:0 0 20px;}
+        .fila-dato{display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid #e3e0d6; font-size:15px;}
+        .fila-dato .etiqueta{color:#777; text-transform:uppercase; font-size:12px; letter-spacing:.03em;}
+        .fila-dato .valor{font-weight:700; font-size:17px;}
+      </style>
+      </head><body>${hojas}</body></html>
+    `;
+  }
+
+  // El confirm (cuando corresponde) va ANTES de abrir la ventana, no
+  // después: abre la ventana de impresión directamente y, al terminar de
+  // imprimir, marca "Impreso" sola (evento afterprint) — sin un segundo
+  // cartel de confirmación al volver a la pestaña (bug real 2026-11-15:
+  // el orden viejo confundía porque el cartel aparecía recién al volver).
+  async function imprimirAsignacionesDeRuta(filas){
+    if(!filas.length) return;
+    const fechaHoja = fechaAsistenciaActual();
+    const ventana = window.open("", "_blank");
+    if(!ventana){ await mostrarAviso("El navegador bloqueó la ventana de impresión. Habilitá los pop-ups para este sitio e intentá de nuevo."); return; }
+    ventana.document.open();
+    ventana.document.write(construirHtmlAsignacionesRuta(filas, fechaHoja));
+    ventana.document.close();
+
+    async function marcarImpresoYCerrar(){
+      const ids = filas.map(f => f.id);
+      const { error } = await sb.from("asistencia_diaria").update({ impreso: true }).in("id", ids);
+      if(error){ console.error("Error marcando impreso:", error); return; }
+      ids.forEach(id => { const fila = stateAsistencia.filas.find(f => f.id === id); if(fila) fila.impreso = true; });
+      renderAsistencia();
+    }
+    ventana.onafterprint = () => { marcarImpresoYCerrar(); ventana.close(); };
+    ventana.onload = () => { ventana.focus(); ventana.print(); };
+  }
+
+  document.getElementById("btn-imprimir-rutas").addEventListener("click", async ()=>{
+    const pendientes = stateAsistencia.filas.filter(f => f.asiste_soporte && !f.impreso);
+    if(!pendientes.length){ await mostrarAviso("No hay asignaciones de ruta pendientes de imprimir (todos los choferes que asisten ya tienen la suya impresa — podés reimprimir una puntual desde su ícono de Detalle)."); return; }
+    if(!(await mostrarConfirmacion(`¿Imprimir las ${pendientes.length} asignación(es) de ruta pendientes? Al terminar de imprimir se marcan automáticamente como "Impreso".`))) return;
+    await imprimirAsignacionesDeRuta(pendientes);
+  });
+
+  // "Cargar choferes de mañana": reemplaza prepararSiguienteDia() del
+  // Apps Script. A diferencia del Sheet, acá no hace falta archivar ni
+  // limpiar nada (cada fecha vive en su propia fila para siempre) — solo
+  // hay que sembrar mañana con el roster activo (y, si mañana es sábado,
+  // filtrado por "asiste sábado"). Usa upsert con ignoreDuplicates para
+  // poder tocar el botón de nuevo sin duplicar choferes ya cargados.
+  document.getElementById("btn-cargar-manana").addEventListener("click", async ()=>{
+    const manana = fechaART(1);
+    const diaSemana = diaDeSemanaAsistencia(manana);
+    if(diaSemana === 0){ await mostrarAviso("Mañana es domingo: no hay operación, no se carga nada."); return; }
+
+    const query = sb.from("choferes_roster").select("nombre,tipo_vehiculo,turno,zona,localidades,asiste_sabado,es_backup").eq("activo", true);
+    const { data: roster, error } = diaSemana === 6 ? await query.eq("asiste_sabado", true) : await query;
+    if(error){ console.error("Error cargando choferes_roster:", error); await mostrarAviso("No se pudo cargar el roster."); return; }
+    if(!roster || !roster.length){ await mostrarAviso("No hay choferes activos en el roster para cargar."); return; }
+
+    if(!(await mostrarConfirmacion(`¿Cargar ${roster.length} chofer(es) del roster para mañana (${manana.split("-").reverse().join("/")})? Los que ya estén cargados para esa fecha no se duplican.`))) return;
+
+    const filasNuevas = roster
+      .slice()
+      .sort((a, b) => {
+        if(!!a.es_backup !== !!b.es_backup) return a.es_backup ? 1 : -1; // backups al final
+        return (a.turno || "99:99").localeCompare(b.turno || "99:99");
+      })
+      .map(r => ({
+        fecha: manana, nombre: r.nombre, tipo_vehiculo: r.tipo_vehiculo,
+        turno: r.turno, zona: r.zona, localidades: r.localidades,
+      }));
+
+    const { error: errorInsert } = await sb.from("asistencia_diaria")
+      .upsert(filasNuevas, { onConflict: "fecha,nombre,turno", ignoreDuplicates: true });
+    if(errorInsert){ console.error("Error cargando choferes de mañana:", errorInsert); await mostrarAviso("No se pudo cargar a los choferes de mañana."); return; }
+
+    await mostrarAviso(`Listo. Se cargaron los choferes del roster para el ${manana.split("-").reverse().join("/")}. Cambiá la fecha de arriba a "Elegir fecha…" para verlos.`);
+  });
+
+  // ======================================================================
+  // Operación en vivo — pantalla de CONSULTA (no se edita acá, los checks
+  // se tildan en "Asistencia de Repartidores"). Agrupa la asistencia de
+  // hoy por zona y arma la lista de alertas, reemplaza lo que hoy se mira
+  // en producción. Reutiliza COLUMNAS_BOOL_ASISTENCIA / calcularEstadoChofer.
+  // ======================================================================
+  async function cargarOperacionVivo(){
+    const fecha = fechaART(0);
+    const { data: filas, error } = await sb.from("asistencia_diaria").select("*").eq("fecha", fecha).order("zona");
+    if(error){ console.error("Error cargando Operación en vivo:", error); return; }
+    renderOperacionVivo(filas || []);
+  }
+
+  function renderOperacionVivo(filas){
+    const total = filas.length;
+    const asistenciaSi = filas.filter(f => f.asiste_soporte).length;
+    const palletRetiradoSi = filas.filter(f => f.pallet_retirado_deposito).length;
+    const conLlegada = filas.filter(f => f.hora_llegada);
+    const fecha = fechaART(0);
+    const aTiempo = conLlegada.filter(f => {
+      const llegada = horaATimestamp(fecha, f.hora_llegada);
+      const turno = horaATimestamp(fecha, f.turno);
+      return llegada !== null && turno !== null && llegada <= turno + TOLERANCIA_PUNTUALIDAD_MIN * 60000;
+    });
+    const alertas = filas.filter(f => {
+      const estado = calcularEstadoChofer(f);
+      return estado.color === "rojo" || (f.tiene_fallidos_soporte && !f.fallidos_recibidos_deposito);
+    });
+
+    const tarjetas = [
+      { label: "Asistencia confirmada", valor: _fmtPct(_pct(asistenciaSi, total)) },
+      { label: "Llegada a tiempo", valor: _fmtPct(_pct(aTiempo.length, conLlegada.length)) },
+      { label: "Pallet retirado", valor: _fmtPct(_pct(palletRetiradoSi, total)) },
+      { label: "Alertas activas", valor: String(alertas.length) },
+    ];
+    document.getElementById("kpis-vivo").innerHTML = tarjetas.map(t => `
+      <div class="kpi-ruta"><div class="label">${t.label}</div><div class="valor">${t.valor}</div></div>
+    `).join("");
+
+    const zonasMap = new Map();
+    filas.forEach(f => {
+      const zona = f.zona || "Sin zona";
+      if(!zonasMap.has(zona)) zonasMap.set(zona, { total: 0, confirmados: 0, palletListo: 0, enRuta: 0, choferes: [] });
+      const z = zonasMap.get(zona);
+      z.total++;
+      if(f.asiste_soporte) z.confirmados++;
+      if(f.pallet_listo_deposito) z.palletListo++;
+      if(f.pallet_retirado_deposito) z.enRuta++;
+      z.choferes.push(f);
+    });
+    const zonasEl = document.getElementById("zonas-vivo");
+    if(!zonasMap.size){
+      zonasEl.innerHTML = `<p class="sin-datos">Sin choferes cargados para hoy.</p>`;
+    } else {
+      zonasEl.innerHTML = [...zonasMap.entries()].map(([zona, z]) => `
+        <div class="zona-card-vivo">
+          <h4>${zona}</h4>
+          <div class="zona-fila-vivo"><span>Confirmados</span><b>${z.confirmados} / ${z.total}</b></div>
+          <div class="zona-fila-vivo"><span>Pallet listo</span><b>${z.palletListo}</b></div>
+          <div class="zona-fila-vivo"><span>En ruta</span><b>${z.enRuta}</b></div>
+          <div class="zona-choferes-vivo">
+            ${z.choferes.map(f => {
+              const estado = calcularEstadoChofer(f);
+              return `
+                <div class="zona-chofer-fila">
+                  <div class="zc-fila-arriba">
+                    <span class="estado-icono-fila chico ${estado.color}"><i data-lucide="${estado.icono}"></i></span>
+                    <span class="zc-nombre">${f.nombre || "(sin nombre)"}</span>
+                    <span class="zc-dato">${f.tipo_vehiculo || "—"}</span>
+                    <span class="zc-dato">${f.turno ? f.turno.slice(0,5) : "—"}</span>
+                  </div>
+                  <div class="zc-estado-texto ${estado.color}">${estado.label}</div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    const alertasEl = document.getElementById("alertas-vivo");
+    if(!alertas.length){
+      alertasEl.innerHTML = `<p class="sin-datos">Sin alertas activas por ahora.</p>`;
+    } else {
+      alertasEl.innerHTML = alertas.map(f => {
+        const estado = calcularEstadoChofer(f);
+        const nivel = estado.color === "rojo" ? "rojo" : "amarillo";
+        const icono = nivel === "rojo" ? "alert-triangle" : "clock";
+        return `
+          <div class="alerta-item-vivo ${nivel}">
+            <i data-lucide="${icono}"></i>
+            <span class="nombre-chofer">${f.nombre || "(sin nombre)"}</span>&nbsp;— ${estado.label}
+          </div>
+        `;
+      }).join("");
+    }
+    lucide.createIcons();
+  }
+
+  document.getElementById("btn-agregar-chofer").addEventListener("click", async ()=>{
+    abrirModalAbm("Agregar chofer", [
+      { clave: "nombre", label: "Nombre", tipo: "texto" },
+      { clave: "tipo_vehiculo", label: "Vehículo", tipo: "select", opciones: abmVehiculos.obtenerActivos() },
+      { clave: "turno", label: "Turno", tipo: "select", opciones: abmTurnos.obtenerActivos() },
+      { clave: "zona", label: "Zona", tipo: "select", opciones: abmZonas.obtenerActivos() },
+      { clave: "localidades", label: "Localidades", tipo: "multiselect", opciones: abmLocalidades.obtenerActivos() },
+    ], {}, async (vals)=>{
+      if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+      if(vals.turno === "") vals.turno = null;
+      const fecha = fechaAsistenciaActual();
+      const { data, error } = await sb.from("asistencia_diaria")
+        .insert({ fecha, ...vals })
+        .select()
+        .single();
+      if(error){
+        console.error("Error agregando chofer:", error);
+        await mostrarAviso("No se pudo agregar (¿ya existe ese chofer para esta fecha y turno vacío?).");
+        return;
+      }
+      stateAsistencia.filas.push(data);
+      renderAsistencia();
+    });
+  });
+
+  // ======================================================================
+  // Administración — Choferes, Vehículos, Zonas, Turnos, Localidades,
+  // Alertas. Reemplaza "Listado de Choferes" / "Localidades" / "Parámetros"
+  // del Sheet. Patrón fijo (ver reglas_de_negocio.md sección 0): filas en
+  // modo lectura, columna "Opciones" a la derecha con editar/borrar, alta
+  // y edición abren el mismo modal.
+  // ======================================================================
+
+  document.querySelectorAll("#modo-admin .chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll("#modo-admin .chip").forEach(b=>b.classList.toggle("activo", b===btn));
+      const modo = btn.dataset.modoAdmin;
+      ["choferes","vehiculos","zonas","turnos","localidades","alertas","fallidos"].forEach(m=>{
+        document.getElementById("admin-" + m).hidden = m !== modo;
+      });
+      if(modo === "choferes") cargarAdminChoferes();
+      if(modo === "vehiculos") abmVehiculos.cargar();
+      if(modo === "zonas") abmZonas.cargar();
+      if(modo === "turnos") abmTurnos.cargar();
+      if(modo === "localidades") abmLocalidades.cargar();
+      if(modo === "alertas") cargarAdminAlertas();
+      if(modo === "fallidos"){ cargarAdminFallidosMapeo(); cargarAdminFallidosAlertas(); }
+    });
+  });
+
+  // ----- Modal genérico de alta/edición (ver reglas_de_negocio.md sección 0) -----
+  let modalAbmOnGuardar = null;
+  const comboInstanciasModal = [];
+
+  function abrirModalAbm(titulo, campos, valores, onGuardar){
+    document.getElementById("modal-abm-titulo").textContent = titulo;
+    const cont = document.getElementById("modal-abm-campos");
+    comboInstanciasModal.length = 0;
+
+    cont.innerHTML = campos.map(c => {
+      const val = (valores && valores[c.clave] != null) ? valores[c.clave] : "";
+      if(c.tipo === "checkbox"){
+        return `<label class="modal-abm-check"><input type="checkbox" class="cel-input" data-campo="${c.clave}" ${val ? "checked" : ""} /> ${c.label}</label>`;
+      }
+      if(c.tipo === "select"){
+        // Cada opción puede ser un string simple ("AUTO") o un par
+        // {valor, texto} cuando el texto a mostrar no puede ser el mismo
+        // dato que se guarda (p.ej. "— Sin turno —" para turno = "").
+        const opciones = (c.opciones || []).map(o =>{
+          const valor = (o && typeof o === "object") ? o.valor : o;
+          const texto = (o && typeof o === "object") ? o.texto : o;
+          return `<li data-valor="${valor}" aria-selected="${String(valor) === String(val)}">${texto}</li>`;
+        }).join("");
+        const actual = (c.opciones || []).find(o => String((o && typeof o === "object") ? o.valor : o) === String(val));
+        const textoActual = actual ? ((actual && typeof actual === "object") ? actual.texto : actual) : (val || "Elegir…");
+        return `<div class="modal-abm-label">${c.label}
+          <div class="combo-filtro" id="modal-campo-${c.clave}" data-valor-actual="${val || ""}">
+            <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">${textoActual}</button>
+            <ul class="combo-filtro-lista" role="listbox" hidden>${opciones}</ul>
+          </div>
+        </div>`;
+      }
+      if(c.tipo === "multiselect"){
+        const seleccionados = new Set(String(val || "").split(",").map(s => s.trim()).filter(Boolean));
+        const opciones = (c.opciones || []).map(o => `
+          <label class="check-columna" data-texto="${o.toLowerCase().replace(/"/g, "&quot;")}"><input type="checkbox" value="${o}" ${seleccionados.has(o) ? "checked" : ""}/> ${o}</label>
+        `).join("");
+        const textoActual = seleccionados.size ? [...seleccionados].join(", ") : "Elegir…";
+        return `<div class="modal-abm-label">${c.label}
+          <div class="combo-filtro" id="modal-campo-${c.clave}" data-valor-actual="${[...seleccionados].join(", ")}">
+            <button type="button" class="combo-filtro-btn" aria-haspopup="true" aria-expanded="false">${textoActual}</button>
+            <div class="panel-filtros-ruta panel-multiselect" hidden>
+              <input type="text" class="buscador-multiselect" placeholder="Buscar…" />
+              <div class="sin-resultados-multiselect sin-datos" hidden>Sin resultados.</div>
+              <div class="lista-multiselect">${opciones || '<span class="sin-datos">Sin localidades cargadas en Administración.</span>'}</div>
+            </div>
+          </div>
+        </div>`;
+      }
+      const tipoInput = c.tipo === "time" ? "time" : (c.tipo === "number" ? "number" : "text");
+      return `<label class="modal-abm-label">${c.label}
+        <input type="${tipoInput}" class="cel-input" data-campo="${c.clave}" value="${String(val).replace(/"/g, "&quot;")}" />
+      </label>`;
+    }).join("");
+
+    campos.filter(c => c.tipo === "select").forEach(c=>{
+      const contId = `modal-campo-${c.clave}`;
+      crearComboGenerico(contId, (valor)=>{
+        document.getElementById(contId).dataset.valorActual = valor;
+      });
+      comboInstanciasModal.push(contId);
+    });
+    campos.filter(c => c.tipo === "multiselect").forEach(c=>{
+      const contId = `modal-campo-${c.clave}`;
+      crearMultiSelectGenerico(contId);
+      comboInstanciasModal.push(contId);
+    });
+
+    document.getElementById("modal-abm").hidden = false;
+    modalAbmOnGuardar = onGuardar;
+  }
+
+  document.getElementById("modal-abm-cerrar").addEventListener("click", ()=>{
+    document.getElementById("modal-abm").hidden = true;
+  });
+  document.getElementById("modal-abm-guardar").addEventListener("click", async ()=>{
+    const datos = {};
+    document.querySelectorAll("#modal-abm-campos .cel-input").forEach(input=>{
+      datos[input.dataset.campo] = input.type === "checkbox" ? input.checked : (input.value || null);
+    });
+    comboInstanciasModal.forEach(contId=>{
+      const campo = contId.replace("modal-campo-", "");
+      datos[campo] = document.getElementById(contId).dataset.valorActual || null;
+    });
+    if(modalAbmOnGuardar) await modalAbmOnGuardar(datos);
+    document.getElementById("modal-abm").hidden = true;
+  });
+
+  // ----- Fábrica de ABM simple (id + nombre + activo): Vehículos, Zonas, Localidades -----
+  function crearAbmSimple({ tabla, tbodyId, buscarId, btnAgregarId, titulo, orden }){
+    let datos = [];
+    let busqueda = "";
+
+    async function cargar(){
+      const { data, error } = await sb.from(tabla).select("*").order(orden || "nombre");
+      if(error){ console.error(`Error cargando ${tabla}:`, error); return; }
+      datos = data || [];
+      render();
+    }
+
+    function render(){
+      let filas = datos;
+      if(busqueda) filas = filas.filter(f => (f.nombre || "").toLowerCase().includes(busqueda));
+      const tbody = document.getElementById(tbodyId);
+      if(!filas.length){
+        tbody.innerHTML = `<tr><td colspan="3" class="sin-datos">Sin ${titulo.toLowerCase()} cargados.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = filas.map(f => `
+        <tr class="${f.activo ? "" : "fila-inactiva"}" data-id="${f.id}">
+          <td>${f.nombre}${f.activo ? "" : '<span class="badge-inactivo">Inactivo</span>'}</td>
+          <td>${f.activo ? "Sí" : "No"}</td>
+          <td class="col-opciones">
+            <span class="opciones-fila">
+              <button type="button" class="btn-icono-chico editar" data-id="${f.id}" title="Editar"><i data-lucide="pencil"></i></button>
+              <button type="button" class="btn-icono-chico borrar" data-id="${f.id}" title="Borrar"><i data-lucide="trash-2"></i></button>
+            </span>
+          </td>
+        </tr>
+      `).join("");
+      lucide.createIcons();
+    }
+
+    function abrirAlta(){
+      abrirModalAbm(`Agregar ${titulo.toLowerCase()}`, [
+        { clave: "nombre", label: "Nombre", tipo: "texto" },
+        { clave: "activo", label: "Activo", tipo: "checkbox" },
+      ], { activo: true }, async (vals)=>{
+        if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+        const { data, error } = await sb.from(tabla).insert({ nombre: vals.nombre, activo: !!vals.activo }).select().single();
+        if(error){ await mostrarAviso("No se pudo guardar (¿ya existe ese nombre?)."); return; }
+        datos.push(data);
+        render();
+      });
+    }
+
+    function abrirEdicion(id){
+      const fila = datos.find(f => f.id === id);
+      if(!fila) return;
+      abrirModalAbm(`Editar ${titulo.toLowerCase()}`, [
+        { clave: "nombre", label: "Nombre", tipo: "texto" },
+        { clave: "activo", label: "Activo", tipo: "checkbox" },
+      ], fila, async (vals)=>{
+        if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+        const { error } = await sb.from(tabla).update({ nombre: vals.nombre, activo: !!vals.activo }).eq("id", id);
+        if(error){ await mostrarAviso("No se pudo guardar."); return; }
+        fila.nombre = vals.nombre; fila.activo = !!vals.activo;
+        render();
+      });
+    }
+
+    async function borrar(id){
+      if(!(await mostrarConfirmacion("¿Borrar este registro? No se puede deshacer."))) return;
+      const { error } = await sb.from(tabla).delete().eq("id", id);
+      if(error){ console.error(error); await mostrarAviso("No se pudo borrar."); return; }
+      datos = datos.filter(f => f.id !== id);
+      render();
+    }
+
+    document.getElementById(buscarId).addEventListener("input", (e)=>{
+      busqueda = e.target.value.toLowerCase();
+      render();
+    });
+    document.getElementById(btnAgregarId).addEventListener("click", abrirAlta);
+    document.getElementById(tbodyId).addEventListener("click", (e)=>{
+      const btnEditar = e.target.closest(".btn-icono-chico.editar");
+      const btnBorrar = e.target.closest(".btn-icono-chico.borrar");
+      if(btnEditar) abrirEdicion(Number(btnEditar.dataset.id));
+      if(btnBorrar) borrar(Number(btnBorrar.dataset.id));
+    });
+
+    return { cargar, obtenerActivos: () => datos.filter(f => f.activo).map(f => f.nombre) };
+  }
+
+  const abmVehiculos = crearAbmSimple({ tabla: "parametros_vehiculos", tbodyId: "tabla-admin-vehiculos", buscarId: "buscar-admin-vehiculos", btnAgregarId: "btn-agregar-vehiculo", titulo: "Vehículo" });
+  const abmZonas = crearAbmSimple({ tabla: "parametros_zonas", tbodyId: "tabla-admin-zonas", buscarId: "buscar-admin-zonas", btnAgregarId: "btn-agregar-zona", titulo: "Zona" });
+  const abmLocalidades = crearAbmSimple({ tabla: "parametros_localidades", tbodyId: "tabla-admin-localidades", buscarId: "buscar-admin-localidades", btnAgregarId: "btn-agregar-localidad", titulo: "Localidad" });
+
+  // Turnos usa "hora" en vez de "nombre" como valor principal — formulario propio, mismo patrón de modal.
+  let adminTurnosData = [];
+  async function cargarAdminTurnosReal(){
+    const { data, error } = await sb.from("parametros_turnos").select("*").order("hora");
+    if(error){ console.error("Error cargando parametros_turnos:", error); return; }
+    adminTurnosData = data || [];
+    renderAdminTurnosReal();
+  }
+  function renderAdminTurnosReal(){
+    const tbody = document.getElementById("tabla-admin-turnos");
+    if(!adminTurnosData.length){ tbody.innerHTML = `<tr><td colspan="3" class="sin-datos">Sin turnos cargados.</td></tr>`; return; }
+    tbody.innerHTML = adminTurnosData.map(t => `
+      <tr class="${t.activo ? "" : "fila-inactiva"}" data-id="${t.id}">
+        <td>${t.hora ? t.hora.slice(0,5) : "—"}${t.activo ? "" : '<span class="badge-inactivo">Inactivo</span>'}</td>
+        <td>${t.activo ? "Sí" : "No"}</td>
+        <td class="col-opciones">
+          <span class="opciones-fila">
+            <button type="button" class="btn-icono-chico editar" data-id="${t.id}" title="Editar"><i data-lucide="pencil"></i></button>
+            <button type="button" class="btn-icono-chico borrar" data-id="${t.id}" title="Borrar"><i data-lucide="trash-2"></i></button>
+          </span>
+        </td>
+      </tr>
+    `).join("");
+    lucide.createIcons();
+  }
+  document.getElementById("buscar-admin-turnos").addEventListener("input", renderAdminTurnosReal); // los turnos no se filtran por texto, campo queda para consistencia visual
+  document.getElementById("btn-agregar-turno").addEventListener("click", ()=>{
+    abrirModalAbm("Agregar turno", [
+      { clave: "hora", label: "Hora", tipo: "time" },
+      { clave: "activo", label: "Activo", tipo: "checkbox" },
+    ], { activo: true }, async (vals)=>{
+      if(!vals.hora){ await mostrarAviso("La hora es obligatoria."); return; }
+      const { data, error } = await sb.from("parametros_turnos").insert({ hora: vals.hora, activo: !!vals.activo }).select().single();
+      if(error){ await mostrarAviso("No se pudo guardar (¿ya existe ese horario?)."); return; }
+      adminTurnosData.push(data);
+      renderAdminTurnosReal();
+    });
+  });
+  document.getElementById("tabla-admin-turnos").addEventListener("click", async (e)=>{
+    const btnEditar = e.target.closest(".btn-icono-chico.editar");
+    const btnBorrar = e.target.closest(".btn-icono-chico.borrar");
+    if(btnEditar){
+      const id = Number(btnEditar.dataset.id);
+      const fila = adminTurnosData.find(f => f.id === id);
+      abrirModalAbm("Editar turno", [
+        { clave: "hora", label: "Hora", tipo: "time" },
+        { clave: "activo", label: "Activo", tipo: "checkbox" },
+      ], { hora: fila.hora ? fila.hora.slice(0,5) : "", activo: fila.activo }, async (vals)=>{
+        const { error } = await sb.from("parametros_turnos").update({ hora: vals.hora, activo: !!vals.activo }).eq("id", id);
+        if(error){ await mostrarAviso("No se pudo guardar."); return; }
+        fila.hora = vals.hora; fila.activo = !!vals.activo;
+        renderAdminTurnosReal();
+      });
+    }
+    if(btnBorrar){
+      const id = Number(btnBorrar.dataset.id);
+      if(!(await mostrarConfirmacion("¿Borrar este turno? No se puede deshacer."))) return;
+      const { error } = await sb.from("parametros_turnos").delete().eq("id", id);
+      if(error){ await mostrarAviso("No se pudo borrar."); return; }
+      adminTurnosData = adminTurnosData.filter(f => f.id !== id);
+      renderAdminTurnosReal();
+    }
+  });
+  const abmTurnos = {
+    cargar: cargarAdminTurnosReal,
+    obtenerActivos: () => adminTurnosData.filter(t => t.activo).map(t => t.hora.slice(0, 5)),
+  };
+
+  // ----- Choferes (roster): más campos, con combos de Vehículo/Zona referenciando sus propios ABM -----
+  let adminChoferesData = [];
+  let adminChoferesSearch = "";
+
+  async function cargarAdminChoferes(){
+    const [{ data, error }] = await Promise.all([
+      sb.from("choferes_roster").select("*").order("nombre"),
+      abmVehiculos.cargar(), abmZonas.cargar(),
+    ]);
+    if(error){ console.error("Error cargando choferes_roster:", error); return; }
+    adminChoferesData = data || [];
+    renderAdminChoferes();
+  }
+
+  function renderAdminChoferes(){
+    let filas = adminChoferesData;
+    if(adminChoferesSearch) filas = filas.filter(f => (f.nombre || "").toLowerCase().includes(adminChoferesSearch));
+    const tbody = document.getElementById("tabla-admin-choferes");
+    if(!filas.length){
+      tbody.innerHTML = `<tr><td colspan="9" class="sin-datos">Sin choferes. Usá "Agregar chofer" para empezar.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filas.map(f => `
+      <tr class="${f.activo ? "" : "fila-inactiva"}" data-id="${f.id}">
+        <td>${f.nombre}${f.es_backup ? ' <span class="texto-muted">(backup)</span>' : ""}</td>
+        <td>${f.tipo_vehiculo || "—"}</td>
+        <td>${f.turno ? f.turno.slice(0,5) : "—"}</td>
+        <td>${f.zona || "—"}</td>
+        <td>${f.localidades || "—"}</td>
+        <td>${f.observaciones || "—"}</td>
+        <td>${f.activo ? "Sí" : "No"}</td>
+        <td>${f.asiste_sabado ? "Sí" : "No"}</td>
+        <td class="col-opciones">
+          <span class="opciones-fila">
+            <button type="button" class="btn-icono-chico editar" data-id="${f.id}" title="Editar"><i data-lucide="pencil"></i></button>
+            <button type="button" class="btn-icono-chico borrar" data-id="${f.id}" title="Borrar"><i data-lucide="trash-2"></i></button>
+          </span>
+        </td>
+      </tr>
+    `).join("");
+    lucide.createIcons();
+  }
+
+  document.getElementById("buscar-admin-choferes").addEventListener("input", (e)=>{
+    adminChoferesSearch = e.target.value.toLowerCase();
+    renderAdminChoferes();
+  });
+
+  function abrirFormularioChofer(titulo, valores, onGuardar){
+    abrirModalAbm(titulo, [
+      { clave: "nombre", label: "Nombre", tipo: "texto" },
+      { clave: "tipo_vehiculo", label: "Vehículo", tipo: "select", opciones: abmVehiculos.obtenerActivos() },
+      { clave: "turno", label: "Turno", tipo: "select", opciones: [{ valor: "", texto: "— Sin turno —" }, ...abmTurnos.obtenerActivos()] },
+      { clave: "es_backup", label: "Es backup (sin turno fijo)", tipo: "checkbox" },
+      { clave: "zona", label: "Zona", tipo: "select", opciones: abmZonas.obtenerActivos() },
+      { clave: "localidades", label: "Localidades", tipo: "multiselect", opciones: abmLocalidades.obtenerActivos() },
+      { clave: "observaciones", label: "Observaciones", tipo: "texto" },
+      { clave: "activo", label: "Activo", tipo: "checkbox" },
+      { clave: "asiste_sabado", label: "Asiste sábado", tipo: "checkbox" },
+    ], valores, onGuardar);
+  }
+
+  document.getElementById("btn-agregar-chofer-roster").addEventListener("click", ()=>{
+    abrirFormularioChofer("Agregar chofer", { activo: true }, async (vals)=>{
+      if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+      if(vals.turno === "") vals.turno = null;
+      const { data, error } = await sb.from("choferes_roster").insert(vals).select().single();
+      if(error){ console.error(error); await mostrarAviso("No se pudo agregar (¿ya existe ese nombre?)."); return; }
+      adminChoferesData.push(data);
+      renderAdminChoferes();
+    });
+  });
+
+  document.getElementById("tabla-admin-choferes").addEventListener("click", async (e)=>{
+    const btnEditar = e.target.closest(".btn-icono-chico.editar");
+    const btnBorrar = e.target.closest(".btn-icono-chico.borrar");
+    if(btnEditar){
+      const id = Number(btnEditar.dataset.id);
+      const fila = adminChoferesData.find(f => f.id === id);
+      abrirFormularioChofer("Editar chofer", { ...fila, turno: fila.turno ? fila.turno.slice(0,5) : "" }, async (vals)=>{
+        if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+        if(vals.turno === "") vals.turno = null;
+        const { error } = await sb.from("choferes_roster").update(vals).eq("id", id);
+        if(error){ await mostrarAviso("No se pudo guardar."); return; }
+        Object.assign(fila, vals);
+        renderAdminChoferes();
+      });
+    }
+    if(btnBorrar){
+      const id = Number(btnBorrar.dataset.id);
+      if(!(await mostrarConfirmacion("¿Borrar este chofer del roster? No se puede deshacer."))) return;
+      const { error } = await sb.from("choferes_roster").delete().eq("id", id);
+      if(error){ await mostrarAviso("No se pudo borrar."); return; }
+      adminChoferesData = adminChoferesData.filter(f => f.id !== id);
+      renderAdminChoferes();
+    }
+  });
+
+  // ----- Umbrales de alerta: 4 filas fijas, solo se editan (no alta/baja) -----
+  let adminAlertasData = [];
+  async function cargarAdminAlertas(){
+    const { data, error } = await sb.from("parametros_alertas").select("*").order("clave");
+    if(error){ console.error("Error cargando parametros_alertas:", error); return; }
+    adminAlertasData = data || [];
+    renderAdminAlertas();
+  }
+  function renderAdminAlertas(){
+    const tbody = document.getElementById("tabla-admin-alertas");
+    tbody.innerHTML = adminAlertasData.map(a => `
+      <tr data-clave="${a.clave}">
+        <td>${a.clave}</td>
+        <td>${a.valor_minutos} min</td>
+        <td class="texto-muted">${a.descripcion || ""}</td>
+        <td class="col-opciones">
+          <span class="opciones-fila">
+            <button type="button" class="btn-icono-chico editar" data-clave="${a.clave}" title="Editar"><i data-lucide="pencil"></i></button>
+          </span>
+        </td>
+      </tr>
+    `).join("");
+    lucide.createIcons();
+  }
+  document.getElementById("tabla-admin-alertas").addEventListener("click", (e)=>{
+    const btn = e.target.closest(".btn-icono-chico.editar");
+    if(!btn) return;
+    const clave = btn.dataset.clave;
+    const fila = adminAlertasData.find(a => a.clave === clave);
+    abrirModalAbm(`Editar umbral: ${clave}`, [
+      { clave: "valor_minutos", label: "Minutos", tipo: "number" },
+    ], fila, async (vals)=>{
+      const valor = Number(vals.valor_minutos);
+      if(!valor || valor < 1){ await mostrarAviso("Tiene que ser un número mayor a 0."); return; }
+      const { error } = await sb.from("parametros_alertas").update({ valor_minutos: valor }).eq("clave", clave);
+      if(error){ await mostrarAviso("No se pudo guardar."); return; }
+      fila.valor_minutos = valor;
+      renderAdminAlertas();
+    });
+  });
 
   // Al cargar la página, y ante cualquier cambio de sesión (login/logout
   // en otra pestaña, token vencido, etc.), decide qué vista mostrar.

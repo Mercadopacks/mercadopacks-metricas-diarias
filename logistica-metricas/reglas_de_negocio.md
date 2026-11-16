@@ -12,7 +12,118 @@ implementan estas reglas por separado (no comparten código entre sí):
   calcula las franjas horarias y los agregados por su cuenta, replicando la
   misma lógica que el dashboard.
 
-Última actualización: 2026-10-24.
+Última actualización: 2026-11-15.
+
+---
+
+## 0. REGLAS DE DISEÑO OBLIGATORIAS — leer esto PRIMERO, antes de diseñar o tocar cualquier módulo/ventana nueva del ecosistema Supabase (`dashboard/beta/`)
+
+Esto es un estándar fijo, no una preferencia de un módulo puntual. Se
+definió el 2026-11-15 después de que el primer ABM de Administración
+(Choferes/Zonas/Turnos/Localidades) se armó mal — con celdas editables
+sueltas en la tabla en vez de un ABM de verdad — y hubo que rehacerlo
+entero. Para no repetir esa corrección en cada sesión nueva, de ahora en
+más **todo ABM** (listado de registros con alta/edición/borrado — no
+confundir con una pantalla operativa tipo "Asistencia de hoy", que sí es
+edición en vivo de una fila que varias personas van completando durante
+el día, ver nota al final) sigue esto:
+
+1. **Las filas de la tabla van en modo lectura** (texto plano), nunca con
+   `<input>` sueltos editables en cada celda. Ver, no editar ahí mismo.
+2. **Última columna = "Opciones"**, alineada a la derecha (`text-align:
+   right` en el `<th>` y los `<td>` de esa columna), con dos íconos
+   Lucide: lápiz (`edit` o `pencil`) para editar, tacho (`trash-2`) para
+   borrar. Nada de edición inline ni de un solo botón "borrar" suelto.
+3. **Alta y edición abren el mismo modal** (overlay + tarjeta centrada,
+   mismo patrón que ya existe para "Pendientes" en Seguimiento en ruta),
+   con los campos correspondientes precargados si es edición, y dos
+   botones: **Guardar** y **Cerrar**. Nunca un `prompt()` del navegador,
+   nunca una fila nueva editable aparece sola en la tabla.
+4. **Cualquier campo de opciones fijas usa un ABM propio, no texto
+   libre** — si algo se repite entre registros (vehículo, zona, turno,
+   localidad), es su propia tabla de parámetros con su propio ABM, y el
+   campo correspondiente en los demás formularios lo referencia con el
+   combo de `crearComboFiltro`/`crearComboGenerico` (nunca un `<input
+   type="text">` libre para un dato que en realidad viene de una lista
+   cerrada).
+5. **Alineación**: cada columna se alinea según su contenido (texto a la
+   izquierda, números/checkboxes centrados, "Opciones" siempre a la
+   derecha) — revisarlo visualmente en el preview local antes de avisar
+   que está listo, no asumir que el CSS por defecto ya alinea bien.
+6. **Buscador + botón de alta van en la misma fila**, alineados
+   horizontalmente (`.buscar-mas-filtrar`, ya con `align-items:center`
+   definido) — si se agrega un campo nuevo a esa fila, confirmar que no
+   rompa la alineación existente antes de pasar a revisión.
+7. **Cualquier elemento HTML nuevo que el `<script>` enganche con
+   `addEventListener` al nivel superior (no adentro de una función que se
+   llama después) tiene que estar en el documento ANTES del `<script>`**
+   (bug real 2026-11-15: el modal genérico `#modal-abm` se agregó al
+   final del `<body>`, DESPUÉS del `<script>` — como el HTML se parsea en
+   orden, en el momento en que el script corría ese elemento todavía no
+   existía, tiraba `Cannot read properties of null` ahí mismo, y por ser
+   un error no capturado cortaba TODO el resto del script top-level sin
+   ejecutarse — incluidas definiciones de `const` que se usaban en
+   funciones muy lejos de ahí, dando después el error, mucho más confuso,
+   de "no se puede acceder a X antes de su inicialización"). Antes de
+   agregar un modal, overlay o cualquier contenedor nuevo con sus propios
+   botones fijos, verificar que quede ANTES del `<script>` principal —
+   nunca después, ni siquiera "al final de todo, para no romper el
+   diseño".
+8. **Todo combo o popover flotante (un `<select>` propio, un panel
+   "Filtrar", un selector de columnas, etc.) se crea con el singleton
+   compartido `crearComboGenerico` / `crearPopoverGenerico` — nunca con su
+   propia variable `yaAbierto`/`hidden` aislada.** (bug real 2026-11-15:
+   el popover "Filtrar" y el popover "Columnas" de Asistencia de
+   Repartidores se habían armado cada uno con su propio
+   `document.addEventListener("click", ...)` para abrir/cerrar; al no
+   compartir el mismo "¿hay algo abierto ahora?", abrir uno no cerraba el
+   otro y terminaban los dos paneles dibujados en el mismo lugar, uno
+   encima del otro — se veía como un "borde doble/excesivo" donde se
+   pisaban). Antes de agregar un combo o popover nuevo, usar una de esas
+   dos funciones; si hace falta un tercer tipo de menú flotante, extender
+   el singleton en vez de crear uno nuevo en paralelo.
+9. **Cualquier botón con ícono + texto queda alineado horizontalmente en
+   una sola línea, nunca ícono arriba/texto abajo.** Esto lo da la regla
+   BASE sobre el selector `button` (`display:inline-flex; align-items:
+   center; gap:7px`) — nunca parchear un botón puntual agregándole su
+   propio `display:flex`; si algo se ve mal alineado, el problema real es
+   que esa regla base está siendo pisada en algún lado.
+10. **Todo combo/multiselect (`crearComboGenerico`/`crearMultiSelectGenerico`)
+    se comporta como un `<select>` nativo: clickear una opción SIEMPRE
+    cierra la lista (sin excepción, nunca queda abierta esperando otra
+    acción), y ↑/↓/Home/End/Enter/Escape navegan y confirman por teclado.**
+    Cualquier combo nuevo tiene que salir de esas dos funciones — no
+    escribir un open/close a mano que solo entienda el mouse.
+11. **Todo elemento de datos que el usuario podría querer copiar/pegar
+    (texto de una celda, de un detalle) puede seleccionarse con el mouse;
+    todo lo demás (botones, títulos, chips, íconos, menús) NO** —
+    `user-select:none` es el default en `body`, reactivado puntualmente
+    en inputs/textareas y en las clases de contenido real (ver regla base
+    en el `<style>`). Si un elemento nuevo de solo-lectura necesita
+    copiarse, sumarlo a esa lista en vez de desactivar la regla general.
+12. **Un `<label>` SOLO puede envolver el control de formulario que
+    literalmente le pertenece (un checkbox, un `<input>` de texto) —
+    NUNCA un combo propio, ni nada que tenga una lista/panel adentro.**
+    Causa real confirmada 2026-11-15 con un test automatizado (jsdom): el
+    stack trace mostraba `HTMLLabelElement._activationBehavior ->
+    sendClickToAssociatedNode` — es comportamiento ESTÁNDAR del navegador
+    (no un bug de un sitio en particular): cualquier click dentro de un
+    `<label>` se reenvía automáticamente a su primer control "labelable"
+    (acá, el botón que abre la lista), así que clickear una opción del
+    combo (que vive adentro del mismo `<label>`) volvía a abrir la lista
+    inmediatamente después de cerrarla. El texto descriptivo de un campo
+    con combo va en un `<div>` (clases `.modal-abm-label`,
+    `.panel-filtros-ruta-campo`), nunca en `<label>`. Antes de envolver
+    cualquier campo nuevo en un `<label>`, confirmar que su ÚNICO
+    contenido interactivo es el control real que ese label describe.
+
+**Excepción explícita — pantallas operativas "en vivo"** (ej. "Asistencia
+de hoy" en Asistencia de Repartidores): ahí varias personas van tildando
+casillas de la MISMA fila a lo largo del día — exigir abrir un modal por
+cada tilde sería impracticable. Esas pantallas siguen con edición inline
+en la tabla, a propósito. La diferencia es el tipo de pantalla: una es
+gestión de registros maestros (ABM), la otra es un tablero operativo del
+día. Ante la duda, preguntar antes de asumir cuál aplica.
 
 ---
 
@@ -2019,6 +2130,27 @@ que no las usa):**
     `height:36px` y el contenedor lleva `align-items:center` — así un
     input con decoración nativa (como el selector de fecha) nunca estira
     ni descentra a los botones de al lado.
+  - **La regla de `input[type="date"]` se define UNA sola vez, como
+    selector global de tipo (`input[type="date"]{...}`), no por cada id de
+    contenedor nuevo** (se repitió el mismo bug el mismo día, en el
+    selector de fecha de "Seguimiento en ruta", justo porque la primera
+    vez se había scopeado a `#rango-envios input[type="date"]` en vez de
+    a todos los `input[type="date"]` de la página). Cualquier datepicker
+    nuevo hereda el estilo correcto solo, sin tener que acordarse de
+    aplicarlo cada vez.
+  - **Filtro de columna con opciones fijas (no texto libre) = combo
+    propio, NUNCA `<select>` nativo** (bug real 2026-11-15: el `<select>`
+    de "Seguimiento en ruta" se veía bien cerrado, pero al abrirlo
+    mostraba la lista con la apariencia default del navegador — un
+    `<select>` no se puede re-estilar en ese estado en ningún navegador).
+    Se portó el mismo componente que ya usaba `dashboard_logistica.html`
+    (`crearComboFiltro()`/clases `.combo-filtro`, `.combo-filtro-btn`,
+    `.combo-filtro-lista`): un botón con texto + flecha, y una `<ul>`
+    propia posicionada debajo, con su propio hover/seleccionado en dorado,
+    que se cierra sola al clickear afuera (`cerrarComboGlobal()`). Un
+    filtro de texto libre (buscar por nombre, tracking, etc.) sigue usando
+    el `input[type="text"]` normal — esta regla es solo para filtros de
+    opciones fijas (zona, estado, rendimiento, etc.).
 
 **Estado actual:** `scripts/publicar_supabase.py` (ingesta probada contra
 un export real: 4107 filas, upsert idempotente por `id_interno`, trigger de
