@@ -2088,9 +2088,21 @@ que hoy vive en `dashboard_logistica.html` (Firestore) a una base nueva en
 Supabase, para poder construir módulos adicionales que comparten los
 mismos datos — primero Fallidos/Cambios (paquetes que el chofer debe
 rendir al día siguiente, con seguimiento de recibidos en planta), después
-Liquidaciones. Corre **en paralelo** al dashboard de producción, en su
-propia URL de GitHub Pages (`logistica-metricas/dashboard/beta/`), sin
+Liquidaciones. Corre **en paralelo** al dashboard de producción, sin
 tocar nada de lo que ya funciona, hasta que se decida migrar de verdad.
+
+**Separado en su propio repo desde 2026-11-16** ("Mercadopacks Sistema"):
+el archivo del dashboard (`index.html` + `assets/`) vive y se edita en el
+repo `Mercadopacks/Sistema` (GitHub Pages en
+`https://mercadopacks.github.io/Sistema/`), NO acá — ya no existe
+`logistica-metricas/dashboard/beta/` en este repo. Los scripts de
+ingesta (`publicar_supabase.py`, el workflow que lo automatiza, las
+migraciones SQL y la Edge Function `crear-usuario`) SÍ se quedan en este
+repo a propósito: comparten el login de LightData con
+`descarga_diaria.yml` y el `concurrency group` que evita que se pisen
+entre sí solo funciona dentro de un mismo repo de GitHub Actions — si se
+movieran también, reaparecería el choque real de Playwright ya visto
+(ver sección 20 / el workflow `publicar_supabase.yml` para el detalle).
 
 **Base de datos (Supabase, proyecto separado del de producción):**
 - `envios`: una fila por envío, clave real `id_interno` (columna `ID
