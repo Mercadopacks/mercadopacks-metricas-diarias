@@ -1984,14 +1984,18 @@ permisos, etc.) — no se duplica acá.
 `fecha_descarga.py` y `generar_reporte.py` de `scripts/` ahora tienen una
 **copia** en el repo Sistema (no comparten código real — son dos copias
 independientes). Si se corrige un bug de scraping/parseo de LightData en
-uno de los dos repos, hay que replicarlo a mano en el otro. Los dos
-pipelines (`descarga_diaria.yml` acá, `publicar_supabase.yml` en el otro
-repo) inician sesión en la MISMA cuenta de LightData por su cuenta —
-antes compartían un `concurrency group` de GitHub Actions que evitaba que
-chocaran (solo funciona dentro de un mismo repo); separados, la
-mitigación es de horario (cron jobs en minutos distintos, ver el workflow
-del otro repo), no una garantía — un timeout de Playwright esperando un
-campo de login/fecha puede deberse a esto.
+uno de los dos repos, hay que replicarlo a mano en el otro.
+
+**Cuentas de LightData separadas (2026-11-16):** el pipeline de Sistema
+(`publicar_supabase.yml`, en el otro repo) pasó a usar una cuenta de
+LightData **propia y distinta** de la que usa este repo
+(`descarga_diaria.yml`) — decisión del usuario, justamente para que las
+dos descargas nunca se crucen. Con esto, el pipeline de producción de
+este repo queda funcionando exactamente igual que antes de que existiera
+el proyecto Sistema: su `concurrency group` (`descarga-lightdata`) sigue
+sirviendo solo para lo que siempre sirvió (que las corridas "Hoy"/"Ayer"
+de ESTE repo no se pisen entre sí), nada más — no hay ninguna
+coordinación pendiente con el otro repo.
 
 ## 22. Changelog del dashboard de producción
 
