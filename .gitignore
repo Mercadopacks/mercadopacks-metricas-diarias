@@ -20,6 +20,10 @@ __pycache__/
 logistica-metricas/scripts/.env
 logistica-metricas/scripts/.env.*
 
+# Caché local del Supabase CLI (metadata de `supabase link`, versiones,
+# etc.) — se regenera solo, no aporta nada versionado.
+supabase/.temp/
+
 # Sistema operativo / editor
 .DS_Store
 Thumbs.db

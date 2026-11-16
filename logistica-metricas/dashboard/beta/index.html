@@ -72,6 +72,7 @@
   }
   #login-error{color:#c0392b; font-size:13px; min-height:18px; text-align:center;}
   .btn-primario{background:var(--dorado); color:var(--negro); padding:11px 16px; justify-content:center;}
+  .btn-primario:disabled{opacity:.6; cursor:not-allowed;}
 
   /* ===================== Botones de ícono (Lucide) ===================== */
   .btn-icono{
@@ -82,12 +83,20 @@
   .btn-icono svg{width:18px; height:18px;}
 
   /* ===================== App shell: sidebar + contenido ===================== */
-  #app-view{display:flex; min-height:100vh;}
+  /* height:100vh (fijo) + overflow:hidden en vez de min-height: el
+     sidebar tiene que quedar siempre fijo en pantalla, sin moverse con el
+     scroll de la página — antes, al no tener una altura tope acá, el
+     contenido de #contenido estiraba a #app-view entero y el navegador
+     scrolleaba todo junto (sidebar incluido) en vez de scrollear solo el
+     contenido (bug real reportado 2026-11-16). Ver #contenido y main más
+     abajo para el scroll interno real. */
+  html, body{height:100%;}
+  #app-view{display:flex; height:100vh; overflow:hidden;}
 
   .sidebar{
     width:var(--sidebar-w); flex-shrink:0; background:var(--negro); color:#fff;
     display:flex; flex-direction:column; transition:width .18s ease;
-    overflow:hidden;
+    overflow:hidden; height:100%;
   }
   .sidebar.colapsado{width:var(--sidebar-w-colapsado);}
 
@@ -113,9 +122,13 @@
   .nav-item{
     display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:8px;
     color:#ccc; background:transparent; text-align:left; font-weight:600; width:100%;
-    white-space:nowrap;
+    white-space:nowrap; font-size:13px;
   }
-  .nav-item svg{width:18px; height:18px; flex-shrink:0;}
+  /* Mismo tamaño de ícono/título que .nav-group-label ("Seguimiento de
+     Repartidores") — antes este quedaba más grande (18px/sin font-size
+     explícito = 16px del navegador) que el grupo, desparejo en el mismo
+     sidebar (pedido 2026-11-16). */
+  .nav-item svg{width:16px; height:16px; flex-shrink:0;}
   .nav-item:hover{background:#1e1e1e; color:#fff;}
   .nav-item.activo{background:var(--dorado); color:var(--negro);}
   .sidebar.colapsado .nav-item{justify-content:center; padding:12px 0;}
@@ -133,6 +146,15 @@
      (ver regla más abajo), así que ahí el grupo SÍ se resalta — es el
      único indicador visible de en qué sección se está. */
   .sidebar.colapsado .nav-group-label.activo{background:var(--dorado); color:var(--negro); font-weight:700;}
+  /* Grupo desplegable (pedido 2026-11-16): la flecha va pegada al borde
+     derecho (margin-left:auto empuja el resto) y rota según esté abierto
+     o cerrado el grupo — "cerrado" (.nav-group sin .abierto) es el estado
+     por defecto al entrar, para no abrir un sidebar lleno de sub-ítems de
+     entrada. */
+  .nav-group-label .chevron{margin-left:auto; width:14px; height:14px; transition:transform .15s ease;}
+  .nav-group.abierto .nav-group-label .chevron{transform:rotate(180deg);}
+  .nav-group:not(.abierto) .nav-subitem{display:none;}
+  .sidebar.colapsado .nav-group-label .chevron{display:none;}
   .nav-subitem{
     display:flex; align-items:center; gap:10px; padding:9px 14px 9px 30px; border-radius:8px;
     color:#ccc; background:transparent; text-align:left; font-weight:500; width:100%;
@@ -145,10 +167,14 @@
   .sidebar.colapsado .nav-subitem{display:none;}
   .sidebar.colapsado .nav-group-label{justify-content:center; padding:12px 0; margin-top:0;}
 
-  #contenido{flex:1; min-width:0;}
+  /* #contenido es columna (header fijo + main) con su PROPIO scroll en
+     `main` — el sidebar (altura fija, ver #app-view arriba) nunca entra en
+     ese scroll. */
+  #contenido{flex:1; min-width:0; height:100%; display:flex; flex-direction:column; overflow:hidden;}
   #contenido header{
     background:#fff; border-bottom:1px solid var(--borde); padding:0 24px;
     display:flex; align-items:center; justify-content:space-between; height:64px; box-sizing:border-box;
+    flex-shrink:0;
   }
   #contenido header h2{font-size:16px; margin:0; font-weight:700;}
   .header-titulo{display:flex; align-items:center; gap:10px;}
@@ -158,11 +184,28 @@
     display:flex; align-items:center; gap:7px; font-size:13px; color:#555; font-weight:600;
   }
   .usuario-logueado svg{width:16px; height:16px; color:#888;}
-  main{max-width:1500px; margin:0 auto; padding:24px 28px;}
+  main{max-width:1500px; margin:0 auto; padding:24px 28px; flex:1; overflow-y:auto; width:100%; box-sizing:border-box;}
   .card{
     background:#fff; border:1px solid var(--borde); border-radius:12px;
     padding:20px; margin-bottom:16px;
   }
+  /* Submenú de Configuración DENTRO de la pantalla (pedido 2026-11-16) —
+     un "sidebar" propio, liviano, para no confundirlo visualmente con el
+     sidebar principal (oscuro). */
+  .config-layout{display:flex; gap:20px; align-items:flex-start;}
+  .config-sidebar{
+    width:220px; flex-shrink:0; display:flex; flex-direction:column; gap:4px;
+    position:sticky; top:0;
+  }
+  .config-nav-item{
+    display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:8px;
+    background:#fff; border:1px solid var(--borde); color:var(--negro);
+    font-weight:600; font-size:13px; text-align:left; width:100%;
+  }
+  .config-nav-item svg{width:16px; height:16px; flex-shrink:0;}
+  .config-nav-item:hover{background:var(--fondo);}
+  .config-nav-item.activo{background:var(--dorado); border-color:var(--dorado);}
+  .config-contenido{flex:1; min-width:0;}
   .kpis{display:flex; gap:16px; flex-wrap:wrap;}
   .kpi{flex:1; min-width:160px;}
   .kpi .valor{font-size:28px; font-weight:800;}
@@ -241,6 +284,11 @@
   .combo-filtro-lista.abre-arriba{top:auto; bottom:calc(100% + 4px);}
   .panel-filtros-ruta.abre-arriba{top:auto; bottom:calc(100% + 6px);}
   .texto-muted{color:#777; font-size:12px;}
+  /* Fila de tabla que lleva a un detalle al clickear (ej. repartidor en
+     Fallidos y Cambios) — mismo trato visual que una fila "normal" pero
+     con feedback de que es clickeable. */
+  .fila-clicable{cursor:pointer;}
+  .fila-clicable:hover{background:var(--fondo);}
   th{color:#555; font-weight:700;}
   .proximamente{text-align:center; padding:60px 20px; color:#777;}
   .chips{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center;}
@@ -559,13 +607,16 @@
     </div>
     <nav>
       <button class="nav-item activo" data-vista="envios">
-        <i data-lucide="package"></i><span class="texto">Seguimiento de Envíos</span>
+        <i data-lucide="package"></i><span class="texto">Dashboard de Envíos</span>
       </button>
       <button class="nav-item" data-vista="fallidos">
         <i data-lucide="rotate-ccw"></i><span class="texto">Fallidos y Cambios</span>
       </button>
       <div class="nav-group">
-        <div class="nav-group-label"><i data-lucide="truck"></i><span class="texto">Seguimiento de Repartidores</span></div>
+        <div class="nav-group-label" data-grupo="repartidores">
+          <i data-lucide="truck"></i><span class="texto">Seguimiento de Repartidores</span>
+          <i data-lucide="chevron-down" class="chevron"></i>
+        </div>
         <button class="nav-subitem" data-vista="repa-ruta">
           <i data-lucide="map-pin"></i><span class="texto">Seguimiento en Ruta</span>
         </button>
@@ -576,8 +627,11 @@
           <i data-lucide="radio"></i><span class="texto">Operación en vivo</span>
         </button>
       </div>
+      <!-- Configuración (ex "Administración") — un solo ítem acá; el
+           submenú de ABMs vive DENTRO de la pantalla, no en este sidebar
+           (pedido 2026-11-16, ver .config-sidebar más abajo). -->
       <button class="nav-item" data-vista="admin">
-        <i data-lucide="settings"></i><span class="texto">Administración</span>
+        <i data-lucide="settings"></i><span class="texto">Configuración</span>
       </button>
     </nav>
   </div>
@@ -586,7 +640,7 @@
     <header>
       <div class="header-titulo">
         <i data-lucide="package" id="icono-titulo-vista"></i>
-        <h2 id="titulo-vista">Seguimiento de Envíos</h2>
+        <h2 id="titulo-vista">Dashboard de Envíos</h2>
       </div>
       <div class="header-derecha">
         <div class="usuario-logueado" id="usuario-logueado" title="Usuario conectado">
@@ -672,8 +726,47 @@
 
       <div id="vista-fallidos" hidden>
         <div class="mini-kpis" id="mini-kpis-fallidos"></div>
-        <div class="card">
-          <div class="card-header-acciones">
+        <div class="chips" id="modo-fallidos">
+          <button class="chip activo" data-modo-fallidos="repartidor">Por repartidor</button>
+          <button class="chip" data-modo-fallidos="todos">Todos</button>
+        </div>
+
+        <!-- Modo "Por repartidor" (default) — pantalla principal pedida
+             2026-11-16: quién tiene cambios/fallidos pendientes, priorizando
+             al repartidor con el caso más antiguo arriba. Se entra al
+             detalle de un repartidor clickeando su fila (ver
+             tabla-fallidos-por-chofer más abajo). -->
+        <div class="card" id="fallidos-chofer-lista-card">
+          <div class="chips" id="fallidos-repartidor-tipo-toolbar">
+            <button class="chip activo" data-tipo-fallido-repa="todos">Todos</button>
+            <button class="chip" data-tipo-fallido-repa="Fallido">Con fallidos</button>
+            <button class="chip" data-tipo-fallido-repa="Cambio">Con cambios</button>
+          </div>
+          <div class="buscar-mas-filtrar">
+            <input id="buscar-fallidos-repartidor" class="buscador" placeholder="Buscar repartidor…" />
+          </div>
+          <div class="tabla-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th class="ordenable" data-sort="nombre">Repartidor<span class="flecha">↕</span></th>
+                  <th class="ordenable" data-sort="fallidos">Fallidos<span class="flecha">↕</span></th>
+                  <th class="ordenable" data-sort="cambios">Cambios<span class="flecha">↕</span></th>
+                  <th class="ordenable" data-sort="total">Total pendiente<span class="flecha">↕</span></th>
+                  <th class="ordenable" data-sort="diasMax">Días en Demora<span class="flecha">↕</span></th>
+                </tr>
+              </thead>
+              <tbody id="tabla-fallidos-por-chofer"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" id="fallidos-card-principal">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;" id="fallidos-detalle-header" hidden>
+            <button type="button" class="btn-icono-chico" id="btn-volver-fallidos-chofer" title="Volver"><i data-lucide="arrow-left"></i></button>
+            <h3 id="fallidos-detalle-titulo" style="margin:0;"></h3>
+          </div>
+          <div class="card-header-acciones" id="fallidos-tipo-toolbar-wrap">
             <div class="chips" id="fallidos-tipo-toolbar">
               <button class="chip activo" data-tipo-fallido="todos">Todos</button>
               <button class="chip" data-tipo-fallido="Fallido">Fallidos</button>
@@ -683,7 +776,7 @@
               <button type="button" class="btn-filtrar" id="btn-agregar-duplicado"><i data-lucide="copy-plus"></i>Marcar duplicado</button>
             </div>
           </div>
-          <div class="buscar-mas-filtrar">
+          <div class="buscar-mas-filtrar" id="fallidos-buscar-wrap">
             <input id="buscar-fallidos" class="buscador" placeholder="Buscar por chofer, cliente, localidad o tracking…" />
             <div class="combo-filtro" id="popover-filtros-fallidos">
               <button type="button" class="btn-filtrar" aria-haspopup="true" aria-expanded="false">
@@ -728,10 +821,12 @@
               <thead>
                 <tr>
                   <th>Antigüedad</th>
+                  <th>Fecha MercadoPacks</th>
                   <th>Tracking</th>
                   <th>Cliente</th>
                   <th>Localidad</th>
                   <th>Chofer</th>
+                  <th>Origen</th>
                   <th>Estado</th>
                   <th>Tipo</th>
                   <th>Destino</th>
@@ -1009,17 +1104,35 @@
       </div>
 
       <div id="vista-admin" hidden>
-        <div class="chips" id="modo-admin">
-          <button class="chip activo" data-modo-admin="choferes">Choferes</button>
-          <button class="chip" data-modo-admin="vehiculos">Vehículos</button>
-          <button class="chip" data-modo-admin="zonas">Zonas</button>
-          <button class="chip" data-modo-admin="turnos">Turnos</button>
-          <button class="chip" data-modo-admin="localidades">Localidades</button>
-          <button class="chip" data-modo-admin="alertas">Umbrales de alerta</button>
-          <button class="chip" data-modo-admin="fallidos">Fallidos y Cambios</button>
+        <!-- Submenú de Configuración DENTRO de la pantalla (no en el
+             sidebar principal) — pedido 2026-11-16: un "sidebar" propio
+             acá adentro, con una bienvenida por defecto hasta que se
+             elija una sección (ver seleccionarModoAdmin()). -->
+        <div class="config-layout">
+          <aside class="config-sidebar">
+            <button class="config-nav-item" data-modo-admin-link="choferes"><i data-lucide="users"></i><span>Choferes</span></button>
+            <button class="config-nav-item" data-modo-admin-link="vehiculos"><i data-lucide="car"></i><span>Vehículos</span></button>
+            <button class="config-nav-item" data-modo-admin-link="zonas"><i data-lucide="map"></i><span>Zonas</span></button>
+            <button class="config-nav-item" data-modo-admin-link="turnos"><i data-lucide="clock"></i><span>Turnos</span></button>
+            <button class="config-nav-item" data-modo-admin-link="localidades"><i data-lucide="map-pinned"></i><span>Localidades</span></button>
+            <button class="config-nav-item" data-modo-admin-link="alertas"><i data-lucide="bell"></i><span>Umbrales de alerta</span></button>
+            <button class="config-nav-item" data-modo-admin-link="fallidos"><i data-lucide="rotate-ccw"></i><span>Fallidos y Cambios</span></button>
+            <button class="config-nav-item" data-modo-admin-link="usuarios"><i data-lucide="user-cog"></i><span>Usuarios</span></button>
+          </aside>
+          <div class="config-contenido">
+        <div id="admin-bienvenida" class="card">
+          <h3 style="margin-top:0;">Configuración</h3>
+          <p class="texto-muted" style="font-size:14px; line-height:1.6;">
+            Acá se administran los datos base del sistema: el roster de choferes y sus vehículos/turnos/zonas,
+            las localidades y zonas que usa el resto del dashboard para filtrar, los umbrales de alerta
+            (cuántos minutos/días antes de mostrar una demora como urgente), el mapeo de qué Estado de Lightdata
+            cuenta como Fallido o Cambio, y los usuarios que pueden entrar al sistema junto con qué vistas
+            puede ver cada uno.
+          </p>
+          <p class="texto-muted" style="font-size:14px;">Elegí una sección en el menú de la izquierda para empezar.</p>
         </div>
 
-        <div id="admin-choferes">
+        <div id="admin-choferes" hidden>
           <div class="card">
             <div class="buscar-mas-filtrar">
               <input id="buscar-admin-choferes" class="buscador" placeholder="Buscar chofer…" />
@@ -1130,6 +1243,33 @@
             </table>
           </div>
         </div>
+
+        <!-- Alta y permisos de usuarios (pedido 2026-11-16). El alta real
+             (crear la cuenta de Supabase Auth) pasa por la Edge Function
+             `crear-usuario` — ver supabase/functions/crear-usuario — nunca
+             se inserta directo en `perfiles_usuario` desde acá. -->
+        <div id="admin-usuarios" hidden>
+          <div class="card">
+            <div class="buscar-mas-filtrar">
+              <input id="buscar-admin-usuarios" class="buscador" placeholder="Buscar por nombre, email o sector…" />
+              <button type="button" class="btn-filtrar" id="btn-agregar-usuario"><i data-lucide="user-plus"></i>Agregar usuario</button>
+            </div>
+            <div class="tabla-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nombre</th><th>Apellido</th><th>Email</th><th>Sector</th>
+                    <th>Admin</th><th>Activo</th><th>Vistas permitidas</th>
+                    <th class="col-opciones">Opciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-admin-usuarios"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -1236,6 +1376,72 @@
     });
   }
 
+  // ===================== Sesión: perfil + permisos por vista =====================
+  // Claves válidas = keys del objeto `vistas` (ver más abajo). Debe
+  // mantenerse sincronizado a mano si se agrega una vista nueva — no hay
+  // forma de derivarlo antes de que `vistas` exista en el script.
+  const VISTAS_DISPONIBLES = [
+    { clave: "envios", label: "Dashboard de Envíos" },
+    { clave: "fallidos", label: "Fallidos y Cambios" },
+    { clave: "repa-ruta", label: "Seguimiento en Ruta" },
+    { clave: "repa-asistencia", label: "Asistencia de Repartidores" },
+    { clave: "repa-vivo", label: "Operación en vivo" },
+    { clave: "admin", label: "Administración" },
+  ];
+
+  const stateSesion = { perfil: null, bloqueado: false };
+
+  // Trae el perfil del usuario logueado (nombre/apellido/sector/vistas) y
+  // aplica el filtro del sidebar. Si todavía no tiene perfil cargado (ej.
+  // una cuenta que ya existía antes de este sistema de permisos, ver
+  // migración 2026-11-16_usuarios_y_permisos.sql), se deja pasar con
+  // acceso completo a propósito — fail-open para no bloquear a nadie el
+  // día del deploy; hay que darle de alta su perfil en Administración >
+  // Usuarios para que sus permisos queden realmente acotados.
+  async function cargarPerfilSesion(session){
+    stateSesion.bloqueado = false;
+    if(!session || !session.user){ stateSesion.perfil = null; return; }
+    const { data, error } = await sb.from("perfiles_usuario")
+      .select("*").eq("auth_user_id", session.user.id).maybeSingle();
+    if(error){ console.error("Error cargando perfil de sesión:", error); stateSesion.perfil = null; aplicarPermisosVistas(); return; }
+    stateSesion.perfil = data || null;
+    if(data && data.activo === false){
+      stateSesion.bloqueado = true;
+      await mostrarAviso("Tu usuario fue desactivado. Contactá a un administrador.");
+      await sb.auth.signOut();
+      mostrarLogin();
+      return;
+    }
+    aplicarPermisosVistas();
+  }
+
+  function puedeVerVista(clave){
+    const p = stateSesion.perfil;
+    if(!p) return true; // sin perfil todavía = fail-open, ver cargarPerfilSesion()
+    if(p.es_admin) return true;
+    return (p.vistas_permitidas || []).includes(clave);
+  }
+
+  function primeraVistaPermitida(){
+    if(puedeVerVista("envios")) return "envios";
+    const permitida = VISTAS_DISPONIBLES.find(v => puedeVerVista(v.clave));
+    return permitida ? permitida.clave : "envios";
+  }
+
+  // Oculta del sidebar los nav-item/nav-subitem cuya vista no está
+  // permitida. Solo esconde el botón — no hay routing por hash en este
+  // sistema, así que no hace falta bloquear nada más aparte de esto.
+  function aplicarPermisosVistas(){
+    document.querySelectorAll("[data-vista]").forEach(btn=>{
+      btn.hidden = !puedeVerVista(btn.dataset.vista);
+    });
+    const grupo = document.querySelector(".nav-group-label");
+    if(grupo){
+      const algunaVisible = ["repa-ruta","repa-asistencia","repa-vivo"].some(v => puedeVerVista(v));
+      grupo.hidden = !algunaVisible;
+    }
+  }
+
   const loginView = document.getElementById("login-view");
   const appView = document.getElementById("app-view");
   const loginForm = document.getElementById("login-form");
@@ -1269,13 +1475,15 @@
   // mientras alguien miraba otra sección).
   let appYaMostrada = false;
 
-  function mostrarApp(session){
+  async function mostrarApp(session){
     loginView.hidden = true;
     appView.hidden = false;
     document.getElementById("usuario-email").textContent = session && session.user ? session.user.email : "—";
     if(!appYaMostrada){
       appYaMostrada = true;
-      seleccionarVista("envios");
+      await cargarPerfilSesion(session);
+      if(stateSesion.bloqueado) return; // cargarPerfilSesion ya deslogueó
+      seleccionarVista(primeraVistaPermitida());
       // Vehículos/Zonas/Turnos/Localidades se usan en los modales de
       // "Agregar/Editar chofer" de Asistencia, aunque el usuario nunca
       // haya entrado a Administración.
@@ -1314,17 +1522,40 @@
   });
 
   const vistas = {
-    "envios": { titulo: "Seguimiento de Envíos", icono: "package", el: document.getElementById("vista-envios") },
+    "envios": { titulo: "Dashboard de Envíos", icono: "package", el: document.getElementById("vista-envios") },
     "fallidos": { titulo: "Fallidos y Cambios", icono: "rotate-ccw", el: document.getElementById("vista-fallidos") },
     "repa-ruta": { titulo: "Seguimiento en Ruta", icono: "map-pin", el: document.getElementById("vista-repa-ruta") },
     "repa-asistencia": { titulo: "Asistencia de Repartidores", icono: "clipboard-check", el: document.getElementById("vista-repa-asistencia") },
     "repa-vivo": { titulo: "Operación en vivo", icono: "radio", el: document.getElementById("vista-repa-vivo") },
-    "admin": { titulo: "Administración", icono: "settings", el: document.getElementById("vista-admin") },
+    "admin": { titulo: "Configuración", icono: "settings", el: document.getElementById("vista-admin") },
   };
+
+  // Qué sub-sección de Configuración está activa — "bienvenida" (default,
+  // pantalla explicativa) o una de los ABM/parámetros. Es el submenú
+  // DENTRO de la pantalla (.config-sidebar) el que decide esto, no el
+  // sidebar principal — ver seleccionarModoAdmin().
+  let modoAdminActual = "bienvenida";
+  const MODOS_ADMIN = ["bienvenida","choferes","vehiculos","zonas","turnos","localidades","alertas","fallidos","usuarios"];
+
+  function seleccionarModoAdmin(modo){
+    modoAdminActual = modo;
+    document.querySelectorAll(".config-nav-item").forEach(b=>b.classList.toggle("activo", b.dataset.modoAdminLink === modo));
+    MODOS_ADMIN.forEach(m=>{
+      document.getElementById("admin-" + m).hidden = m !== modo;
+    });
+    if(modo === "choferes") cargarAdminChoferes();
+    if(modo === "vehiculos") abmVehiculos.cargar();
+    if(modo === "zonas") abmZonas.cargar();
+    if(modo === "turnos") abmTurnos.cargar();
+    if(modo === "localidades") abmLocalidades.cargar();
+    if(modo === "alertas") cargarAdminAlertas();
+    if(modo === "fallidos"){ cargarAdminFallidosMapeo(); cargarAdminFallidosAlertas(); }
+    if(modo === "usuarios") cargarAdminUsuarios();
+  }
 
   function seleccionarVista(v){
     document.querySelectorAll(".nav-item, .nav-subitem").forEach(b=>b.classList.toggle("activo", b.dataset.vista === v));
-    document.querySelector(".nav-group-label").classList.toggle("activo", v === "repa-ruta" || v === "repa-asistencia" || v === "repa-vivo");
+    document.querySelector('.nav-group-label[data-grupo="repartidores"]').classList.toggle("activo", v === "repa-ruta" || v === "repa-asistencia" || v === "repa-vivo");
     Object.entries(vistas).forEach(([key, cfg])=>{ cfg.el.hidden = key !== v; });
     document.getElementById("titulo-vista").textContent = vistas[v].titulo;
     const iconoTitulo = document.querySelector(".header-titulo i, .header-titulo svg");
@@ -1340,7 +1571,7 @@
     if(v === "repa-ruta") cargarRuta();
     if(v === "repa-asistencia") cargarAsistencia();
     if(v === "repa-vivo") cargarOperacionVivo();
-    if(v === "admin") cargarAdminChoferes();
+    if(v === "admin") seleccionarModoAdmin(modoAdminActual);
   }
 
   document.querySelectorAll(".nav-item, .nav-subitem").forEach(btn=>{
@@ -1348,9 +1579,16 @@
   });
 
   // Clic en el grupo "Seguimiento de Repartidores" (el título, no un
-  // sub-ítem puntual) lleva a Seguimiento en Ruta por defecto, que es la
-  // única sección ya migrada.
-  document.querySelector(".nav-group-label").addEventListener("click", ()=> seleccionarVista("repa-ruta"));
+  // sub-ítem puntual) solo despliega/colapsa sus 3 sub-ítems — para entrar
+  // a una sección hay que clickear el sub-ítem en sí (pedido 2026-11-16).
+  document.querySelector('.nav-group-label[data-grupo="repartidores"]').addEventListener("click", ()=>{
+    document.querySelector('.nav-group-label[data-grupo="repartidores"]').closest(".nav-group").classList.toggle("abierto");
+  });
+
+  // Submenú de Configuración, DENTRO de la pantalla (ver .config-sidebar).
+  document.querySelectorAll(".config-nav-item").forEach(btn=>{
+    btn.addEventListener("click", ()=> seleccionarModoAdmin(btn.dataset.modoAdminLink));
+  });
 
   // "Hoy"/"ayer" en hora de Argentina (ART = UTC-3 fijo, sin horario de
   // verano — mismo criterio que el resto del proyecto, ver
@@ -1719,6 +1957,12 @@
   };
 
   const stateFallidos = {
+    // modo "repartidor" (default, pedido 2026-11-16): pantalla principal
+    // con un repartidor por fila y, al clickear uno, el detalle de sus
+    // casos pendientes ordenados por antigüedad. modo "todos": el listado
+    // plano de siempre, con los chips Fallido/Cambio para filtrar.
+    modo: "repartidor", choferSeleccionado: null, searchRepartidor: "", tipoRepartidor: "todos",
+    sortChofer: { key: "diasMax", dir: "desc" },
     tipo: "todos", destino: "", estatus: "pendiente", rangoDias: 30, search: "",
     mapeo: {}, umbrales: { pedir: 2, prioridad: 3, revisar: 5 }, filas: [],
   };
@@ -1730,7 +1974,11 @@
     return Math.round((hoy - d) / (24 * 60 * 60 * 1000));
   }
 
-  const COLUMNAS_ENVIO_FALLIDOS = "id_interno,tracking,cliente,localidad,cadete,estado,fecha_mercadopacks,logistica_inversa,observaciones";
+  // `raw` incluye "Origen" (Directo/ML/TNube/ML TURBO, ver diccionario_de_datos.md)
+  // tal cual lo trae Lightdata — no está promovido a columna propia como
+  // logistica_inversa/observaciones porque acá solo se muestra, no se
+  // filtra ni se usa para clasificar.
+  const COLUMNAS_ENVIO_FALLIDOS = "id_interno,tracking,cliente,localidad,cadete,estado,fecha_mercadopacks,logistica_inversa,observaciones,raw";
 
   // El Estado de Lightdata NO define un Cambio (describe el paquete NUEVO
   // que se entrega, no si el chofer ya devolvió el producto ORIGINAL) — la
@@ -1854,16 +2102,96 @@
     `).join("");
   }
 
+  // Resumen por repartidor para el modo "Por repartidor" — solo casos
+  // pendientes (un repartidor ya no tiene nada "para rendir" una vez
+  // cerrado el caso), agrupados por chofer, ordenados por el caso más
+  // antiguo de cada uno (el repartidor con el caso más urgente va primero).
+  function renderFallidosPorChofer(){
+    const pendientes = stateFallidos.filas.filter(f => f.estatus === "pendiente");
+    const porChofer = {};
+    pendientes.forEach(f => {
+      const nombre = f.envio.cadete || "Sin chofer";
+      const g = porChofer[nombre] || (porChofer[nombre] = { nombre, fallidos: 0, cambios: 0, diasMax: 0 });
+      if(f.tipo === "Cambio") g.cambios++; else g.fallidos++;
+      if(f.dias !== null && f.dias > g.diasMax) g.diasMax = f.dias;
+    });
+    let grupos = Object.values(porChofer).map(g => ({ ...g, total: g.fallidos + g.cambios }));
+
+    if(stateFallidos.tipoRepartidor === "Fallido") grupos = grupos.filter(g => g.fallidos > 0);
+    else if(stateFallidos.tipoRepartidor === "Cambio") grupos = grupos.filter(g => g.cambios > 0);
+
+    const q = stateFallidos.searchRepartidor;
+    if(q) grupos = grupos.filter(g => g.nombre.toLowerCase().includes(q));
+
+    const { key, dir } = stateFallidos.sortChofer;
+    document.querySelectorAll("#fallidos-chofer-lista-card th.ordenable").forEach(th=>{
+      const flecha = th.querySelector(".flecha");
+      if(th.dataset.sort === key){ flecha.textContent = dir === "asc" ? "▲" : "▼"; flecha.classList.add("activa"); }
+      else { flecha.textContent = "↕"; flecha.classList.remove("activa"); }
+    });
+    const mul = dir === "asc" ? 1 : -1;
+    grupos.sort((a, b) => {
+      const va = a[key], vb = b[key];
+      if(typeof va === "string") return va.localeCompare(vb) * mul;
+      return (va - vb) * mul;
+    });
+
+    const tbody = document.getElementById("tabla-fallidos-por-chofer");
+    if(!grupos.length){
+      tbody.innerHTML = `<tr><td colspan="5" class="sin-datos">Sin casos pendientes.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = grupos.map(g => {
+      const alerta = alertaDiasFallido(g.diasMax);
+      return `
+      <tr class="fila-clicable" data-chofer="${g.nombre.replace(/"/g, "&quot;")}">
+        <td>${g.nombre}</td>
+        <td>${g.fallidos}</td>
+        <td>${g.cambios}</td>
+        <td>${g.total}</td>
+        <td><span class="badge ${alerta.color}">${g.diasMax} d · ${alerta.label}</span></td>
+      </tr>`;
+    }).join("");
+  }
+
+  // Muestra/oculta las tarjetas según el modo actual y si hay un
+  // repartidor seleccionado — ver stateFallidos.modo/choferSeleccionado.
+  function aplicarModoFallidos(){
+    const enRepartidor = stateFallidos.modo === "repartidor";
+    const detalle = enRepartidor && stateFallidos.choferSeleccionado;
+    document.getElementById("fallidos-chofer-lista-card").hidden = !enRepartidor || !!detalle;
+    document.getElementById("fallidos-card-principal").hidden = enRepartidor && !detalle;
+    document.getElementById("fallidos-detalle-header").hidden = !detalle;
+    document.getElementById("fallidos-tipo-toolbar-wrap").hidden = !!detalle;
+    document.getElementById("fallidos-buscar-wrap").hidden = !!detalle;
+    if(detalle){
+      document.getElementById("fallidos-detalle-titulo").textContent = stateFallidos.choferSeleccionado;
+    }
+  }
+
   function renderFallidos(){
+    aplicarModoFallidos();
+    if(stateFallidos.modo === "repartidor" && !stateFallidos.choferSeleccionado){
+      renderKpisFallidos(stateFallidos.filas);
+      renderFallidosPorChofer();
+      return;
+    }
+
     let filas = stateFallidos.filas;
-    if(stateFallidos.tipo !== "todos") filas = filas.filter(f => f.tipo === stateFallidos.tipo);
-    if(stateFallidos.destino) filas = filas.filter(f => f.destino === stateFallidos.destino);
-    if(stateFallidos.estatus === "pendiente") filas = filas.filter(f => f.estatus === "pendiente");
-    else if(stateFallidos.estatus === "cerrados") filas = filas.filter(f => f.estatus !== "pendiente");
+    if(stateFallidos.modo === "repartidor"){
+      // Detalle de un repartidor: siempre sus casos pendientes, sin los
+      // filtros de Tipo/Destino/Estatus de la pestaña "Todos".
+      filas = filas.filter(f => (f.envio.cadete || "Sin chofer") === stateFallidos.choferSeleccionado && f.estatus === "pendiente");
+    } else {
+      if(stateFallidos.tipo !== "todos") filas = filas.filter(f => f.tipo === stateFallidos.tipo);
+      if(stateFallidos.destino) filas = filas.filter(f => f.destino === stateFallidos.destino);
+      if(stateFallidos.estatus === "pendiente") filas = filas.filter(f => f.estatus === "pendiente");
+      else if(stateFallidos.estatus === "cerrados") filas = filas.filter(f => f.estatus !== "pendiente");
+    }
 
-    renderKpisFallidos(filas);
+    renderKpisFallidos(stateFallidos.filas);
 
-    const q = stateFallidos.search;
+    const q = stateFallidos.modo === "repartidor" ? "" : stateFallidos.search;
     if(q){
       filas = filas.filter(f =>
         (f.envio.cadete || "").toLowerCase().includes(q) ||
@@ -1876,20 +2204,23 @@
 
     const tbody = document.getElementById("tabla-fallidos");
     if(!filas.length){
-      tbody.innerHTML = `<tr><td colspan="11" class="sin-datos">Sin casos en este filtro.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" class="sin-datos">Sin casos en este filtro.</td></tr>`;
       return;
     }
     tbody.innerHTML = filas.map(f => {
       const alerta = alertaDiasFallido(f.dias);
       const idSeg = f.seguimiento ? f.seguimiento.id : "";
       const idInterno = f.envio.id_interno;
+      const origen = (f.envio.raw && f.envio.raw["Origen"]) || "—";
       return `
       <tr>
         <td><span class="badge ${alerta.color}">${f.dias === null ? "—" : f.dias + " d"} · ${alerta.label}</span></td>
+        <td>${f.envio.fecha_mercadopacks || "—"}</td>
         <td>${f.envio.tracking || "—"}</td>
         <td>${f.envio.cliente || "—"}</td>
         <td>${f.envio.localidad || "—"}</td>
         <td>${f.envio.cadete || "—"}</td>
+        <td>${origen}</td>
         <td>${f.envio.estado || "—"}${f.duplicado ? ' <span class="badge gris">Duplicado</span>' : ""}</td>
         <td>${f.tipo}</td>
         <td>${f.destino}</td>
@@ -1910,6 +2241,46 @@
       renderFallidos();
     });
   });
+  document.querySelectorAll("#modo-fallidos .chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll("#modo-fallidos .chip").forEach(b=>b.classList.toggle("activo", b===btn));
+      stateFallidos.modo = btn.dataset.modoFallidos;
+      stateFallidos.choferSeleccionado = null;
+      aplicarModoFallidos();
+      renderFallidos();
+    });
+  });
+  document.getElementById("buscar-fallidos-repartidor").addEventListener("input", (e)=>{
+    stateFallidos.searchRepartidor = e.target.value.trim().toLowerCase();
+    renderFallidosPorChofer();
+  });
+  document.querySelectorAll("#fallidos-repartidor-tipo-toolbar .chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll("#fallidos-repartidor-tipo-toolbar .chip").forEach(b=>b.classList.toggle("activo", b===btn));
+      stateFallidos.tipoRepartidor = btn.dataset.tipoFallidoRepa;
+      renderFallidosPorChofer();
+    });
+  });
+  document.querySelectorAll("#fallidos-chofer-lista-card th.ordenable").forEach(th=>{
+    th.addEventListener("click", ()=>{
+      const key = th.dataset.sort;
+      if(stateFallidos.sortChofer.key === key) stateFallidos.sortChofer.dir = stateFallidos.sortChofer.dir === "asc" ? "desc" : "asc";
+      else stateFallidos.sortChofer = { key, dir: "desc" };
+      renderFallidosPorChofer();
+    });
+  });
+  document.getElementById("tabla-fallidos-por-chofer").addEventListener("click", (e)=>{
+    const fila = e.target.closest("tr[data-chofer]");
+    if(!fila) return;
+    stateFallidos.choferSeleccionado = fila.dataset.chofer;
+    aplicarModoFallidos();
+    renderFallidos();
+  });
+  document.getElementById("btn-volver-fallidos-chofer").addEventListener("click", ()=>{
+    stateFallidos.choferSeleccionado = null;
+    aplicarModoFallidos();
+    renderFallidos();
+  });
   document.getElementById("buscar-fallidos").addEventListener("input", (e)=>{
     stateFallidos.search = e.target.value.trim().toLowerCase();
     renderFallidos();
@@ -1926,7 +2297,7 @@
     if(!fila) return;
     abrirModalAbm(`Caso: ${fila.envio.tracking || idInterno}`, [
       { clave: "estatus", label: "Estatus", tipo: "select", opciones: Object.entries(ESTATUS_LABEL_FALLIDOS).map(([valor, texto]) => ({ valor, texto })) },
-      { clave: "precio_descuento", label: "Precio a descontar (si aplica)", tipo: "number" },
+      { clave: "precio_descuento", label: "Precio a descontar", tipo: "number", mostrarSi: (v) => v.estatus === "descontar" },
       { clave: "motivo_cierre", label: "Motivo de cierre", tipo: "texto" },
       { clave: "observaciones", label: "Observaciones", tipo: "texto" },
     ], fila.seguimiento || { estatus: "pendiente" }, async (vals)=>{
@@ -1943,7 +2314,7 @@
       } else {
         ({ error } = await sb.from("fallidos_seguimiento").insert({ id_interno: idInterno, duplicado: false, ...payload }));
       }
-      if(error){ console.error(error); await mostrarAviso("No se pudo guardar."); return; }
+      if(error){ console.error(error); await mostrarAviso("No se pudo guardar."); return false; }
       cargarFallidos();
     });
   }
@@ -2049,9 +2420,9 @@
   });
   document.getElementById("btn-agregar-fallidos-mapeo").addEventListener("click", ()=>{
     abrirFormularioMapeoFallido("Agregar estado", { tipo: "Fallido", destino: "Vuelve a salir" }, async (vals)=>{
-      if(!vals.estado || !vals.tipo || !vals.destino){ await mostrarAviso("Completá los 3 campos."); return; }
+      if(!vals.estado || !vals.tipo || !vals.destino){ await mostrarAviso("Completá los 3 campos."); return false; }
       const { data, error } = await sb.from("parametros_fallidos_mapeo").insert(vals).select().single();
-      if(error){ await mostrarAviso("No se pudo guardar (¿ese estado ya está mapeado?)."); return; }
+      if(error){ await mostrarAviso("No se pudo guardar (¿ese estado ya está mapeado?)."); return false; }
       adminFallidosMapeoData.push(data);
       renderAdminFallidosMapeo();
     });
@@ -2064,7 +2435,7 @@
       const fila = adminFallidosMapeoData.find(f => f.id === id);
       abrirFormularioMapeoFallido("Editar estado", fila, async (vals)=>{
         const { error } = await sb.from("parametros_fallidos_mapeo").update(vals).eq("id", id);
-        if(error){ await mostrarAviso("No se pudo guardar."); return; }
+        if(error){ await mostrarAviso("No se pudo guardar."); return false; }
         Object.assign(fila, vals);
         renderAdminFallidosMapeo();
       });
@@ -2111,15 +2482,147 @@
       { clave: "valor_dias", label: "Días", tipo: "number" },
     ], fila, async (vals)=>{
       const valor = Number(vals.valor_dias);
-      if(!valor || valor < 1){ await mostrarAviso("Tiene que ser un número mayor a 0."); return; }
+      if(!valor || valor < 1){ await mostrarAviso("Tiene que ser un número mayor a 0."); return false; }
       const { error } = await sb.from("parametros_alertas_fallidos").update({ valor_dias: valor }).eq("clave", clave);
-      if(error){ await mostrarAviso("No se pudo guardar."); return; }
+      if(error){ await mostrarAviso("No se pudo guardar."); return false; }
       fila.valor_dias = valor;
       renderAdminFallidosAlertas();
     });
   });
 
   // ======================================================================
+  // Administración > Usuarios (alta + permisos por vista, 2026-11-16)
+  // ======================================================================
+  let adminUsuariosData = [];
+  let adminUsuariosBusqueda = "";
+
+  // Convierte la lista de claves guardadas (ej. ["envios","fallidos"]) a
+  // los labels legibles que usa el combo multiselect del modal, y
+  // viceversa — el campo "multiselect" del modal genérico trabaja con
+  // strings (el label es también el value), no con pares {clave,label}
+  // como el campo "select", así que la conversión se hace acá en vez de
+  // tocar ese componente compartido.
+  function clavesAVistasLabel(claves){
+    return (claves || []).map(c => (VISTAS_DISPONIBLES.find(v => v.clave === c) || {}).label).filter(Boolean);
+  }
+  function labelsAVistasClave(labels){
+    return (labels || []).map(l => (VISTAS_DISPONIBLES.find(v => v.label === l) || {}).clave).filter(Boolean);
+  }
+
+  async function cargarAdminUsuarios(){
+    const { data, error } = await sb.from("perfiles_usuario").select("*").order("nombre");
+    if(error){ console.error("Error cargando perfiles_usuario:", error); return; }
+    adminUsuariosData = data || [];
+    renderAdminUsuarios();
+  }
+
+  function renderAdminUsuarios(){
+    const q = adminUsuariosBusqueda;
+    let filas = adminUsuariosData;
+    if(q){
+      filas = filas.filter(u =>
+        (u.nombre || "").toLowerCase().includes(q) ||
+        (u.apellido || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q) ||
+        (u.sector || "").toLowerCase().includes(q)
+      );
+    }
+    const tbody = document.getElementById("tabla-admin-usuarios");
+    if(!filas.length){
+      tbody.innerHTML = `<tr><td colspan="8" class="sin-datos">Sin usuarios cargados.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filas.map(u => `
+      <tr data-id="${u.id}">
+        <td>${u.nombre}</td>
+        <td>${u.apellido}</td>
+        <td>${u.email}</td>
+        <td class="texto-muted">${u.sector || "—"}</td>
+        <td>${u.es_admin ? '<span class="badge verde">Sí</span>' : '<span class="badge gris">No</span>'}</td>
+        <td>${u.activo ? '<span class="badge verde">Sí</span>' : '<span class="badge rojo">No</span>'}</td>
+        <td class="texto-muted">${u.es_admin ? "Todas (admin)" : (clavesAVistasLabel(u.vistas_permitidas).join(", ") || "—")}</td>
+        <td class="col-opciones">
+          <button type="button" class="btn-icono-chico editar" data-id="${u.id}" title="Editar"><i data-lucide="pencil"></i></button>
+        </td>
+      </tr>
+    `).join("");
+    lucide.createIcons();
+  }
+
+  document.getElementById("buscar-admin-usuarios").addEventListener("input", (e)=>{
+    adminUsuariosBusqueda = e.target.value.trim().toLowerCase();
+    renderAdminUsuarios();
+  });
+
+  document.getElementById("tabla-admin-usuarios").addEventListener("click", (e)=>{
+    const btn = e.target.closest(".btn-icono-chico.editar");
+    if(!btn) return;
+    const usuario = adminUsuariosData.find(u => String(u.id) === btn.dataset.id);
+    if(!usuario) return;
+    abrirModalAbm(`Editar usuario: ${usuario.nombre} ${usuario.apellido}`, [
+      { clave: "nombre", label: "Nombre", tipo: "texto" },
+      { clave: "apellido", label: "Apellido", tipo: "texto" },
+      { clave: "sector", label: "Sector", tipo: "texto" },
+      { clave: "es_admin", label: "Administrador (ve todas las vistas)", tipo: "checkbox" },
+      { clave: "activo", label: "Activo (desmarcar bloquea su acceso)", tipo: "checkbox" },
+      { clave: "vistas", label: "Vistas permitidas (si no es admin)", tipo: "multiselect", opciones: VISTAS_DISPONIBLES.map(v => v.label) },
+    ], { ...usuario, vistas: clavesAVistasLabel(usuario.vistas_permitidas).join(", ") }, async (vals)=>{
+      const payload = {
+        nombre: vals.nombre, apellido: vals.apellido, sector: vals.sector || null,
+        es_admin: !!vals.es_admin, activo: !!vals.activo,
+        vistas_permitidas: labelsAVistasClave(String(vals.vistas || "").split(",").map(s => s.trim()).filter(Boolean)),
+      };
+      const { error } = await sb.from("perfiles_usuario").update(payload).eq("id", usuario.id);
+      if(error){ console.error(error); await mostrarAviso("No se pudo guardar — ¿tu usuario tiene permiso de administrador?"); return false; }
+      await cargarAdminUsuarios();
+      // Si el usuario editado es el que está logueado ahora mismo, el
+      // sidebar tiene que reflejar el cambio sin esperar a recargar.
+      if(stateSesion.perfil && stateSesion.perfil.id === usuario.id){
+        stateSesion.perfil = { ...stateSesion.perfil, ...payload };
+        aplicarPermisosVistas();
+      }
+    });
+  });
+
+  document.getElementById("btn-agregar-usuario").addEventListener("click", ()=>{
+    abrirModalAbm("Agregar usuario", [
+      { clave: "nombre", label: "Nombre", tipo: "texto" },
+      { clave: "apellido", label: "Apellido", tipo: "texto" },
+      { clave: "email", label: "Email", tipo: "texto" },
+      { clave: "password", label: "Contraseña temporal (mínimo 6 caracteres)", tipo: "texto" },
+      { clave: "sector", label: "Sector", tipo: "texto" },
+      { clave: "vistas", label: "Vistas permitidas", tipo: "multiselect", opciones: VISTAS_DISPONIBLES.map(v => v.label) },
+    ], {}, async (vals)=>{
+      if(!vals.nombre || !vals.apellido || !vals.email || !vals.password){
+        await mostrarAviso("Nombre, Apellido, Email y Contraseña son obligatorios.");
+        return false;
+      }
+      const { data: sesionActual } = await sb.auth.getSession();
+      const token = sesionActual && sesionActual.session ? sesionActual.session.access_token : null;
+      if(!token){ await mostrarAviso("Tu sesión expiró — volvé a iniciar sesión."); return false; }
+
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/crear-usuario`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
+          nombre: vals.nombre, apellido: vals.apellido, email: vals.email, password: vals.password,
+          sector: vals.sector || null,
+          vistas_permitidas: labelsAVistasClave(String(vals.vistas || "").split(",").map(s => s.trim()).filter(Boolean)),
+        }),
+      });
+      const resultado = await resp.json().catch(() => ({}));
+      if(!resp.ok){
+        await mostrarAviso(resultado.error || "No se pudo crear el usuario.");
+        return false;
+      }
+      await cargarAdminUsuarios();
+      await mostrarAviso("Usuario creado. Ya puede loguearse con el email y la contraseña que ingresaste.");
+    });
+  });
   // Seguimiento de Repartidores — Seguimiento en ruta
   // ======================================================================
 
@@ -3074,10 +3577,10 @@
       { clave: "zona", label: "Zona", tipo: "select", opciones: abmZonas.obtenerActivos() },
       { clave: "localidades", label: "Localidades", tipo: "multiselect", opciones: abmLocalidades.obtenerActivos() },
     ], { ...f, turno: f.turno ? f.turno.slice(0,5) : "" }, async (vals)=>{
-      if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+      if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return false; }
       if(vals.turno === "") vals.turno = null;
       const { error } = await sb.from("asistencia_diaria").update(vals).eq("id", id);
-      if(error){ console.error("Error editando chofer:", error); await mostrarAviso("No se pudo guardar."); return; }
+      if(error){ console.error("Error editando chofer:", error); await mostrarAviso("No se pudo guardar."); return false; }
       Object.assign(f, vals);
       renderAsistencia();
     });
@@ -3357,7 +3860,7 @@
       { clave: "zona", label: "Zona", tipo: "select", opciones: abmZonas.obtenerActivos() },
       { clave: "localidades", label: "Localidades", tipo: "multiselect", opciones: abmLocalidades.obtenerActivos() },
     ], {}, async (vals)=>{
-      if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+      if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return false; }
       if(vals.turno === "") vals.turno = null;
       const fecha = fechaAsistenciaActual();
       const { data, error } = await sb.from("asistencia_diaria")
@@ -3367,7 +3870,7 @@
       if(error){
         console.error("Error agregando chofer:", error);
         await mostrarAviso("No se pudo agregar (¿ya existe ese chofer para esta fecha y turno vacío?).");
-        return;
+        return false;
       }
       stateAsistencia.filas.push(data);
       renderAsistencia();
@@ -3382,36 +3885,50 @@
   // y edición abren el mismo modal.
   // ======================================================================
 
-  document.querySelectorAll("#modo-admin .chip").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      document.querySelectorAll("#modo-admin .chip").forEach(b=>b.classList.toggle("activo", b===btn));
-      const modo = btn.dataset.modoAdmin;
-      ["choferes","vehiculos","zonas","turnos","localidades","alertas","fallidos"].forEach(m=>{
-        document.getElementById("admin-" + m).hidden = m !== modo;
-      });
-      if(modo === "choferes") cargarAdminChoferes();
-      if(modo === "vehiculos") abmVehiculos.cargar();
-      if(modo === "zonas") abmZonas.cargar();
-      if(modo === "turnos") abmTurnos.cargar();
-      if(modo === "localidades") abmLocalidades.cargar();
-      if(modo === "alertas") cargarAdminAlertas();
-      if(modo === "fallidos"){ cargarAdminFallidosMapeo(); cargarAdminFallidosAlertas(); }
-    });
-  });
+  // (La navegación entre sub-secciones de Configuración ahora la maneja
+  // seleccionarModoAdmin(), llamada desde el sidebar — ver seleccionarVista().)
 
   // ----- Modal genérico de alta/edición (ver reglas_de_negocio.md sección 0) -----
   let modalAbmOnGuardar = null;
   const comboInstanciasModal = [];
+
+  // Lee el estado actual de todos los campos del modal abierto (inputs +
+  // combos), en el mismo formato que recibe onGuardar — se usa tanto para
+  // guardar como para evaluar `mostrarSi` de cada campo en vivo.
+  function leerValoresModalAbm(){
+    const datos = {};
+    document.querySelectorAll("#modal-abm-campos .cel-input").forEach(input=>{
+      datos[input.dataset.campo] = input.type === "checkbox" ? input.checked : (input.value || null);
+    });
+    comboInstanciasModal.forEach(contId=>{
+      const campo = contId.replace("modal-campo-", "");
+      datos[campo] = document.getElementById(contId).dataset.valorActual || null;
+    });
+    return datos;
+  }
 
   function abrirModalAbm(titulo, campos, valores, onGuardar){
     document.getElementById("modal-abm-titulo").textContent = titulo;
     const cont = document.getElementById("modal-abm-campos");
     comboInstanciasModal.length = 0;
 
+    // Campos con `mostrarSi(valoresActuales)` quedan ocultos hasta que esa
+    // condición se cumpla (ej. "Precio a descontar" solo si el Estatus
+    // elegido es "Descontar al chofer") — se reevalúa en cada cambio, ver
+    // actualizarVisibilidadCampos() más abajo.
+    function actualizarVisibilidadCampos(){
+      const actuales = leerValoresModalAbm();
+      campos.forEach(c=>{
+        if(!c.mostrarSi) return;
+        const wrap = cont.querySelector(`[data-campo-wrap="${c.clave}"]`);
+        if(wrap) wrap.hidden = !c.mostrarSi(actuales);
+      });
+    }
+
     cont.innerHTML = campos.map(c => {
       const val = (valores && valores[c.clave] != null) ? valores[c.clave] : "";
       if(c.tipo === "checkbox"){
-        return `<label class="modal-abm-check"><input type="checkbox" class="cel-input" data-campo="${c.clave}" ${val ? "checked" : ""} /> ${c.label}</label>`;
+        return `<div data-campo-wrap="${c.clave}"><label class="modal-abm-check"><input type="checkbox" class="cel-input" data-campo="${c.clave}" ${val ? "checked" : ""} /> ${c.label}</label></div>`;
       }
       if(c.tipo === "select"){
         // Cada opción puede ser un string simple ("AUTO") o un par
@@ -3424,12 +3941,12 @@
         }).join("");
         const actual = (c.opciones || []).find(o => String((o && typeof o === "object") ? o.valor : o) === String(val));
         const textoActual = actual ? ((actual && typeof actual === "object") ? actual.texto : actual) : (val || "Elegir…");
-        return `<div class="modal-abm-label">${c.label}
+        return `<div data-campo-wrap="${c.clave}"><div class="modal-abm-label">${c.label}
           <div class="combo-filtro" id="modal-campo-${c.clave}" data-valor-actual="${val || ""}">
             <button type="button" class="combo-filtro-btn" aria-haspopup="listbox" aria-expanded="false">${textoActual}</button>
             <ul class="combo-filtro-lista" role="listbox" hidden>${opciones}</ul>
           </div>
-        </div>`;
+        </div></div>`;
       }
       if(c.tipo === "multiselect"){
         const seleccionados = new Set(String(val || "").split(",").map(s => s.trim()).filter(Boolean));
@@ -3437,7 +3954,7 @@
           <label class="check-columna" data-texto="${o.toLowerCase().replace(/"/g, "&quot;")}"><input type="checkbox" value="${o}" ${seleccionados.has(o) ? "checked" : ""}/> ${o}</label>
         `).join("");
         const textoActual = seleccionados.size ? [...seleccionados].join(", ") : "Elegir…";
-        return `<div class="modal-abm-label">${c.label}
+        return `<div data-campo-wrap="${c.clave}"><div class="modal-abm-label">${c.label}
           <div class="combo-filtro" id="modal-campo-${c.clave}" data-valor-actual="${[...seleccionados].join(", ")}">
             <button type="button" class="combo-filtro-btn" aria-haspopup="true" aria-expanded="false">${textoActual}</button>
             <div class="panel-filtros-ruta panel-multiselect" hidden>
@@ -3446,18 +3963,19 @@
               <div class="lista-multiselect">${opciones || '<span class="sin-datos">Sin localidades cargadas en Administración.</span>'}</div>
             </div>
           </div>
-        </div>`;
+        </div></div>`;
       }
       const tipoInput = c.tipo === "time" ? "time" : (c.tipo === "number" ? "number" : "text");
-      return `<label class="modal-abm-label">${c.label}
+      return `<div data-campo-wrap="${c.clave}"><label class="modal-abm-label">${c.label}
         <input type="${tipoInput}" class="cel-input" data-campo="${c.clave}" value="${String(val).replace(/"/g, "&quot;")}" />
-      </label>`;
+      </label></div>`;
     }).join("");
 
     campos.filter(c => c.tipo === "select").forEach(c=>{
       const contId = `modal-campo-${c.clave}`;
       crearComboGenerico(contId, (valor)=>{
         document.getElementById(contId).dataset.valorActual = valor;
+        actualizarVisibilidadCampos();
       });
       comboInstanciasModal.push(contId);
     });
@@ -3466,6 +3984,10 @@
       crearMultiSelectGenerico(contId);
       comboInstanciasModal.push(contId);
     });
+    cont.querySelectorAll(".cel-input").forEach(input=>{
+      input.addEventListener("input", actualizarVisibilidadCampos);
+    });
+    actualizarVisibilidadCampos();
 
     document.getElementById("modal-abm").hidden = false;
     modalAbmOnGuardar = onGuardar;
@@ -3475,16 +3997,30 @@
     document.getElementById("modal-abm").hidden = true;
   });
   document.getElementById("modal-abm-guardar").addEventListener("click", async ()=>{
-    const datos = {};
-    document.querySelectorAll("#modal-abm-campos .cel-input").forEach(input=>{
-      datos[input.dataset.campo] = input.type === "checkbox" ? input.checked : (input.value || null);
-    });
-    comboInstanciasModal.forEach(contId=>{
-      const campo = contId.replace("modal-campo-", "");
-      datos[campo] = document.getElementById(contId).dataset.valorActual || null;
-    });
-    if(modalAbmOnGuardar) await modalAbmOnGuardar(datos);
-    document.getElementById("modal-abm").hidden = true;
+    const datos = leerValoresModalAbm();
+    const btnGuardar = document.getElementById("modal-abm-guardar");
+    // Indicador de espera genérico (pedido 2026-11-16): algunos onGuardar
+    // tardan de verdad (ej. "Agregar usuario" llama a una Edge Function
+    // que crea la cuenta de Auth) y sin esto no había ninguna señal de que
+    // el click hizo algo. Se deshabilita el botón para evitar un doble
+    // click mientras tanto.
+    const textoOriginal = btnGuardar.textContent;
+    btnGuardar.disabled = true;
+    btnGuardar.textContent = "Guardando…";
+    let cerrar = true;
+    try {
+      // Un onGuardar que devuelve `false` (ej. una validación que falló, o
+      // un error del servidor) deja el modal abierto con los datos tal
+      // cual los escribió el usuario, en vez de cerrarlo y obligarlo a
+      // cargar todo de nuevo — bug real reportado 2026-11-16. Cualquier
+      // otro valor de retorno (incluido `undefined`, lo más común) sigue
+      // cerrando como siempre.
+      if(modalAbmOnGuardar) cerrar = (await modalAbmOnGuardar(datos)) !== false;
+    } finally {
+      btnGuardar.disabled = false;
+      btnGuardar.textContent = textoOriginal;
+    }
+    if(cerrar) document.getElementById("modal-abm").hidden = true;
   });
 
   // ----- Fábrica de ABM simple (id + nombre + activo): Vehículos, Zonas, Localidades -----
@@ -3527,9 +4063,9 @@
         { clave: "nombre", label: "Nombre", tipo: "texto" },
         { clave: "activo", label: "Activo", tipo: "checkbox" },
       ], { activo: true }, async (vals)=>{
-        if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+        if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return false; }
         const { data, error } = await sb.from(tabla).insert({ nombre: vals.nombre, activo: !!vals.activo }).select().single();
-        if(error){ await mostrarAviso("No se pudo guardar (¿ya existe ese nombre?)."); return; }
+        if(error){ await mostrarAviso("No se pudo guardar (¿ya existe ese nombre?)."); return false; }
         datos.push(data);
         render();
       });
@@ -3542,9 +4078,9 @@
         { clave: "nombre", label: "Nombre", tipo: "texto" },
         { clave: "activo", label: "Activo", tipo: "checkbox" },
       ], fila, async (vals)=>{
-        if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+        if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return false; }
         const { error } = await sb.from(tabla).update({ nombre: vals.nombre, activo: !!vals.activo }).eq("id", id);
-        if(error){ await mostrarAviso("No se pudo guardar."); return; }
+        if(error){ await mostrarAviso("No se pudo guardar."); return false; }
         fila.nombre = vals.nombre; fila.activo = !!vals.activo;
         render();
       });
@@ -3608,9 +4144,9 @@
       { clave: "hora", label: "Hora", tipo: "time" },
       { clave: "activo", label: "Activo", tipo: "checkbox" },
     ], { activo: true }, async (vals)=>{
-      if(!vals.hora){ await mostrarAviso("La hora es obligatoria."); return; }
+      if(!vals.hora){ await mostrarAviso("La hora es obligatoria."); return false; }
       const { data, error } = await sb.from("parametros_turnos").insert({ hora: vals.hora, activo: !!vals.activo }).select().single();
-      if(error){ await mostrarAviso("No se pudo guardar (¿ya existe ese horario?)."); return; }
+      if(error){ await mostrarAviso("No se pudo guardar (¿ya existe ese horario?)."); return false; }
       adminTurnosData.push(data);
       renderAdminTurnosReal();
     });
@@ -3626,7 +4162,7 @@
         { clave: "activo", label: "Activo", tipo: "checkbox" },
       ], { hora: fila.hora ? fila.hora.slice(0,5) : "", activo: fila.activo }, async (vals)=>{
         const { error } = await sb.from("parametros_turnos").update({ hora: vals.hora, activo: !!vals.activo }).eq("id", id);
-        if(error){ await mostrarAviso("No se pudo guardar."); return; }
+        if(error){ await mostrarAviso("No se pudo guardar."); return false; }
         fila.hora = vals.hora; fila.activo = !!vals.activo;
         renderAdminTurnosReal();
       });
@@ -3709,10 +4245,10 @@
 
   document.getElementById("btn-agregar-chofer-roster").addEventListener("click", ()=>{
     abrirFormularioChofer("Agregar chofer", { activo: true }, async (vals)=>{
-      if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+      if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return false; }
       if(vals.turno === "") vals.turno = null;
       const { data, error } = await sb.from("choferes_roster").insert(vals).select().single();
-      if(error){ console.error(error); await mostrarAviso("No se pudo agregar (¿ya existe ese nombre?)."); return; }
+      if(error){ console.error(error); await mostrarAviso("No se pudo agregar (¿ya existe ese nombre?)."); return false; }
       adminChoferesData.push(data);
       renderAdminChoferes();
     });
@@ -3725,10 +4261,10 @@
       const id = Number(btnEditar.dataset.id);
       const fila = adminChoferesData.find(f => f.id === id);
       abrirFormularioChofer("Editar chofer", { ...fila, turno: fila.turno ? fila.turno.slice(0,5) : "" }, async (vals)=>{
-        if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return; }
+        if(!vals.nombre){ await mostrarAviso("El nombre es obligatorio."); return false; }
         if(vals.turno === "") vals.turno = null;
         const { error } = await sb.from("choferes_roster").update(vals).eq("id", id);
-        if(error){ await mostrarAviso("No se pudo guardar."); return; }
+        if(error){ await mostrarAviso("No se pudo guardar."); return false; }
         Object.assign(fila, vals);
         renderAdminChoferes();
       });
@@ -3776,9 +4312,9 @@
       { clave: "valor_minutos", label: "Minutos", tipo: "number" },
     ], fila, async (vals)=>{
       const valor = Number(vals.valor_minutos);
-      if(!valor || valor < 1){ await mostrarAviso("Tiene que ser un número mayor a 0."); return; }
+      if(!valor || valor < 1){ await mostrarAviso("Tiene que ser un número mayor a 0."); return false; }
       const { error } = await sb.from("parametros_alertas").update({ valor_minutos: valor }).eq("clave", clave);
-      if(error){ await mostrarAviso("No se pudo guardar."); return; }
+      if(error){ await mostrarAviso("No se pudo guardar."); return false; }
       fila.valor_minutos = valor;
       renderAdminAlertas();
     });

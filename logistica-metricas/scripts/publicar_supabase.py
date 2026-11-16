@@ -1,13 +1,16 @@
 """
-Script de PRUEBA, fuera del pipeline de producción: sube el export crudo de
-LightData "tal cual" a Supabase (tabla `envios`), para validar el diseño de
-la base nueva antes de migrar el dashboard y `descarga_diaria.yml` de
-verdad (ver reglas_de_negocio.md, sección sobre el ecosistema Supabase).
+Sube el export crudo de LightData "tal cual" a Supabase (tabla `envios`),
+para el ecosistema beta (dashboard/beta) — ver reglas_de_negocio.md,
+sección sobre el ecosistema Supabase. Automatizado desde 2026-11-16 vía
+.github/workflows/publicar_supabase.yml (cron-job.org, cada 10 min en
+horario operativo), en paralelo al pipeline de producción
+(Firestore/descarga_diaria.yml) — no lo reemplaza todavía.
 
 No toca Firestore ni ningún script de producción existente. Corre contra un
 proyecto de Supabase separado, usando las credenciales en `scripts/.env`
-(ver requirements_supabase.txt para las dependencias extra que necesita,
-no incluidas en requirements.txt porque todavía no corre en CI).
+en corridas locales, o los secrets de GitHub Actions en el workflow (ver
+requirements_supabase.txt para las dependencias extra que necesita, no
+incluidas en requirements.txt porque no corre en el pipeline de Firestore).
 
 Uso: python publicar_supabase.py <archivo_crudo.xls>
 """

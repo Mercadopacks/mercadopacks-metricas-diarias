@@ -861,7 +861,7 @@
          se presentó, con qué vehículo, lee las planillas de Google Sheets).
          Este modo es rendimiento DURANTE la ruta — velocidad de entrega y
          demora de cada chofer en curso, para que soporte accione en caliente.
-         Lee `envios_detalle/<hoy>/choferes` en Firestore — el mismo detalle
+         Lee `envios_detalle/<hoy>` (campo `choferes`) en Firestore — el mismo detalle
          por chofer que ya alimenta LightData vía `publicar_firestore.py`
          (ver reglas_de_negocio.md sección 17/17.1), actualizado cada 20
          minutos por la corrida intradía. No depende de ninguna planilla de
@@ -1052,7 +1052,7 @@
   // día es cada 20 min, ver reglas_de_negocio.md sección 16). Un poll cada
   // 45s multiplicaba por ~13 las lecturas de Firestore sin ganar nada a
   // cambio (bug reportado 2026-11-15: agotó la cuota diaria de lecturas).
-  const POLL_MS = 10 * 60 * 1000;
+  const POLL_MS = 20 * 60 * 1000;
 
   // Franjas horarias de entrega (sobre entregas efectivas). El corte
   // principal del negocio sigue siendo las 21:00; a partir de ahi se
@@ -1375,26 +1375,37 @@
     return limpio || 'sin-nombre';
   }
 
-  // Trae el detalle de un chofer para las fechas indicadas (una lectura
-  // por fecha, no todo el detalle del día — ver publicar_firestore.py,
-  // calcular_detalle_por_chofer(), para la decisión de guardar así).
-  // Usa detalleCache para no repetir lecturas ya hechas.
+  // Trae el documento completo de detalle de un día (todos los choferes),
+  // cacheado por fecha en state.detalleDiaCache — una sola lectura por
+  // fecha sin importar cuántos choferes se consulten después, porque desde
+  // 2026-11-16 publicar_firestore.py guarda el día entero en un solo
+  // documento (envios_detalle/<fecha>, campo `choferes`) en vez de un
+  // documento por chofer (ver calcular_detalle_por_chofer() / publicar()
+  // en ese script — el esquema viejo facturaba 1 lectura de Firestore POR
+  // CHOFER cuando se pedían todos, causa real del agotamiento de cuota del
+  // 2026-11-15, ver reglas_de_negocio.md sección 20.17).
+  async function cargarDetalleDia(fecha){
+    if(!(fecha in state.detalleDiaCache)){
+      try{
+        const snap = await db.collection('envios_detalle').doc(fecha).get();
+        state.detalleDiaCache[fecha] = snap.exists ? (snap.data().choferes || {}) : {};
+      }catch(e){
+        console.error('cargarDetalleDia failed', fecha, e);
+        state.detalleDiaCache[fecha] = {};
+      }
+    }
+    return state.detalleDiaCache[fecha];
+  }
+
+  // Trae el detalle de un chofer para las fechas indicadas, reusando
+  // cargarDetalleDia() (1 lectura por fecha, sin importar el chofer).
   async function cargarDetalleChofer(chofer, dates){
     const idChofer = sanitizarIdChofer(chofer);
     const items = [];
     for(const fecha of dates){
-      const clave = fecha + '::' + idChofer;
-      if(!(clave in state.detalleCache)){
-        try{
-          const snap = await db.collection('envios_detalle').doc(fecha)
-            .collection('choferes').doc(idChofer).get();
-          state.detalleCache[clave] = snap.exists ? (snap.data().items || []) : [];
-        }catch(e){
-          console.error('cargarDetalleChofer failed', fecha, chofer, e);
-          state.detalleCache[clave] = [];
-        }
-      }
-      for(const item of state.detalleCache[clave]){
+      const choferesDelDia = await cargarDetalleDia(fecha);
+      const entrada = choferesDelDia[idChofer];
+      for(const item of (entrada ? entrada.items : []) || []){
         items.push(Object.assign({ fecha }, item));
       }
     }
@@ -1426,7 +1437,7 @@
     rangeEnd: null,
     index: [],               // fechas disponibles (ISO), ascendente
     cache: {},                // iso -> snapshot
-    detalleCache: {},         // 'iso::choferSanitizado' -> array de items
+    detalleDiaCache: {},      // iso -> { choferSanitizado: {chofer, items} } (doc completo del día)
     sort: { key: 'pctEfectividad', dir: 'desc' },
     search: '',
     searchDetalle: '',
@@ -3107,20 +3118,20 @@
   }
 
   // Trae TODOS los choferes con detalle de la fecha seleccionada
-  // (fechaRutaActual()) en una sola lectura de colección (sin saber sus
-  // ids de antemano) — mucho más barato que pedir chofer por chofer como
-  // hace cargarDetalleChofer() para la vista de Envíos. Cachea por fecha
-  // en stateRuta.cachePorFecha, para no releer Firestore al ir y volver
-  // entre "Hoy"/"Ayer"/una fecha ya vista; `forzar=true` (botón
-  // "Actualizar") vuelve a leer igual la fecha actual.
+  // (fechaRutaActual()) — una sola lectura de documento (ver
+  // cargarDetalleDia(), el doc único por día desde 2026-11-16) en vez de
+  // la lectura de colección de antes, que facturaba 1 lectura por chofer.
+  // Cachea por fecha en stateRuta.cachePorFecha, para no releer Firestore
+  // al ir y volver entre "Hoy"/"Ayer"/una fecha ya vista; `forzar=true`
+  // (botón "Actualizar") vuelve a leer igual la fecha actual.
   async function cargarChoferesEnRutaHoy(forzar){
     const fecha = fechaRutaActual();
     if(stateRuta.cachePorFecha[fecha] && !forzar) return stateRuta.cachePorFecha[fecha];
-    const snap = await db.collection('envios_detalle').doc(fecha).collection('choferes').get();
-    const filas = [];
-    snap.forEach(doc => {
-      const data = doc.data() || {};
-      filas.push(construirFilaRutaDesdeItems(data.chofer || doc.id, data.items || [], fecha));
+    if(forzar) delete state.detalleDiaCache[fecha];
+    const choferesDelDia = await cargarDetalleDia(fecha);
+    const filas = Object.keys(choferesDelDia).map(idChofer => {
+      const data = choferesDelDia[idChofer] || {};
+      return construirFilaRutaDesdeItems(data.chofer || idChofer, data.items || [], fecha);
     });
     stateRuta.cachePorFecha[fecha] = filas;
     return filas;

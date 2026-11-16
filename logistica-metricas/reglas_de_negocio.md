@@ -2018,37 +2018,55 @@ usuarios): una sola persona con la pestaña abierta varias horas ya se
 comía el cupo gratis de 50.000 lecturas/día del plan Spark de Firebase.
 
 **Fix aplicado (bajo riesgo, implementado):** `POLL_MS` pasó de 45s a 10
-minutos (`dashboard_logistica.html`) — coincide con la cadencia más fina
-que existe hoy entre los jobs de cron-job.org, así que no se pierde
-frescura real (no puede haber datos más nuevos que eso) y las lecturas por
-pestaña abierta bajan ~13x.
+minutos, y luego (2026-11-16, a pedido del usuario) a **20 minutos**
+(`dashboard_logistica.html`) — coincide con la cadencia más gruesa entre
+los jobs de cron-job.org (cada 20 min de día, cada 10 min de noche, ver
+sección 16), así que en la franja diurna no se pierde frescura real
+(no puede haber datos más nuevos que eso); en la franja nocturna el
+dashboard puede tardar hasta 10 min extra en reflejar un dato nuevo,
+aceptado a cambio de la mitad de lecturas por pestaña abierta (~26x menos
+que el original de 45s).
+
+**Fix 2 aplicado (2026-11-16, implementado):** se colapsó el detalle por
+chofer a un solo documento por día (`envios_detalle/<fecha>`, campo
+`choferes` con un mapa `{idChofer: {chofer, items}}`), reemplazando la
+subcolección `choferes/<id>` de antes.
+- `publicar_firestore.py` (`publicar()`): ahora hace **1 `.set()` por día**
+  en vez de 1 `.set()` por chofer + el `.stream()` completo que borraba
+  choferes fantasma (ver sección 20.4/bug 2026-11-12) — el reemplazo total
+  del documento ya deja afuera solo a los choferes sin ítems, sin necesitar
+  el borrado aparte.
+- `dashboard_logistica.html`: `cargarChoferesEnRutaHoy()` (Seguimiento en
+  ruta, el peor caso: ~130 choferes) y `cargarDetalleChofer()` (vista
+  Envíos, un chofer puntual) pasan ambos por una función nueva,
+  `cargarDetalleDia(fecha)`, que lee el documento único y cachea por
+  fecha — de ~130 lecturas por poll a **1 lectura por poll**, sin importar
+  cuántos choferes se consulten.
+- Riesgo validado antes de implementar: el límite de Firestore es 1 MiB
+  por documento; con ~130 choferes y ~26 ítems c/u (dato real del
+  2026-11-13, sección 20.13) la estimación da ~650-700 KB — holgado hoy,
+  pero sin mucho margen para días de mayor volumen. Si el volumen de
+  choferes/ítems por día crece sensiblemente, medir el tamaño real del
+  documento antes de confiar en este esquema indefinidamente.
 
 **Pendiente, a definir con el usuario (no implementado todavía):**
-1. **Colapsar el detalle por chofer a un solo documento por día**
-   (`envios_detalle/<fecha>` con un mapa de choferes, en vez de la
-   subcolección `choferes/<id>` actual) — bajaría tanto las lecturas del
-   dashboard (de ~130 a 1 por poll) como las escrituras de
-   `publicar_firestore.py` (hoy hace un `.set()` por chofer + un
-   `.stream()` completo para borrar choferes fantasma, sección 20.4; con
-   un solo documento sería 1 `.set()` y ningún stream). Riesgo a validar
-   antes de implementar: el límite de Firestore es 1 MiB por documento —
-   con ~130 choferes y ~26 ítems c/u (dato real del 2026-11-13, sección
-   20.13), la estimación da **~650-700 KB**, holgado hoy pero sin mucho
-   margen para días de mayor volumen; habría que medir el tamaño real
-   antes de migrar.
-2. **Evitar que el costo se multiplique por usuario concurrente** — ni
-   (1) ni subir `POLL_MS` resuelven esto: cada pestaña sigue pagando su
-   propia lectura. La única forma real de compartir una sola lectura entre
-   N usuarios simultáneos es agregar una capa de caché fuera del modelo de
+1. **Evitar que el costo se multiplique por usuario concurrente** — el fix
+   de arriba y `POLL_MS` no resuelven esto: cada pestaña abierta sigue
+   pagando su propia lectura (1 por poll ahora, pero N pestañas = N
+   lecturas). La única forma real de compartir una sola lectura entre N
+   usuarios simultáneos es agregar una capa de caché fuera del modelo de
    Firestore (ej. un archivo estático publicado por el propio Action a
    GitHub Pages, que todas las pestañas lean por HTTP en vez de pegarle a
-   Firestore) — cambio de arquitectura más grande, no justificado solo por
-   este incidente.
-3. **Subir el proyecto de Firebase al plan Blaze** (pago por uso) — elimina
+   Firestore) — cambio de arquitectura más grande (nuevo permiso de
+   escritura del Action al repo, lógica de publicación del archivo,
+   fallback si el archivo todavía no existe para una fecha) que requiere
+   decisiones de diseño propias antes de tocar código; no se implementa
+   sin acordar el diseño exacto primero.
+2. **Subir el proyecto de Firebase al plan Blaze** (pago por uso) — elimina
    el tope diario duro de 50.000 lecturas/20.000 escrituras del plan Spark.
    A este volumen el costo real esperado es de centavos de dólar por día
    (Firestore regala las primeras 50.000 lecturas/día incluso en Blaze). Es
-   la red de seguridad más simple, independiente de si se hacen (1) o (2).
+   la red de seguridad más simple, independiente de si se hace (1) o no.
 
 **Se evaluó y se descartó (por ahora) migrar de Firestore a Supabase**: el
 problema de fondo no es el motor de base de datos sino el patrón de
@@ -2152,13 +2170,17 @@ que no las usa):**
     el `input[type="text"]` normal — esta regla es solo para filtros de
     opciones fijas (zona, estado, rendimiento, etc.).
 
-**Estado actual:** `scripts/publicar_supabase.py` (ingesta probada contra
-un export real: 4107 filas, upsert idempotente por `id_interno`, trigger de
-historial verificado) + `dashboard/beta/index.html` con login y una sola
-sección migrada ("Seguimiento de Envíos": KPIs + tabla de últimos
-cambios). "Seguimiento de Repartidores" (el más grande del dashboard
-viejo, con sus 3 modos: vivo/histórico/en ruta) queda como placeholder
-"Próximamente" — migrarlo de verdad es el siguiente paso.
+**Estado actual (actualizado 2026-11-16):** `scripts/publicar_supabase.py`
+ya corre **automatizado** vía `.github/workflows/publicar_supabase.yml`
+(disparado por cron-job.org cada 10 min en horario operativo, mismo
+mecanismo que `descarga_diaria.yml` — ver el workflow para la config
+exacta), en paralelo al pipeline de producción, no en reemplazo.
+`dashboard/beta/index.html` ya tiene migradas: Seguimiento de Envíos,
+Fallidos y Cambios (con vista "Por repartidor" y vista "Todos"),
+Seguimiento de Repartidores completo (Seguimiento en Ruta / Asistencia /
+Operación en vivo), y Configuración (Choferes/Vehículos/Zonas/Turnos/
+Localidades/Umbrales/Fallidos/Usuarios) con alta de usuarios y permisos
+por vista.
 
 | Fecha | Cambio |
 |---|---|

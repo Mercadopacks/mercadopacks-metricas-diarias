@@ -1,10 +1,23 @@
-name: Publicar a Supabase (prueba)
+name: Publicar a Supabase
 
-# Dispara manualmente desde la pestaña Actions (workflow_dispatch) — NO está
-# enganchado a ningún cron todavía (ver reglas_de_negocio.md sección 21):
-# `publicar_supabase.py` sigue siendo un script de prueba, fuera del
-# pipeline de producción (Firestore/descarga_diaria.yml). Esto solo evita
-# tener que correrlo a mano en la propia computadora cada vez.
+# Automatizado desde 2026-11-16 (ver reglas_de_negocio.md sección 21) vía
+# cron-job.org disparando workflow_dispatch — MISMO mecanismo que
+# descarga_diaria.yml y por la misma razón (el `schedule:` nativo de
+# GitHub Actions llega con 4-5h de atraso, ver ese workflow para el
+# detalle medido). Alimenta el ecosistema Supabase (dashboard/beta), en
+# paralelo al pipeline de producción (Firestore/descarga_diaria.yml) — no
+# lo reemplaza.
+#
+# Configuración en cron-job.org: 1 job, dispara cada 10 min SOLO en
+# horario operativo (11:00-21:00 ART = 14:00-24:00 UTC, lunes a sábado) —
+# de noche no entran paquetes nuevos al depósito, correrlo igual solo
+# suma riesgo de choque con descarga_diaria.yml sin ganar nada.
+#   URL:     https://api.github.com/repos/Mercadopacks/mercadopacks-metricas-diarias/actions/workflows/publicar_supabase.yml/dispatches
+#   Método:  POST
+#   Headers: Authorization: Bearer <PERSONAL_ACCESS_TOKEN>
+#            Accept: application/vnd.github+json
+#            Content-Type: application/json
+#   Body:    {"ref":"main","inputs":{}}
 #
 # Secrets que necesita este workflow en GitHub (Settings > Secrets and
 # variables > Actions), ADEMÁS de LIGHTDATA_USER/LIGHTDATA_PASS que ya
@@ -12,8 +25,8 @@ name: Publicar a Supabase (prueba)
 #   SUPABASE_URL               - URL del proyecto de Supabase (ecosistema beta)
 #   SUPABASE_SERVICE_ROLE_KEY  - Service role key de ese mismo proyecto
 #
-# Para ejecutarlo: pestaña "Actions" del repo > "Publicar a Supabase
-# (prueba)" > "Run workflow". "Fecha" vacío = hoy (ART).
+# También se puede disparar a mano: pestaña "Actions" del repo > "Publicar
+# a Supabase" > "Run workflow". "Fecha" vacío = hoy (ART).
 
 on:
   workflow_dispatch:

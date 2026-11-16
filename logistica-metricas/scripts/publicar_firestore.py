@@ -249,40 +249,33 @@ def publicar(snapshots: dict, sa_json: str, detalle: dict | None = None):
     index_ref.set({"dates": sorted(fechas)})
 
     # Detalle por chofer (opcional — puede venir vacío si no se pidió, ver
-    # main()). Se guarda en envios_detalle/<fecha>/choferes/<chofer>, no en
-    # un solo documento por día, para que el dashboard pueda pedir
-    # únicamente el chofer que el usuario seleccionó en vez de bajar el
-    # detalle de todos los choferes del día. `.set()` reemplaza el
-    # documento completo, mismo criterio que el snapshot: si se reprocesa
-    # un día (ventana de repaso), el detalle también queda actualizado.
+    # main()). Se guarda en UN SOLO documento por día, envios_detalle/<fecha>,
+    # con un mapa `choferes` adentro — antes era un documento por chofer en
+    # la subcolección envios_detalle/<fecha>/choferes/<chofer>.
+    #
+    # Se cambió (2026-11-16, ver reglas_de_negocio.md sección 20.17) porque
+    # leer "todos los choferes del día" (como hace "Seguimiento en ruta") con
+    # ese esquema viejo significaba un `.collection('choferes').get()` que
+    # Firestore factura como 1 lectura POR documento de la colección (~130
+    # lecturas por refresco, por cada pestaña abierta) — esa facturación por
+    # documento fue la causa real del agotamiento de cuota del 2026-11-15.
+    # Con un solo documento por día, tanto ese caso ("Seguimiento en ruta",
+    # todos los choferes) como el de la vista Envíos (un chofer puntual, ver
+    # cargarDetalleChofer() en el dashboard) quedan en 1 lectura cada uno.
+    # `.set()` reemplaza el documento entero, mismo criterio que el
+    # snapshot: si se reprocesa un día (ventana de repaso), el detalle
+    # también queda actualizado completo — y como es reemplazo total, un
+    # chofer que perdió todos sus envíos entre una corrida y otra
+    # simplemente no aparece más como key en `choferes`, sin necesitar el
+    # borrado aparte que hacía falta con la subcolección vieja (bug real
+    # 2026-11-12).
     if detalle:
         for fecha, por_chofer in detalle.items():
-            choferes_actuales = set()
+            choferes_doc = {}
             for cadete, items in por_chofer.items():
                 doc_id = sanitizar_id_chofer(cadete)
-                choferes_actuales.add(doc_id)
-                db.collection("envios_detalle").document(fecha) \
-                    .collection("choferes").document(doc_id) \
-                    .set({"chofer": cadete, "fecha": fecha, "items": items})
-
-            # Bug real reportado el 2026-11-12 ("Seguimiento en ruta"
-            # mostraba choferes con paquetes asignados que en LightData ya
-            # no tenían nada): un chofer que en una corrida anterior tenía
-            # envíos asignados y después los perdió (reasignados a otro
-            # chofer durante el día) dejaba de aparecer como key en
-            # `detalle[fecha]` — su documento viejo nunca se tocaba de
-            # nuevo y quedaba para siempre con la foto de la corrida vieja,
-            # mostrando asignaciones que ya no existen. Se borran acá los
-            # documentos de choferes que YA NO tienen ningún ítem en esta
-            # fecha según la corrida actual — `detalle[fecha]` es la
-            # verdad completa y actual de esa fecha en el momento en que
-            # se la reprocesa (el export se vuelve a bajar entero), así
-            # que cualquier chofer que no esté en `choferes_actuales` es
-            # porque genuinamente ya no tiene nada asignado ese día.
-            coleccion_choferes = db.collection("envios_detalle").document(fecha).collection("choferes")
-            for doc in coleccion_choferes.stream():
-                if doc.id not in choferes_actuales:
-                    doc.reference.delete()
+                choferes_doc[doc_id] = {"chofer": cadete, "items": items}
+            db.collection("envios_detalle").document(fecha).set({"choferes": choferes_doc})
 
 
 def main():
