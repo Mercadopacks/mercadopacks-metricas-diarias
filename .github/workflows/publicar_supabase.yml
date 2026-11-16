@@ -23,8 +23,15 @@ on:
         required: false
         default: ''
 
+#
+# Mismo grupo de concurrencia que descarga_diaria.yml (no uno propio): los
+# dos workflows hacen login por Playwright contra la MISMA cuenta de
+# LightData, así que tienen que encolarse entre sí, no solo contra sí
+# mismos — si corren en paralelo, una sesión pisa a la otra a mitad del
+# flujo de login/filtros (timeout real visto 2026-11-16 esperando el campo
+# de fecha, mientras descarga_diaria.yml corría al mismo tiempo).
 concurrency:
-  group: publicar-supabase
+  group: descarga-lightdata
   cancel-in-progress: false
 
 jobs:
