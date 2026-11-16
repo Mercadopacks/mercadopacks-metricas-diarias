@@ -16,117 +16,6 @@ implementan estas reglas por separado (no comparten código entre sí):
 
 ---
 
-## 0. REGLAS DE DISEÑO OBLIGATORIAS — leer esto PRIMERO, antes de diseñar o tocar cualquier módulo/ventana nueva del ecosistema Supabase (`dashboard/beta/`)
-
-Esto es un estándar fijo, no una preferencia de un módulo puntual. Se
-definió el 2026-11-15 después de que el primer ABM de Administración
-(Choferes/Zonas/Turnos/Localidades) se armó mal — con celdas editables
-sueltas en la tabla en vez de un ABM de verdad — y hubo que rehacerlo
-entero. Para no repetir esa corrección en cada sesión nueva, de ahora en
-más **todo ABM** (listado de registros con alta/edición/borrado — no
-confundir con una pantalla operativa tipo "Asistencia de hoy", que sí es
-edición en vivo de una fila que varias personas van completando durante
-el día, ver nota al final) sigue esto:
-
-1. **Las filas de la tabla van en modo lectura** (texto plano), nunca con
-   `<input>` sueltos editables en cada celda. Ver, no editar ahí mismo.
-2. **Última columna = "Opciones"**, alineada a la derecha (`text-align:
-   right` en el `<th>` y los `<td>` de esa columna), con dos íconos
-   Lucide: lápiz (`edit` o `pencil`) para editar, tacho (`trash-2`) para
-   borrar. Nada de edición inline ni de un solo botón "borrar" suelto.
-3. **Alta y edición abren el mismo modal** (overlay + tarjeta centrada,
-   mismo patrón que ya existe para "Pendientes" en Seguimiento en ruta),
-   con los campos correspondientes precargados si es edición, y dos
-   botones: **Guardar** y **Cerrar**. Nunca un `prompt()` del navegador,
-   nunca una fila nueva editable aparece sola en la tabla.
-4. **Cualquier campo de opciones fijas usa un ABM propio, no texto
-   libre** — si algo se repite entre registros (vehículo, zona, turno,
-   localidad), es su propia tabla de parámetros con su propio ABM, y el
-   campo correspondiente en los demás formularios lo referencia con el
-   combo de `crearComboFiltro`/`crearComboGenerico` (nunca un `<input
-   type="text">` libre para un dato que en realidad viene de una lista
-   cerrada).
-5. **Alineación**: cada columna se alinea según su contenido (texto a la
-   izquierda, números/checkboxes centrados, "Opciones" siempre a la
-   derecha) — revisarlo visualmente en el preview local antes de avisar
-   que está listo, no asumir que el CSS por defecto ya alinea bien.
-6. **Buscador + botón de alta van en la misma fila**, alineados
-   horizontalmente (`.buscar-mas-filtrar`, ya con `align-items:center`
-   definido) — si se agrega un campo nuevo a esa fila, confirmar que no
-   rompa la alineación existente antes de pasar a revisión.
-7. **Cualquier elemento HTML nuevo que el `<script>` enganche con
-   `addEventListener` al nivel superior (no adentro de una función que se
-   llama después) tiene que estar en el documento ANTES del `<script>`**
-   (bug real 2026-11-15: el modal genérico `#modal-abm` se agregó al
-   final del `<body>`, DESPUÉS del `<script>` — como el HTML se parsea en
-   orden, en el momento en que el script corría ese elemento todavía no
-   existía, tiraba `Cannot read properties of null` ahí mismo, y por ser
-   un error no capturado cortaba TODO el resto del script top-level sin
-   ejecutarse — incluidas definiciones de `const` que se usaban en
-   funciones muy lejos de ahí, dando después el error, mucho más confuso,
-   de "no se puede acceder a X antes de su inicialización"). Antes de
-   agregar un modal, overlay o cualquier contenedor nuevo con sus propios
-   botones fijos, verificar que quede ANTES del `<script>` principal —
-   nunca después, ni siquiera "al final de todo, para no romper el
-   diseño".
-8. **Todo combo o popover flotante (un `<select>` propio, un panel
-   "Filtrar", un selector de columnas, etc.) se crea con el singleton
-   compartido `crearComboGenerico` / `crearPopoverGenerico` — nunca con su
-   propia variable `yaAbierto`/`hidden` aislada.** (bug real 2026-11-15:
-   el popover "Filtrar" y el popover "Columnas" de Asistencia de
-   Repartidores se habían armado cada uno con su propio
-   `document.addEventListener("click", ...)` para abrir/cerrar; al no
-   compartir el mismo "¿hay algo abierto ahora?", abrir uno no cerraba el
-   otro y terminaban los dos paneles dibujados en el mismo lugar, uno
-   encima del otro — se veía como un "borde doble/excesivo" donde se
-   pisaban). Antes de agregar un combo o popover nuevo, usar una de esas
-   dos funciones; si hace falta un tercer tipo de menú flotante, extender
-   el singleton en vez de crear uno nuevo en paralelo.
-9. **Cualquier botón con ícono + texto queda alineado horizontalmente en
-   una sola línea, nunca ícono arriba/texto abajo.** Esto lo da la regla
-   BASE sobre el selector `button` (`display:inline-flex; align-items:
-   center; gap:7px`) — nunca parchear un botón puntual agregándole su
-   propio `display:flex`; si algo se ve mal alineado, el problema real es
-   que esa regla base está siendo pisada en algún lado.
-10. **Todo combo/multiselect (`crearComboGenerico`/`crearMultiSelectGenerico`)
-    se comporta como un `<select>` nativo: clickear una opción SIEMPRE
-    cierra la lista (sin excepción, nunca queda abierta esperando otra
-    acción), y ↑/↓/Home/End/Enter/Escape navegan y confirman por teclado.**
-    Cualquier combo nuevo tiene que salir de esas dos funciones — no
-    escribir un open/close a mano que solo entienda el mouse.
-11. **Todo elemento de datos que el usuario podría querer copiar/pegar
-    (texto de una celda, de un detalle) puede seleccionarse con el mouse;
-    todo lo demás (botones, títulos, chips, íconos, menús) NO** —
-    `user-select:none` es el default en `body`, reactivado puntualmente
-    en inputs/textareas y en las clases de contenido real (ver regla base
-    en el `<style>`). Si un elemento nuevo de solo-lectura necesita
-    copiarse, sumarlo a esa lista en vez de desactivar la regla general.
-12. **Un `<label>` SOLO puede envolver el control de formulario que
-    literalmente le pertenece (un checkbox, un `<input>` de texto) —
-    NUNCA un combo propio, ni nada que tenga una lista/panel adentro.**
-    Causa real confirmada 2026-11-15 con un test automatizado (jsdom): el
-    stack trace mostraba `HTMLLabelElement._activationBehavior ->
-    sendClickToAssociatedNode` — es comportamiento ESTÁNDAR del navegador
-    (no un bug de un sitio en particular): cualquier click dentro de un
-    `<label>` se reenvía automáticamente a su primer control "labelable"
-    (acá, el botón que abre la lista), así que clickear una opción del
-    combo (que vive adentro del mismo `<label>`) volvía a abrir la lista
-    inmediatamente después de cerrarla. El texto descriptivo de un campo
-    con combo va en un `<div>` (clases `.modal-abm-label`,
-    `.panel-filtros-ruta-campo`), nunca en `<label>`. Antes de envolver
-    cualquier campo nuevo en un `<label>`, confirmar que su ÚNICO
-    contenido interactivo es el control real que ese label describe.
-
-**Excepción explícita — pantallas operativas "en vivo"** (ej. "Asistencia
-de hoy" en Asistencia de Repartidores): ahí varias personas van tildando
-casillas de la MISMA fila a lo largo del día — exigir abrir un modal por
-cada tilde sería impracticable. Esas pantallas siguen con edición inline
-en la tabla, a propósito. La diferencia es el tipo de pantalla: una es
-gestión de registros maestros (ABM), la otra es un tablero operativo del
-día. Ante la duda, preguntar antes de asumir cuál aplica.
-
----
-
 ## 1. Entrega efectiva
 
 **Definición:** un envío se considera "entregado con éxito" si su `Estado` es
@@ -2081,118 +1970,30 @@ como decisión separada y deliberada si en el futuro se necesita de verdad
 push en tiempo real (vía websockets/Realtime de Supabase) en vez de
 polling.
 
-## 21. Nuevo ecosistema sobre Supabase: `dashboard/beta/` (empezado 2026-11-15)
+## 21. Mercadopacks Sistema (ecosistema Supabase) — repo separado
 
-**Qué es y por qué existe:** el usuario quiere migrar gradualmente todo lo
-que hoy vive en `dashboard_logistica.html` (Firestore) a una base nueva en
-Supabase, para poder construir módulos adicionales que comparten los
-mismos datos — primero Fallidos/Cambios (paquetes que el chofer debe
-rendir al día siguiente, con seguimiento de recibidos en planta), después
-Liquidaciones. Corre **en paralelo** al dashboard de producción, sin
-tocar nada de lo que ya funciona, hasta que se decida migrar de verdad.
+Lo que era `dashboard/beta/` dentro de este repo se separó el 2026-11-16
+en su propio repo, **`Mercadopacks/Sistema`**, junto con TODOS sus
+scripts de ingesta (`publicar_supabase.py`, su workflow, las migraciones
+SQL, la Edge Function de alta de usuarios). Ese repo tiene su propio
+`reglas_de_negocio.md` con el detalle completo (reglas de diseño del
+dashboard, esquema de la base, reglas de Fallidos/Cambios, sistema de
+permisos, etc.) — no se duplica acá.
 
-**Separado en su propio repo desde 2026-11-16** ("Mercadopacks Sistema"):
-el archivo del dashboard (`index.html` + `assets/`) vive y se edita en el
-repo `Mercadopacks/Sistema` (GitHub Pages en
-`https://mercadopacks.github.io/Sistema/`), NO acá — ya no existe
-`logistica-metricas/dashboard/beta/` en este repo. Los scripts de
-ingesta (`publicar_supabase.py`, el workflow que lo automatiza, las
-migraciones SQL y la Edge Function `crear-usuario`) SÍ se quedan en este
-repo a propósito: comparten el login de LightData con
-`descarga_diaria.yml` y el `concurrency group` que evita que se pisen
-entre sí solo funciona dentro de un mismo repo de GitHub Actions — si se
-movieran también, reaparecería el choque real de Playwright ya visto
-(ver sección 20 / el workflow `publicar_supabase.yml` para el detalle).
+**Lo único relevante para ESTE repo:** `descargar_lightdata.py`,
+`fecha_descarga.py` y `generar_reporte.py` de `scripts/` ahora tienen una
+**copia** en el repo Sistema (no comparten código real — son dos copias
+independientes). Si se corrige un bug de scraping/parseo de LightData en
+uno de los dos repos, hay que replicarlo a mano en el otro. Los dos
+pipelines (`descarga_diaria.yml` acá, `publicar_supabase.yml` en el otro
+repo) inician sesión en la MISMA cuenta de LightData por su cuenta —
+antes compartían un `concurrency group` de GitHub Actions que evitaba que
+chocaran (solo funciona dentro de un mismo repo); separados, la
+mitigación es de horario (cron jobs en minutos distintos, ver el workflow
+del otro repo), no una garantía — un timeout de Playwright esperando un
+campo de login/fecha puede deberse a esto.
 
-**Base de datos (Supabase, proyecto separado del de producción):**
-- `envios`: una fila por envío, clave real `id_interno` (columna `ID
-  (Interno)` del export — el `Número Tracking` NO es único, puede
-  repetirse). Columnas tipadas para lo que se usa activamente
-  (`tracking`, `cliente`, `localidad`, `zona`, `estado`, `cadete`,
-  `fecha_mercadopacks`, `fecha_estado`, `fecha_asignacion`,
-  `fecha_a_planta`) + columna `raw jsonb` con las 37 columnas completas
-  del export de LightData tal cual vienen (incluidos datos personales del
-  destinatario — decisión del usuario: se guardan, protegidos por RLS en
-  vez de excluirlos como se hace en Firestore).
-- `envios_historial`: se llena sola via trigger (`envios_log_historial()`)
-  cada vez que cambia `estado` o `cadete` de un envío — no se escribe a
-  mano desde ningún script.
-- RLS activado en ambas tablas desde que se creó el proyecto. Service
-  role (usado por `scripts/publicar_supabase.py`, el script de ingesta)
-  tiene permiso total vía `GRANT`. El rol `authenticated` (usuarios
-  logueados por Supabase Auth) solo tiene `GRANT SELECT` + una policy de
-  lectura — nunca puede escribir. **Ojo:** un `GRANT` de tabla y una
-  policy de RLS son dos cosas separadas — faltó el `GRANT` a
-  `authenticated` la primera vez y tiró "permission denied" aunque la
-  policy ya estaba bien.
-- Auth: registro público desactivado (`Allow new users to sign up` off),
-  cuentas creadas a mano desde el panel de Supabase, login con
-  email+contraseña.
-
-**Reglas de diseño para `dashboard/beta/` y todo lo que se construya
-arriba de este ecosistema nuevo (a diferencia del dashboard de producción,
-que no las usa):**
-- **Fuente: Nunito** (Google Fonts), no la fuente del sistema que usa el
-  dashboard viejo.
-- **Íconos: librería Lucide** (`data-lucide="nombre"` + `lucide.createIcons()`),
-  nunca emojis como ícono — el dashboard de producción sí usa emojis
-  (🚚, 📦, etc.) en chips/encabezados, pero ese es el patrón viejo; acá no.
-- **Navegación: sidebar lateral desplegable/colapsable** (ícono "menu" de
-  Lucide para alternar), reemplaza el patrón de chips arriba de la pantalla
-  que usa el dashboard de producción.
-- **Botones de acción secundaria** (ej. cerrar sesión): ícono solo, sin
-  texto — igual que el resto de los íconos, Lucide.
-- Paleta de marca igual que siempre: dorado `#F6BE05` + negro, fondo
-  `#efeeea`, tarjetas blancas — eso no cambia entre el dashboard viejo y
-  este ecosistema nuevo.
-- **Campos de entrada (texto, fecha, buscador) vs. chips — dos formas
-  distintas, nunca mezclarlas** (bug real 2026-11-15: un `<input
-  type="date">` quedó con el estilo nativo del navegador, inconsistente
-  con el resto; de paso, `.chips{display:flex}` sin `align-items:center`
-  hacía que el input de fecha —más alto por su ícono nativo— estirara los
-  botones chip de al lado). Regla:
-  - **Chips** (opciones seleccionables, ej. Hoy/Ayer/Rango): forma de
-    "pastilla", `border-radius:20px`.
-  - **Campos de entrada** (donde se escribe o se elige un valor: fecha,
-    buscador, texto): esquinas rectas `border-radius:8px`, fondo blanco,
-    borde `1px solid var(--borde)`, **nunca** forma de pastilla.
-  - Todo elemento dentro de una fila de chips (`.chips`) comparte la misma
-    `height:36px` y el contenedor lleva `align-items:center` — así un
-    input con decoración nativa (como el selector de fecha) nunca estira
-    ni descentra a los botones de al lado.
-  - **La regla de `input[type="date"]` se define UNA sola vez, como
-    selector global de tipo (`input[type="date"]{...}`), no por cada id de
-    contenedor nuevo** (se repitió el mismo bug el mismo día, en el
-    selector de fecha de "Seguimiento en ruta", justo porque la primera
-    vez se había scopeado a `#rango-envios input[type="date"]` en vez de
-    a todos los `input[type="date"]` de la página). Cualquier datepicker
-    nuevo hereda el estilo correcto solo, sin tener que acordarse de
-    aplicarlo cada vez.
-  - **Filtro de columna con opciones fijas (no texto libre) = combo
-    propio, NUNCA `<select>` nativo** (bug real 2026-11-15: el `<select>`
-    de "Seguimiento en ruta" se veía bien cerrado, pero al abrirlo
-    mostraba la lista con la apariencia default del navegador — un
-    `<select>` no se puede re-estilar en ese estado en ningún navegador).
-    Se portó el mismo componente que ya usaba `dashboard_logistica.html`
-    (`crearComboFiltro()`/clases `.combo-filtro`, `.combo-filtro-btn`,
-    `.combo-filtro-lista`): un botón con texto + flecha, y una `<ul>`
-    propia posicionada debajo, con su propio hover/seleccionado en dorado,
-    que se cierra sola al clickear afuera (`cerrarComboGlobal()`). Un
-    filtro de texto libre (buscar por nombre, tracking, etc.) sigue usando
-    el `input[type="text"]` normal — esta regla es solo para filtros de
-    opciones fijas (zona, estado, rendimiento, etc.).
-
-**Estado actual (actualizado 2026-11-16):** `scripts/publicar_supabase.py`
-ya corre **automatizado** vía `.github/workflows/publicar_supabase.yml`
-(disparado por cron-job.org cada 10 min en horario operativo, mismo
-mecanismo que `descarga_diaria.yml` — ver el workflow para la config
-exacta), en paralelo al pipeline de producción, no en reemplazo.
-`dashboard/beta/index.html` ya tiene migradas: Seguimiento de Envíos,
-Fallidos y Cambios (con vista "Por repartidor" y vista "Todos"),
-Seguimiento de Repartidores completo (Seguimiento en Ruta / Asistencia /
-Operación en vivo), y Configuración (Choferes/Vehículos/Zonas/Turnos/
-Localidades/Umbrales/Fallidos/Usuarios) con alta de usuarios y permisos
-por vista.
+## 22. Changelog del dashboard de producción
 
 | Fecha | Cambio |
 |---|---|
