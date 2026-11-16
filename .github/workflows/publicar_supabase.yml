@@ -1,0 +1,82 @@
+name: Publicar a Supabase (prueba)
+
+# Dispara manualmente desde la pestaña Actions (workflow_dispatch) — NO está
+# enganchado a ningún cron todavía (ver reglas_de_negocio.md sección 21):
+# `publicar_supabase.py` sigue siendo un script de prueba, fuera del
+# pipeline de producción (Firestore/descarga_diaria.yml). Esto solo evita
+# tener que correrlo a mano en la propia computadora cada vez.
+#
+# Secrets que necesita este workflow en GitHub (Settings > Secrets and
+# variables > Actions), ADEMÁS de LIGHTDATA_USER/LIGHTDATA_PASS que ya
+# existen para descarga_diaria.yml:
+#   SUPABASE_URL               - URL del proyecto de Supabase (ecosistema beta)
+#   SUPABASE_SERVICE_ROLE_KEY  - Service role key de ese mismo proyecto
+#
+# Para ejecutarlo: pestaña "Actions" del repo > "Publicar a Supabase
+# (prueba)" > "Run workflow". "Fecha" vacío = hoy (ART).
+
+on:
+  workflow_dispatch:
+    inputs:
+      fecha:
+        description: 'Fecha a descargar y subir (YYYY-MM-DD). Vacío = hoy (ART).'
+        required: false
+        default: ''
+
+concurrency:
+  group: publicar-supabase
+  cancel-in-progress: false
+
+jobs:
+  descargar-y-publicar:
+    runs-on: ubuntu-latest
+    # Misma imagen que descarga_diaria.yml (Python + Playwright/Chromium +
+    # LibreOffice + requirements.txt ya instalados, incluye pandas/numpy que
+    # usa publicar_supabase.py) — ver scripts/Dockerfile.
+    container:
+      image: ghcr.io/mercadopacks/mercadopacks-metricas-diarias/ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Descargar repo
+        uses: actions/checkout@v4
+
+      # supabase/python-dotenv no están en requirements.txt (no corren en
+      # el pipeline de producción todavía, ver publicar_supabase.py) — se
+      # instalan aparte en cada corrida de este workflow.
+      - name: Instalar dependencias extra (supabase, python-dotenv)
+        working-directory: logistica-metricas/scripts
+        run: pip install -r requirements_supabase.txt
+
+      - name: Descargar de LightData y publicar a Supabase
+        working-directory: logistica-metricas/scripts
+        env:
+          LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
+          LIGHTDATA_PASS: ${{ secrets.LIGHTDATA_PASS }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FECHA_INPUT: ${{ github.event.inputs.fecha }}
+        run: |
+          set -e
+          if [ -n "$FECHA_INPUT" ]; then
+            FECHA_DESCARGA="$FECHA_INPUT"
+          else
+            FECHA_DESCARGA=$(date -u -d "-3 hours" +%F)  # ART = UTC-3
+          fi
+          export FECHA_DESCARGA
+          SALIDA=$(python3 descargar_lightdata.py)
+          echo "$SALIDA"
+          RUTA=$(echo "$SALIDA" | tail -n1 | sed 's/^Archivo descargado: //')
+          python3 publicar_supabase.py "$RUTA"
+
+      - name: Subir captura de pantalla si falló
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-publicar-supabase
+          path: logistica-metricas/scripts/error_descarga.png
+          if-no-files-found: ignore
