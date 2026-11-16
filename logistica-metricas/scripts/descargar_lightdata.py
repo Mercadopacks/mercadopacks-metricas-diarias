@@ -262,8 +262,21 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
             except PlaywrightTimeoutError:
                 pass
 
-            page.get_by_role("link", name="local_shipping Envios").click()
-            page.get_by_role("link", name="menu Envios").click()
+            # Retry: a veces LightData tarda en desplegar el submenú tras el
+            # primer click (el panel queda cargando y "menu Envios" nunca
+            # aparece dentro del timeout) — visto en una corrida real
+            # (captura de pantalla del 2026-11-16: "Envios" quedaba marcado
+            # activo pero el submenú nunca se renderizaba). Reintentando el
+            # click del menú principal se fuerza a LightData a re-desplegar
+            # el submenú.
+            for intento in range(3):
+                try:
+                    page.get_by_role("link", name="local_shipping Envios").click()
+                    page.get_by_role("link", name="menu Envios").click(timeout=10000)
+                    break
+                except PlaywrightTimeoutError:
+                    if intento == 2:
+                        raise
 
             page.get_by_role("textbox", name="Fecha desde/hasta").click()
             seleccionar_dia(page, fecha)
