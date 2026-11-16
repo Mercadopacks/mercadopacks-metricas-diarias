@@ -262,21 +262,27 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
             except PlaywrightTimeoutError:
                 pass
 
-            # Retry: a veces LightData tarda en desplegar el submenú tras el
-            # primer click (el panel queda cargando y "menu Envios" nunca
-            # aparece dentro del timeout) — visto en una corrida real
-            # (captura de pantalla del 2026-11-16: "Envios" quedaba marcado
-            # activo pero el submenú nunca se renderizaba). Reintentando el
-            # click del menú principal se fuerza a LightData a re-desplegar
-            # el submenú.
+            # El menú "Envios" es un toggle: un click lo abre, otro click lo
+            # cierra. Un primer intento de fix (re-clickear el toggle en
+            # cada reintento) no funcionó (visto en una corrida real,
+            # 2026-11-16) — sospecha: si el toggle ya estaba abierto pero
+            # lento en renderizar, el re-click lo cerraba de nuevo, dejando
+            # el submenú siempre invisible. Por eso acá se espera (sin
+            # volver a clickear el toggle) a que el submenú se vuelva
+            # visible, y solo se re-clickea el toggle si de verdad no
+            # apareció tras la espera — igual que el manejo de Select2 en
+            # seleccionar_estado_todos().
+            page.get_by_role("link", name="local_shipping Envios").click()
+            menu_envios = page.get_by_role("link", name="menu Envios")
             for intento in range(3):
                 try:
-                    page.get_by_role("link", name="local_shipping Envios").click()
-                    page.get_by_role("link", name="menu Envios").click(timeout=10000)
+                    menu_envios.wait_for(state="visible", timeout=15000)
                     break
                 except PlaywrightTimeoutError:
                     if intento == 2:
                         raise
+                    page.get_by_role("link", name="local_shipping Envios").click()
+            menu_envios.click()
 
             page.get_by_role("textbox", name="Fecha desde/hasta").click()
             seleccionar_dia(page, fecha)
