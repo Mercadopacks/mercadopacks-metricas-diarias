@@ -1970,6 +1970,108 @@ como decisión separada y deliberada si en el futuro se necesita de verdad
 push en tiempo real (vía websockets/Realtime de Supabase) en vez de
 polling.
 
+### 20.18 Incidente real: "Seguimiento en ruta" sin datos para ninguna fecha (2026-11-16/17)
+
+Reportado por el usuario: el Action de descarga falló un par de veces
+seguidas y, además, "Seguimiento en ruta" dejó de mostrar datos — ni
+siquiera eligiendo "Ayer" o fechas viejas que antes sí funcionaban. Se
+mezclaron **tres problemas independientes**, dos reales de la descarga
+(que parecían la causa) y uno real de permisos de Firestore (que era la
+causa de fondo del "sin datos"). Guía de diagnóstico para la próxima vez,
+de más superficial a más profundo:
+
+**1. `descargar_lightdata.py` — dos timeouts reales de Playwright en el
+flujo de LightData** (no relacionados entre sí, corregidos en orden):
+- `page.get_by_role("link", name="menu Envios").click()` tirando
+  `Timeout 20000ms exceeded`: el click en el menú padre
+  (`"local_shipping Envios"`) es un **toggle** — abre/cierra. Un primer
+  intento de fix reintentaba re-clickeando el padre en cada reintento, lo
+  cual podía CERRAR el submenú si ya estaba abierto pero lento en
+  renderizar (visto en una corrida real: el padre quedaba marcado activo
+  con el panel vacío). Fix real: un solo click al padre, después
+  `menu_envios.wait_for(state="visible", ...)` sin volver a tocar el
+  padre, y recién si *de verdad* no apareció tras esperar, un reintento
+  del click del padre (máximo 3 intentos).
+- Ya con el menú resuelto, apareció un segundo timeout en
+  `page.get_by_role("textbox", name="Fecha desde/hasta").click()`: el
+  listado de Envíos a veces tarda más de 20s en cargar tras la
+  navegación. Fix: timeout propio de 40s solo para ese primer campo
+  (no se subió el timeout global — hubiera ocultado timeouts reales en
+  otros pasos).
+- Estructural, en `descarga_diaria.yml`: el loop que procesa la ventana de
+  repaso de 3 días corría bajo `set -e` **global** — si fallaba la
+  primera fecha, las otras 2 ni se intentaban, dejando huecos que no se
+  autocuraban solos. Fix: cada fecha corre en su propia subshell; una
+  falla se anota y se sigue con las demás, y el step solo termina en
+  error al final (para seguir alertando) si hubo algún fallo — pero las
+  fechas que sí funcionaron ya quedan publicadas.
+
+**2. La causa real de fondo — reglas de Firestore desactualizadas tras la
+migración de esquema de la sección 20.17.** El "Fix 2" de esa sección
+(2026-11-16) cambió `envios_detalle` de una subcolección
+(`envios_detalle/{fecha}/choferes/{chofer}`) a un documento único por día
+(`envios_detalle/{fecha}`, con un mapa `choferes` adentro) — pero las
+**reglas de seguridad de Firestore** (se configuran aparte, en Firebase
+Console → Firestore Database → Rules; no viven en este repo ni en
+ningún archivo versionado) seguían teniendo `allow read, write: if true`
+**solo** para el path viejo de la subcolección. El path nuevo no
+matcheaba ninguna regla, y en Firestore **sin regla que matchee = acceso
+denegado por default** — 403 `PERMISSION_DENIED` en **todas** las fechas,
+no solo las de después de la migración (se verificó explícitamente contra
+fechas de septiembre/octubre que antes funcionaban).
+
+El bug quedó enmascarado durante horas de diagnóstico porque:
+- El dashboard lee `envios_detalle` con un `try/catch` que absorbe
+  cualquier error (incluido el 403 de permisos) y lo convierte en
+  `todasFilas = []` (`cargarChoferesEnRutaHoy()` /
+  `renderRepartidoresRuta()`), mostrando el mismo cartel de "Todavía no
+  hay datos para esa fecha" que se ve con un día genuinamente sin datos
+  — sin loguear nada visible para el usuario ni distinguir "no hay
+  datos" de "no tengo permiso para leerlos".
+- `envios_daily`/`envios_index` (otras vistas, como "Seguimiento de
+  Envíos") sí tenían su regla correcta y seguían funcionando, lo que
+  hacía parecer un problema puntual de "Seguimiento en ruta" o de una
+  fecha puntual, en vez de un problema de permisos que afectaba a TODA
+  la colección `envios_detalle`.
+
+**Cómo se detectó, para la próxima vez:** se consultó Firestore
+directamente por su REST API pública (sin ninguna credencial — el
+proyecto no requiere auth para esto), comparando una colección que
+funcionaba contra la que no:
+```
+GET https://firestore.googleapis.com/v1/projects/mercadopacks-metricas/databases/%28default%29/documents/envios_daily/<fecha>
+GET https://firestore.googleapis.com/v1/projects/mercadopacks-metricas/databases/%28default%29/documents/envios_detalle/<fecha>
+```
+(OJO: `(default)` va URL-encoded como `%28default%29`, si no la API
+devuelve 404 en vez de la respuesta real.) La primera devolvía 200 con
+datos reales en todas las fechas probadas; la segunda devolvía 403 en
+TODAS las fechas probadas (viejas y nuevas por igual) — eso descartó de
+una que fuera un hueco de datos (que daría 200 con el documento vacío o
+inexistente, no 403) y apuntó directo a las reglas.
+
+**Fix real:** se agregó a las reglas de Firestore el bloque faltante:
+```
+match /envios_detalle/{fecha} {
+  allow read, write: if true;
+}
+```
+(se dejó también el bloque viejo de la subcolección, sin romper nada,
+por si queda algún dato histórico en ese esquema). Verificado después de
+publicar: la misma consulta REST pasó a devolver 200 con el detalle real
+del 2026-11-16 — los datos de ese día **ya estaban** en Firestore desde
+antes, nunca hizo falta ningún backfill manual, solo estaban bloqueados.
+
+**Lección para diagnósticos futuros de "esta vista no muestra datos" en
+este dashboard:** si una vista no muestra nada, antes de asumir que es un
+hueco en la descarga/publicación, comparar por REST la colección que
+falla contra una que sí funciona. Un 403 en TODAS las fechas (no solo la
+que se estaba mirando) es la huella de una regla de Firestore
+desactualizada, no de un día puntual sin procesar — especialmente
+sospechoso si hubo una migración de esquema reciente (sección 20.17) que
+haya cambiado el path de algún documento/colección sin que alguien
+recuerde revisar las reglas en el Firebase Console (ese paso es manual,
+no se dispara solo ni se versiona con el código).
+
 ## 21. Mercadopacks Sistema (ecosistema Supabase) — repo separado
 
 Lo que era `dashboard/beta/` dentro de este repo se separó el 2026-11-16
@@ -2048,3 +2150,4 @@ coordinación pendiente con el otro repo.
 | 2026-11-14 | Sección 20.16: cuatro correcciones más, reportadas con captura. (1) La leyenda de "Sin resolver"/"Gestionados" del panel "Pendientes" dejó de ser un texto fijo siempre visible y pasó a un ícono "ⓘ" junto al título, con el mismo texto en el tooltip. (2) Bug real: el panel "Pendientes" se cerraba solo a los 45s (el poll automático) mientras el usuario lo estaba mirando — ahora solo se cierra si cambia la fecha que se está viendo; un refresco de la misma fecha (poll o "Actualizar") refresca su contenido en vez de cerrarlo. (3) Bug real: un chofer con 0 paquetes entregados podía mostrar "En ruta" en vez de "Sin iniciar" si tenía un solo pendiente ya cancelado/reprogramado desde antes de arrancar su recorrido — ahora "Sin iniciar" depende solo de no haber entregado nada. (4) Bug real: Cañuelas y Máximo Paz caían en "Sin zona" en vez de Zona Sur — faltaba ese partido completo en el mapa de localidades (al igual que pasó con Zárate/Campana el 2026-11-12, se agregó a mano). |
 | 2026-11-14 | Sección 16: a pedido del usuario, el job "Hoy — noche" de cron-job.org pasó de cada 20 a cada 10 minutos (21:00-23:50 ART), para seguimiento más fino de repartidores en ese tramo. Cambio puramente de configuración externa (minutos del cronjob), no toca `descarga_diaria.yml` ni ningún script — el `concurrency` del workflow ya cubre el caso de corridas que se superpongan. |
 | 2026-11-15 | Sección 20.17: el Action de descarga diaria falló por cuota de Firestore agotada (`429 Quota exceeded`). Causa real: el dashboard refrescaba cada 45s sin relación con la frecuencia real de los datos (cron cada 10-20 min), y "Seguimiento en ruta" hace una lectura de colección completa (~130 choferes = ~130 lecturas facturadas) en cada poll, por cada pestaña abierta. Fix aplicado: `POLL_MS` de 45s a 10 min. Quedan pendientes de decisión del usuario: colapsar el detalle por chofer a un solo documento por día (baja lecturas Y escrituras, con un límite de 1 MiB/documento a validar antes), agregar una capa de caché compartida entre usuarios, y/o subir el proyecto a plan Blaze como red de seguridad. Se evaluó y descartó (por ahora) migrar a Supabase — el problema es de arquitectura, no del motor de base de datos. |
+| 2026-11-16/17 | Sección 20.18: incidente real combinado — el Action de descarga falló repetidas veces por dos timeouts de Playwright reales (toggle del menú "Envíos" que se cerraba solo al reintentar, y el campo de fecha tardando >20s en cargar tras navegar al listado) más un `set -e` global que dejaba sin procesar las 3 fechas de la ventana de repaso si fallaba la primera. Se corrigieron los tres. Pero la causa real de que "Seguimiento en ruta" mostrara "Todavía no hay datos" en TODAS las fechas (no solo las fallidas) eran las reglas de seguridad de Firestore: el "Fix 2" de la sección 20.17 (colapsar `envios_detalle` a un documento por día) nunca se reflejó en las reglas de Firestore Console, que solo tenían `allow read` para el path viejo de la subcolección — el path nuevo daba 403 `PERMISSION_DENIED`, absorbido en silencio por el `catch` del dashboard y mostrado igual que "no hay datos". Diagnosticado comparando por REST `envios_daily` (200 OK) contra `envios_detalle` (403 en todas las fechas, viejas y nuevas) sin necesitar ninguna credencial. Fix: se agregó la regla faltante `match /envios_detalle/{fecha} { allow read, write: if true; }` en Firebase Console. Los datos del 16/11 ya estaban publicados desde antes — no hizo falta backfill, solo estaban bloqueados. |
