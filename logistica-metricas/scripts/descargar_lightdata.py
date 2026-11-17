@@ -284,7 +284,12 @@ def descargar(usuario: str, clave: str, fecha_objetivo=None, modo_fecha=None) ->
                     page.get_by_role("link", name="local_shipping Envios").click()
             menu_envios.click()
 
-            page.get_by_role("textbox", name="Fecha desde/hasta").click()
+            # El click de arriba dispara la navegación al listado de
+            # Envios, que a veces tarda en cargar más que el timeout
+            # default (visto en una corrida real, 2026-11-16: timeout de
+            # 20s esperando este campo). Timeout propio, más generoso, solo
+            # para este primer campo tras la navegación.
+            page.get_by_role("textbox", name="Fecha desde/hasta").click(timeout=40000)
             seleccionar_dia(page, fecha)
             page.get_by_role("button", name="Ok").click()
 
