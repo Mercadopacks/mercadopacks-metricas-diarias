@@ -156,7 +156,19 @@ jobs:
           FECHA_INPUT: ${{ github.event.inputs.fecha }}
           MODO_INPUT: ${{ github.event.inputs.modo }}
         run: |
-          set -e
+          # OJO (2026-11-17): NO se usa `set -e` acá a propósito. Con
+          # `set -e`, si una fecha del loop fallaba (ej. un timeout
+          # puntual de LightData en SOLO una de las 3 fechas de la
+          # ventana de repaso), el script cortaba ahí mismo y las fechas
+          # restantes del loop ni se intentaban — un fallo transitorio en
+          # "ayer" también dejaba sin reprocesar "ayer -2" y "ayer -3",
+          # aunque esas sí hubieran funcionado. Ahora cada fecha se
+          # procesa en una función aislada: si una falla, se anota y se
+          # sigue con las demás; recién al final, si hubo alguna fecha
+          # fallida, el step termina en error (para que la corrida se siga
+          # viendo roja y se notifique), pero las fechas que sí funcionaron
+          # ya quedaron publicadas en Firestore.
+          #
           # Mismo motivo que en el paso "Verificar que el día..." de arriba:
           # "-3 hours" convierte el instante UTC actual a su fecha
           # equivalente en ART antes de calcular "hoy"/"ayer", para que las
@@ -170,14 +182,27 @@ jobs:
             FECHAS=$(for i in 1 2 3; do date -u -d "-3 hours -$i day" +%F; done)
           fi
 
+          HUBO_FALLO=0
           for FECHA in $FECHAS; do
             echo "=== Procesando $FECHA ==="
-            export FECHA_DESCARGA="$FECHA"
-            SALIDA=$(python3 descargar_lightdata.py)
-            echo "$SALIDA"
-            RUTA=$(echo "$SALIDA" | tail -n1 | sed 's/^Archivo descargado: //')
-            python3 publicar_firestore.py "$RUTA"
+            (
+              set -e
+              export FECHA_DESCARGA="$FECHA"
+              SALIDA=$(python3 descargar_lightdata.py)
+              echo "$SALIDA"
+              RUTA=$(echo "$SALIDA" | tail -n1 | sed 's/^Archivo descargado: //')
+              python3 publicar_firestore.py "$RUTA"
+            )
+            if [ $? -ne 0 ]; then
+              echo "!!! Falló el procesamiento de $FECHA, sigo con las demás fechas !!!"
+              HUBO_FALLO=1
+            fi
           done
+
+          if [ "$HUBO_FALLO" = "1" ]; then
+            echo "Una o más fechas fallaron — ver el log de arriba para identificar cuál."
+            exit 1
+          fi
 
       # El .xls crudo (con datos personales de destinatarios) NO se commitea
       # al repo — es público. Solo el snapshot agregado llega a Firestore.
